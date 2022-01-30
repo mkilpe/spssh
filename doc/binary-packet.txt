@@ -1,0 +1,29 @@
+
+ uint32    packet_length
+ byte      padding_length
+ byte[n1]  payload; n1 = packet_length - padding_length - 1
+ byte[n2]  random padding; n2 = padding_length
+ byte[m]   mac (Message Authentication Code - MAC); m = mac_length
+
+
+Sending packet:
+
+ 1. compress payload
+ 2. calculate padding
+ 3. calculate packet length
+ 4. construct unencrypted packet
+ 5. calculate mac
+ 6. encrypt packet (not the mac)
+
+ notice that steps 5-6 are combined in case of GCM and works bit differently
+
+
+ Receiving packet:
+
+ 1. decrypt first max(8, cipher block size) bytes to get length
+ 2. decrypt rest of the packet with the known length
+ 3. verify mac
+ 4. check packet restrictions (padding size)
+ 5. decompress payload
+
+ notice that steps 1-3 are combined in case of GCM and works bit differently

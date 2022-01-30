@@ -1,0 +1,48 @@
+
+Overview:
+* SSH/SFTP server side
+  * Primary use is FileZilla server
+* SSH/SFTP client side
+* other SSH subsystems (scp, forwarding, shell)?
+* Analyzing/Stress testing client
+
+
+Implementation:
+
+SSH version 2 protocol (first server side)
+ * Transport Layer Protocol
+ * Authentication Protocol
+ * Connection Protocol
+
+SFTP version 3
+
+
+Requirements:
+ * All components are separate and easy to test
+ * No dependency to networking layer
+ * All well tested
+ * Virtual filesystem to handle all filesystem operations
+ * Abstract crypto operations - support at least Nettle
+ * Start with:
+   * KEX: X25519 (ECDH with Curve25519 and SHA-256)
+   * Host key format: ssh-ed25519
+   * Cipher: AES-256 GCM
+   * Optional compression support
+
+References:
+
+https://datatracker.ietf.org/doc/html/rfc4251
+https://datatracker.ietf.org/doc/html/rfc4252
+https://datatracker.ietf.org/doc/html/rfc4253
+https://datatracker.ietf.org/doc/html/rfc4254
+AES-GCM: https://datatracker.ietf.org/doc/html/rfc5647
+EC: https://datatracker.ietf.org/doc/html/rfc5656
+KEX using Curve25519: https://datatracker.ietf.org/doc/html/rfc8731
+KEX using DH: https://www.rfc-editor.org/rfc/rfc4419.html, https://www.rfc-editor.org/rfc/rfc8268.html
+KEX using RSA2048: https://www.ietf.org/rfc/rfc4432.txt
+RSA SHA256 keys: https://www.rfc-editor.org/rfc/rfc8332.html
+HMAC-SHA256: https://www.rfc-editor.org/rfc/rfc6668.html
+SFTP: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02
+IANA name allocation: https://www.iana.org/assignments/ssh-parameters/ssh-parameters.xhtml
+
+

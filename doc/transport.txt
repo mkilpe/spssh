@@ -1,0 +1,351 @@
+
+1. Protocol version exchange:
+  * Both sides send: "SSH-2.0-softwareversion comments CR LF"
+    * comments string is optionaĺ. There is no space after the comments string.
+
+    * The server MAY send other lines of data before sending the version
+      string.  Each line SHOULD be terminated by a Carriage Return and Line
+      Feed.  Such lines MUST NOT begin with "SSH-", and SHOULD be encoded
+      in ISO-10646 UTF-8
+
+    * 'softwareversion' strings MUST consist of printable US-ASCII characters,
+      with the exception of whitespace characters and the minus sign (-).
+
+
+2. Binary Packet Protocol
+
+      uint32    packet_length
+      byte      padding_length
+      byte[n1]  payload; n1 = packet_length - padding_length - 1
+      byte[n2]  random padding; n2 = padding_length
+      byte[m]   mac (Message Authentication Code - MAC); m = mac_length
+
+      packet_length
+         The length of the packet in bytes, not including 'mac' or the
+         'packet_length' field itself.
+
+      padding_length
+         Length of 'random padding' (bytes).
+
+      payload
+         The useful contents of the packet.  If compression has been
+         negotiated, this field is compressed.  Initially, compression
+         MUST be "none".
+
+      random padding
+         Arbitrary-length padding, such that the total length of
+         (packet_length || padding_length || payload || random padding)
+         is a multiple of the cipher block size or 8, whichever is larger.
+         There MUST be at least four bytes of padding.  The padding SHOULD
+         consist of random bytes.  The maximum amount of padding is 255 bytes.
+
+      mac
+         Message Authentication Code.  If message authentication has
+         been negotiated, this field contains the MAC bytes.  Initially,
+         the MAC algorithm MUST be "none".
+
+
+   Note that the length of the concatenation of 'packet_length', 'padding_length',
+   'payload', and 'random padding' MUST be a multiple of the cipher block size or 8,
+   whichever is larger.
+
+   Note that the 'packet_length' field is also encrypted, unless using AEAD like
+   AES-GCM mode in which case it is not encrypted but only authenticated.
+
+   Also note that the insertion of variable amounts of 'random padding' may help
+   thwart traffic analysis.
+
+   All implementations MUST be able to process packets with an uncompressed payload
+   length of 32768 bytes or less and a total packet size of 35000 bytes or less
+   (including 'packet_length', 'padding_length', 'payload', 'random padding', and 'mac').
+
+   If compression has been negotiated, the 'payload' field (and only it) will be
+   compressed using the negotiated algorithm.  The 'packet_length' field and 'mac'
+   will be computed from the compressed payload.
+
+   After key exchange, the 'mac' for the selected MAC
+   algorithm will be computed before encryption from the concatenation
+   of packet data:
+
+      mac = MAC(key, sequence_number || unencrypted_packet)
+
+   where unencrypted_packet is the entire packet without 'mac' (the
+   length fields, 'payload' and 'random padding'), and sequence_number
+   is an implicit packet sequence number represented as uint32.  The
+   sequence_number is initialized to zero for the first packet, and is
+   incremented after every packet (regardless of whether encryption or
+   MAC is in use).  It is never reset, even if keys/algorithms are
+   renegotiated later.  It wraps around to zero after every 2^32
+   packets.
+
+
+3. Key Exchange Methods (KEX)
+
+   Certificates and public keys are encoded as follows:
+
+      string    certificate or public key format identifier
+      byte[n]   key/certificate data
+
+   The certificate part may be a zero length string, but a public key is required.
+
+   "curve25519-sha256" format: tbd.
+   "rsa2048-sha256" format: tbd.
+
+
+   Signatures are encoded as follows:
+
+      string    signature format identifier (as specified by the
+                public key/certificate format)
+      byte[n]   signature blob in format specific encoding.
+
+
+
+   Key exchange (kex) begins by each side sending name-lists of
+   supported algorithms.  Each side has a preferred algorithm in each
+   category, and it is assumed that most implementations, at any given
+   time, will use the same preferred algorithm.  Each side MAY guess
+   which algorithm the other side is using, and MAY send an initial key
+   exchange packet according to the algorithm, if appropriate for the
+   preferred method.
+
+   The guess is considered wrong if:
+
+   o  the kex algorithm and/or the host key algorithm is guessed wrong
+      (server and client have different preferred algorithm), or
+
+   o  if any of the other algorithms cannot be agreed upon (the
+      procedure is defined below in Section 7.1).
+
+   Otherwise, the guess is considered to be right, and the
+   optimistically sent packet MUST be handled as the first key exchange
+   packet.
+
+   However, if the guess was wrong, and a packet was optimistically sent
+   by one or both parties, such packets MUST be ignored
+
+
+   Key exchange begins by each side sending the following packet:
+
+      byte         SSH_MSG_KEXINIT
+      byte[16]     cookie (random bytes)
+      name-list    kex_algorithms
+      name-list    server_host_key_algorithms
+      name-list    encryption_algorithms_client_to_server
+      name-list    encryption_algorithms_server_to_client
+      name-list    mac_algorithms_client_to_server
+      name-list    mac_algorithms_server_to_client
+      name-list    compression_algorithms_client_to_server
+      name-list    compression_algorithms_server_to_client
+      name-list    languages_client_to_server
+      name-list    languages_server_to_client
+      boolean      first_kex_packet_follows
+      uint32       0 (reserved for future extension)
+
+   Each of the algorithm name-lists MUST be a comma-separated list of
+   algorithm names. Each supported (allowed) algorithm MUST be listed in
+   order of preference, from most to least.
+
+   The first algorithm in each name-list MUST be the preferred (guessed)
+   algorithm.  Each name-list MUST contain at least one algorithm name.
+
+   cookie
+         The 'cookie' MUST be a random value generated by the sender.
+
+   kex_algorithms
+         "curve25519-sha256", one of the normal dh?
+
+   server_host_key_algorithms
+         "ssh-ed25519", "rsa-sha2-256"
+
+   encryption_algorithms
+         "AEAD_AES_256_GCM", "aes256-ctr"
+
+   mac_algorithms
+         "AEAD_AES_256_GCM", "hmac-sha2-256"
+
+   compression_algorithms
+         "none"
+
+         Note that "none" must be explicitly listed if it is to be acceptable.
+
+   languages
+         Empty list for now.
+
+   first_kex_packet_follows
+         Indicates whether a guessed key exchange packet follows.  If a
+         guessed packet will be sent, this MUST be TRUE.  If no guessed
+         packet will be sent, this MUST be FALSE.
+
+         After receiving the SSH_MSG_KEXINIT packet from the other side,
+         each party will know whether their guess was right.  If the
+         other party's guess was wrong, and this field was TRUE, the
+         next packet MUST be silently ignored, and both sides MUST then
+         act as determined by the negotiated key exchange method.  If
+         the guess was right, key exchange MUST continue using the
+         guessed packet.
+
+   After the SSH_MSG_KEXINIT message exchange, the key exchange
+   algorithm is run.  It may involve several packet exchanges, as
+   specified by the key exchange method.
+
+   Once a party has sent a SSH_MSG_KEXINIT message for key exchange or
+   re-exchange, until it has sent a SSH_MSG_NEWKEYS message,
+   it MUST NOT send any messages other than:
+
+   o  Transport layer generic messages (1 to 19) (but
+      SSH_MSG_SERVICE_REQUEST and SSH_MSG_SERVICE_ACCEPT MUST NOT be
+      sent);
+
+   o  Algorithm negotiation messages (20 to 29) (but further
+      SSH_MSG_KEXINIT messages MUST NOT be sent);
+
+   o  Specific key exchange method messages (30 to 49).
+
+   Note, however, that during a key re-exchange, after sending a
+   SSH_MSG_KEXINIT message, each party MUST be prepared to process an
+   arbitrary number of messages that may be in-flight before receiving a
+   SSH_MSG_KEXINIT message from the other party.
+
+   KEX produces:
+        * Session identifier (only from initial kex)
+        * Initial IV client to server
+        * Initial IV server to client
+        * Encryption key client to server
+        * Encryption key server to client
+        * Integrity key client to server
+        * Integrity key server to client
+
+   Key exchange ends by each side sending an SSH_MSG_NEWKEYS message.
+   This message is sent with the old keys and algorithms.  All messages
+   sent after this message MUST use the new keys and algorithms.
+
+   When this message is received, the new keys and algorithms MUST be
+   used for receiving.
+
+   The purpose of this message is to ensure that a party is able to
+   respond with an SSH_MSG_DISCONNECT message that the other party can
+   understand if something goes wrong with the key exchange.
+
+      byte      SSH_MSG_NEWKEYS
+
+
+   Key re-exchange is started by sending an SSH_MSG_KEXINIT packet when
+   not already doing a key exchange (as described in Section 7.1).  When
+   this message is received, a party MUST respond with its own
+   SSH_MSG_KEXINIT message, except when the received SSH_MSG_KEXINIT
+   already was a reply.
+
+
+4. Service Request
+
+   After the key exchange, the client requests a service.  The service
+   is identified by a name.
+
+   Currently, the following names have been reserved:
+
+      ssh-userauth
+      ssh-connection
+
+   Similar local naming policy is applied to the service names, as is
+   applied to the algorithm names.  A local service should use the
+   PRIVATE USE syntax of "servicename@domain".
+
+      byte      SSH_MSG_SERVICE_REQUEST
+      string    service name
+
+   If the server rejects the service request, it SHOULD send an
+   appropriate SSH_MSG_DISCONNECT message and MUST disconnect.
+
+   When the service starts, it may have access to the session identifier
+   generated during the key exchange.
+
+   If the server supports the service (and permits the client to use
+   it), it MUST respond with the following:
+
+      byte      SSH_MSG_SERVICE_ACCEPT
+      string    service name
+
+
+   Message numbers used by services should be in the area reserved for
+   them.  The transport level will continue to process its own messages.
+
+   Note that after a key exchange with implicit server authentication,
+   the client MUST wait for a response to its service request message
+   before sending any further data.
+
+
+ 5. Additional Messages
+
+   Disconnection Message
+
+      byte      SSH_MSG_DISCONNECT
+      uint32    reason code
+      string    description in ISO-10646 UTF-8 encoding [RFC3629]
+      string    language tag [RFC3066]
+
+   This message causes immediate termination of the connection.
+
+      SSH_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT             1
+      SSH_DISCONNECT_PROTOCOL_ERROR                          2
+      SSH_DISCONNECT_KEY_EXCHANGE_FAILED                     3
+      SSH_DISCONNECT_RESERVED                                4
+      SSH_DISCONNECT_MAC_ERROR                               5
+      SSH_DISCONNECT_COMPRESSION_ERROR                       6
+      SSH_DISCONNECT_SERVICE_NOT_AVAILABLE                   7
+      SSH_DISCONNECT_PROTOCOL_VERSION_NOT_SUPPORTED          8
+      SSH_DISCONNECT_HOST_KEY_NOT_VERIFIABLE                 9
+      SSH_DISCONNECT_CONNECTION_LOST                        10
+      SSH_DISCONNECT_BY_APPLICATION                         11
+      SSH_DISCONNECT_TOO_MANY_CONNECTIONS                   12
+      SSH_DISCONNECT_AUTH_CANCELLED_BY_USER                 13
+      SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE         14
+      SSH_DISCONNECT_ILLEGAL_USER_NAME                      15
+
+
+   Ignored Data Message
+
+      byte      SSH_MSG_IGNORE
+      string    data
+
+   All implementations MUST understand (and ignore) this message at any
+   time (after receiving the identification string).  No implementation
+   is required to send them.  This message can be used as an additional
+   protection measure against advanced traffic analysis techniques.
+
+
+   Debug Message
+
+      byte      SSH_MSG_DEBUG
+      boolean   always_display
+      string    message in ISO-10646 UTF-8 encoding [RFC3629]
+      string    language tag [RFC3066]
+
+   All implementations MUST understand this message, but they are
+   allowed to ignore it.
+
+
+   Reserved Messages
+
+   An implementation MUST respond to all unrecognized messages with an
+   SSH_MSG_UNIMPLEMENTED message in the order in which the messages were
+   received.  Such messages MUST be otherwise ignored.  Later protocol
+   versions may define other meanings for these message types.
+
+      byte      SSH_MSG_UNIMPLEMENTED
+      uint32    packet sequence number of rejected message
+
+
+6. Messages numbers
+
+         SSH_MSG_DISCONNECT             1
+         SSH_MSG_IGNORE                 2
+         SSH_MSG_UNIMPLEMENTED          3
+         SSH_MSG_DEBUG                  4
+         SSH_MSG_SERVICE_REQUEST        5
+         SSH_MSG_SERVICE_ACCEPT         6
+         SSH_MSG_KEXINIT                20
+         SSH_MSG_NEWKEYS                21
+
+
+   Note that numbers 30-49 are used for kex packets.  Different kex
+   methods may reuse message numbers in this range.

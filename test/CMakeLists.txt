@@ -1,0 +1,1 @@
+add_sp_test_application(test_spssh spssh_server spssh_client)
