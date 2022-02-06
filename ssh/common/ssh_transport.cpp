@@ -5,10 +5,16 @@
 
 namespace securepath::ssh {
 
+ssh_transport::ssh_transport(ssh_config const& c, out_buffer& b, logger& l)
+: config_(c)
+, output_(b)
+, logger_(l)
+{
+}
+
 void ssh_transport::on_version_exchange(ssh_version const& v) {
-	if(logger_) {
-		logger_->log(fz::logmsg::status, L"Client version exchange [ssh=%s, software=%s]", v.ssh, v.software);
-	}
+	logger_.log(logger::info, "Client version exchange [ssh={}, software={}]", v.ssh, v.software);
+
 	if(v.ssh != "2.0") {
 		//unsupported version
 		disconnect(ssh_protocol_version_not_supported);
@@ -31,9 +37,8 @@ void ssh_transport::set_state(ssh_state s) {
    string    language tag [RFC3066]
 */
 void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
-	if(logger_) {
-		logger_->log(fz::logmsg::debug_info, "SSH disconnect [state=%d, code=%d, msg=%s]", state(), code, message);
-	}
+	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
+
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
 		ssh_bp_encoder p{config_, crypto_out_, output_};
 
@@ -110,6 +115,8 @@ layer_op ssh_transport::handle_payload(in_buffer& in) {
 }
 
 layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
+
+
 	// if we haven't extracted header yet or we have enough bytes, try to handle the packet
 	if(!crypto_in_.packet_size || crypto_in_.packet_size <= in.size()) {
 		return handle_payload(in);

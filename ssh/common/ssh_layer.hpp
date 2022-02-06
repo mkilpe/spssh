@@ -10,8 +10,8 @@ class out_buffer;
 
 enum class layer_op {
 	none,
-	want_more,
-	rekeying,
+	want_read_more,
+	want_write_more,
 	disconnected
 };
 

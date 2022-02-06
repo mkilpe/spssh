@@ -14,7 +14,7 @@ protected:
 	~in_buffer() = default;
 public:
 	/// Returns span representing the currently available bytes in buffer for reading
-	virtual const_span get() const = 0;
+	virtual span get() const = 0;
 
 	/** \brief Consumes bytes that were used from the above returned span.
 	 *   Size given must be less or equal to the size of the span.

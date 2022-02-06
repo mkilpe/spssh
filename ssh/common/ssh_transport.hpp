@@ -1,12 +1,11 @@
 #ifndef SP_SHH_TRANSPORT_HEADER
 #define SP_SHH_TRANSPORT_HEADER
 
+#include "logger.hpp"
 #include "packet_types.hpp"
 #include "ssh_config.hpp"
 #include "ssh_layer.hpp"
 #include "stream_crypto.hpp"
-
-#include <libfilezilla/logger.hpp>
 
 namespace securepath::ssh {
 
@@ -17,6 +16,9 @@ enum class ssh_state {
 	none,
 	version_exchange,
 	kex,
+	transport,
+	user_authentication,
+	subsystem,
 	disconnected
 };
 
@@ -24,7 +26,7 @@ enum class ssh_state {
  */
 class ssh_transport {
 public:
-	ssh_transport(ssh_config const&, out_buffer&, fz::logger_interface* logger = nullptr);
+	ssh_transport(ssh_config const&, out_buffer&, logger&);
 
 	layer_op handle(in_buffer&);
 
@@ -32,6 +34,8 @@ public:
 
 	ssh_state state() const;
 	void set_state(ssh_state);
+
+	//get error
 
 protected:
 	virtual void on_version_exchange(ssh_version const&);
@@ -44,7 +48,7 @@ private:
 private:
 	ssh_config const& config_;
 	out_buffer& output_;
-	fz::logger_interface* logger_;
+	logger& logger_;
 
 	ssh_state state_{ssh_state::none};
 

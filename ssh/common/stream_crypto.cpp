@@ -5,9 +5,10 @@
 
 namespace securepath::ssh {
 
-std:size_t const packet_lenght_size = 4;
+std::size_t const packet_lenght_size = 4;
+std::size_t const padding_size = 1;
 // header size = packet_length 4 bytes + padding length 1 byte
-std::size_t const header_size = packet_lenght_size + 1;
+std::size_t const header_size = packet_lenght_size + padding_size;
 std::size_t const maximum_padding_size = 255;
 
 // minimum "block" size, the length of header+payload must be multiple of the "block" size (even for stream ciphers).
@@ -190,21 +191,88 @@ bool ssh_bp_decoder::decode_header() {
 	return true;
 }
 
+bool ssh_bp_decoder::aead_decrypt(aead_cipher& cip, const_span data, span out) {
+	// first handle the non-encrypted authenticated data
+	cip.process_auth(data.subspan(0, packet_lenght_size));
+	data = data.subspan(packet_lenght_size);
+	// decrypt the data
+	cip.process(data, out);
+
+	// get the tag
+	std::vector<std::byte> tag(integrity_size_);
+	cip.tag(tag);
+
+	// check the tag matches
+	if(std::memcmp(tag.data(), data.data() + stream_.packet_header.packet_size, integrity_size_) != 0) {
+		return false;
+	}
+
+	std::uint8_t padding = std::to_integer<std::uint8_t>(out_.data());
+	payload_ = span{out.subspan(padding_size, stream_.packet_header.packet_size - padding_size - padding)};
+
+	return true;
+}
+
+bool ssh_bp_decoder::decrypt_with_mac(const_span data, span out) {
+	// here the first block is already decrypted so that we found the packet_length
+	std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
+	// if we are not doing decryption in place, copy the first block to out
+	if(data.data() != out.data()) {
+		std::memcpy(out.data(), data.data(), packet_multiplier_);
+	}
+	data = data.subspan(packet_multiplier_);
+
+	std::size_t decrypt_size = stream_.packet_header.packet_size - packet_multiplier_ + packet_lenght_size;
+	stream_.cipher.process(data.subspan(0, decrypt_size), out.subspan(packet_multiplier_, decrypt_size));
+
+	std::byte seq_buf[4];
+	// convert the packet sequence to binary and process for mac
+	u32ton(stream_.packet_sequence, seq_buf);
+
+	stream_.mac->process(span{seq_buf, 4});
+	// process the packet for mac
+	stream_.mac->process(out.subspan(packet_lenght_size, stream_.packet_header.packet_size));
+
+	// get the tag
+	std::vector<std::byte> mac(integrity_size_);
+	stream_.mac->result(mac);
+
+	// check the tag matches
+	if(std::memcmp(mac.data(), out.data() + stream_.packet_header.packet_size + packet_lenght_size, integrity_size_) != 0) {
+		return false;
+	}
+
+	payload_ = span{out.subspan(header_size, stream_.packet_header.packet_size - padding_size - padding)};
+
+	return true;
+}
+
 bool ssh_bp_decoder::decode() {
 	if(data_.size() < packet_lenght_size + stream_.packet_header.packet_size + integrity_size_) {
 		return false;
 	}
+
+	bool ret = true;
+	// are we encrypted?
+	if(stream_.cipher) {
+		if(stream_.cipher->is_aead()) {
+			ret = aead_decrypt(static_cast<aead_cipher&>(*stream_), data_, data_);
+		} else {
+			ret = decrypt_with_mac(data_, data_);
+		}
+	} else {
+		std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
+		payload_ = span{data_.subspan(header_size, stream_.packet_header.packet_size - padding_size - padding)};
+	}
+
+	// incremented for every packet and let wrap around
+	++stream_.packet_sequence;
+
+	return ret;
 }
 
 const_span ssh_bp_decoder::payload() const {
-	if(data_.empty() || !header_.is_valid()) {
-		return const_span{};
-	}
-	return const_span{data_.data()+header_size};
-}
-
-packet_decode_header ssh_bp_decoder::header() const {
-	return header_;
+	return payload_;
 }
 
 }

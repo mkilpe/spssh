@@ -23,14 +23,21 @@ struct stream_crypto {
 	std::unique_ptr<ssh::mac> mac;
 };
 
-struct packet_decode_header {
-	std::size_t packet_size{};
+/// status of incoming packet that is currently being handled
+enum class packet_status {
+	waiting_header, // we have no data or not enough for first block
+	waiting_data,   // we have decrypted first block (or we use aead) and know the packet length
+	data_ready      // we have decrypted whole packet and ready to process it
+};
 
-	bool is_valid() const { return packet_size; };
+struct packet_info {
+	packet_status status{packet_status::waiting_header};
+	std::size_t packet_size{};
+	std::size_t data_size{};
 };
 
 struct stream_in_crypto : public stream_crypto {
-	packet_decode_header packet_header;
+	packet_decode_header current_packet;
 };
 
 struct stream_out_crypto : public stream_crypto {
@@ -80,7 +87,8 @@ private:
 	ssh_config const& config_;
 	stream_in_crypto& stream_;
 	in_buffer& in_;
-	const_span data_;
+	span data_;
+	const_span payload_;
 	std::size_t packet_multiplier_;
 };
 

@@ -45,7 +45,7 @@ public:
 	virtual void tag(span out) = 0;
 
 private:
-	std::size_t tag_size_;
+	std::size_t const tag_size_;
 };
 
 }

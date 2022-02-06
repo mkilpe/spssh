@@ -28,6 +28,7 @@ Requirements:
    * Host key format: ssh-ed25519
    * Cipher: AES-256 GCM
    * Optional compression support
+ * Consider that authentication/sftp file operations and so on can be async
 
 References:
 
