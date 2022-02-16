@@ -10,17 +10,33 @@
 
 namespace securepath::ssh {
 
+std::size_t const packet_lenght_size = 4;
+std::size_t const padding_size = 1;
+// header size = packet_length 4 bytes + padding length 1 byte
+std::size_t const packet_header_size = packet_lenght_size + padding_size;
+std::size_t const maximum_padding_size = 255;
+
+// minimum "block" size, the length of header+payload must be multiple of the "block" size (even for stream ciphers).
+std::size_t const minimum_block_size = 8;
+
+// at least 4 bytes of padding is always required per SSH specification
+std::size_t const minimum_padding_size = 4;
+
 class ssh_config;
 
 /// Necessary crypto components and buffers for single stream (i.e. one direction communication)
 struct stream_crypto {
 	/// sequence number of packet, incremented after every binary protocol packet
 	std::uint32_t packet_sequence{};
+	std::uint32_t block_size{minimum_block_size};
 
 	std::unique_ptr<compression> compress;
 	std::unique_ptr<ssh::cipher> cipher;
 	// this is only used if !cipher->is_aead()
 	std::unique_ptr<ssh::mac> mac;
+
+	// this is mac->size() or aead_cipher->tag_size() when we are encrypting
+	std::uint32_t integrity_size{};
 };
 
 /// status of incoming packet that is currently being handled
@@ -32,12 +48,22 @@ enum class packet_status {
 
 struct packet_info {
 	packet_status status{packet_status::waiting_header};
-	std::size_t packet_size{};
-	std::size_t data_size{};
+	std::size_t packet_size{}; // size of the whole packet, this is available after decrypting the header
+	std::size_t data_size{};   // size of the transport payload, this is available after decrypting whole packet
+	span payload{};            // current decrypted payload to be handled
+
+	void clear() {
+		status = packet_status::waiting_header;
+		packet_size = 0;
+		data_size = 0;
+		payload = {};
+	}
 };
 
 struct stream_in_crypto : public stream_crypto {
-	packet_decode_header current_packet;
+	packet_info current_packet;
+	// buffer for calculating tag, should be always integrity_size
+	std::vector<std::byte> tag_buffer;
 };
 
 struct stream_out_crypto : public stream_crypto {
@@ -71,25 +97,6 @@ private:
 	std::size_t packet_multiplier_;
 	span data_;
 	std::size_t used_{};
-};
-
-
-class ssh_bp_decoder {
-public:
-	ssh_bp_decoder(ssh_config const& config, stream_in_crypto& stream, in_buffer& in);
-
-	bool decode_header();
-	bool decode();
-
-	const_span payload() const;
-
-private:
-	ssh_config const& config_;
-	stream_in_crypto& stream_;
-	in_buffer& in_;
-	span data_;
-	const_span payload_;
-	std::size_t packet_multiplier_;
 };
 
 }

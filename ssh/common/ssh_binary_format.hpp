@@ -46,8 +46,8 @@ public:
 
 	void add_uint32(std::uint32_t v) {
 		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
-		u32ton(v, out_);
-		out += 4;
+		u32ton(v, out_+pos_);
+		pos_ += 4;
 	}
 
 	void add_uint8(std::uint8_t v) {

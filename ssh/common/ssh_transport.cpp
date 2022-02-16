@@ -13,11 +13,12 @@ ssh_transport::ssh_transport(ssh_config const& c, out_buffer& b, logger& l)
 }
 
 void ssh_transport::on_version_exchange(ssh_version const& v) {
-	logger_.log(logger::info, "Client version exchange [ssh={}, software={}]", v.ssh, v.software);
+	logger_.log(logger::info, "SSH version exchange [remote ssh={}, remote software={}]", v.ssh, v.software);
 
 	if(v.ssh != "2.0") {
+		logger_.log(logger::error, "SSH invalid remote version [{} != 2.0]", v.ssh);
 		//unsupported version
-		disconnect(ssh_protocol_version_not_supported);
+		set_error_and_disconnect(ssh_protocol_version_not_supported);
 	}
 }
 
@@ -53,6 +54,11 @@ void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 	set_state(ssh_state::disconnected);
 }
 
+void ssh_transport::set_error_and_disconnect(ssh_error_code code) {
+	error_ = code;
+	disconnect(code);
+}
+
 layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 	if(state() == ssh_state::none) {
 		if(!send_version_string(config_.my_version, output_)) {
@@ -86,44 +92,32 @@ layer_op ssh_transport::handle_packet(span payload) {
 
 }
 
-layer_op ssh_transport::handle_payload(in_buffer& in) {
-	ssh_bp_decoder p{config_, crypto_in_, in};
+layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
 
-	if(!crypto_in_.packet_size) {
-		if(!p.decode_header()) {
-			//t: log message
-			disconnect();
-			return layer_op::disconnected;
-		}
-		crypto_in_.packet_size = p.packet_size();
-		crypto_in_.padding_size = p.padding_size();
-		if(crypto_in_.packet_size > in.size()) {
+	if(crypto_in_.current_packet.status == packet_status::waiting_header) {
+		if(!try_decode_header(in.get())) {
 			return layer_op::want_more;
 		}
 	}
 
-	if(p.decode()) {
-		handle_packet(p.payload());
-		crypto_in_.packet_size = 0;
-		crypto_in_.padding_size = 0;
-	} else {
-		//t: log message
-		disconnect();
-		return layer_op::disconnected;
-	}
-	return layer_op::none;
-}
-
-layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
-
-
-	// if we haven't extracted header yet or we have enough bytes, try to handle the packet
-	if(!crypto_in_.packet_size || crypto_in_.packet_size <= in.size()) {
-		return handle_payload(in);
+	if(crypto_in_.current_packet.status == packet_status::waiting_data) {
+		// see if we have whole packet already
+		if(crypto_in_.current_packet.packet_size <= in.size()) {
+			crypto_in_.current_packet.payload = decrypt_packet(in.get());
+		} else {
+			return layer_op::want_more;
+		}
 	}
 
-	// not enough data
-	return layer_op::want_more;
+	if(crypto_in_.current_packet.status == packet_status::data_ready) {
+		return handle_transport_payload(crypto_in_.current_packet.payload);
+		// if success .. crypto_in_.current_packet.clear();
+	}
+
+	// if we get here something went wrong, disconnect...
+	set_error_and_disconnect(ssh_protocol_error);
+
+	return layer_op::disconnected;
 }
 
 layer_op ssh_transport::handle(in_buffer& in) {
@@ -135,6 +129,144 @@ layer_op ssh_transport::handle(in_buffer& in) {
 	}
 
 	return handle_binary_packet(in);
+}
+
+bool ssh_transport::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+	logger_.log(logger::debug, "SSH starting to encrypt");
+
+	crypto_in_.cipher = std::move(cipher);
+	crypto_in_.mac = std::move(mac);
+
+	if(crypto_in_.cipher->is_aead()) {
+		crypto_in_.integrity_size = static_cast<aead_cipher const&>(*crypto_in_.cipher).tag_size();
+	} else {
+		SPSSH_ASSERT(crypto_in_.mac, "Invalid mac");
+		crypto_in_.integrity_size = crypto_in_.mac->size();
+	}
+
+	crypto_in_.block_size = std::max(minimum_block_size, crypto_in_.cipher->cipher_block_size());
+	SPSSH_ASSERT(crypto_in_.block_size < maximum_padding_size, "too big cipher block size");
+
+	crypto_in_.tag_buffer.resize(crypto_in_.integrity_size);
+}
+
+bool ssh_transport::try_decode_header(span in_data) {
+	if(data.size() < crypto_in_.block_size) {
+		return false;
+	}
+
+	// check if the  packet length is encrypted or not
+	if(crypto_in_.cipher && !crypto_in_.cipher->is_aead()) {
+		// decrypt just the first block to get the length
+		auto block_span = data_.subspan(0, crypto_in_.block_size);
+		crypto_in_.cipher->process(block_span, block_span);
+	}
+
+	crypto_in_.current_packet.packet_size = packet_lenght_size + ntou32(data_.data()) + integrity_size_;
+	crypto_in_.current_packet.status = packet_status::waiting_data;
+	logger_.log(logger::debug, "SSH try_decode_header [size={}]", crypto_in_.packet_header.packet_size);
+
+	return true;
+}
+
+span ssh_transport::decrypt_packet(span in_data) {
+	SPSSH_ASSERT(crypto_in_.current_packet.packet_size <= in_data.size(), "Invalid data size");
+
+	span ret;
+
+	// are we encrypted?
+	if(crypto_in_.cipher) {
+		if(crypto_in_.cipher->is_aead()) {
+			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_), data_, data_);
+		} else {
+			ret = decrypt_with_mac(data_, data_);
+		}
+	} else {
+		std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
+		ret = span{data_.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding)};
+	}
+
+	if(!ret.empty()) {
+		crypto_in_.current_packet.status = packet_status::data_ready;
+		// incremented for every packet and let wrap around
+		++crypto_in_.packet_sequence;
+	}
+	return ret;
+}
+
+
+span ssh_transport::decrypt_aead(aead_cipher& cip, const_span data, span out) {
+	SPSSH_ASSERT(crypto_out_.block_size >= minimum_block_size, "invalid block size");
+	SPSSH_ASSERT(crypto_out_.current_packet.packet_size >= crypto_out_.block_size, "invalid packet size");
+	SPSSH_ASSERT(crypto_out_.integrity_size > 0, "invalid integrity size");
+	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_out_.integrity_size, "Invalid tag buffer");
+
+	// first handle the non-encrypted authenticated data
+	cip.process_auth(data.subspan(0, packet_lenght_size));
+	data = data.subspan(packet_lenght_size);
+
+	// decrypt the data
+	cip.process(data, out);
+
+	// get the tag
+	cip.tag(crypto_in_.tag_buffer);
+
+	// check the tag matches
+	if(std::memcmp(crypto_in_.tag_buffer.data()
+		, data.data() + crypto_in_.current_packet.packet_size - crypto_in_.integrity_size
+		, crypto_in_.integrity_size) != 0)
+	{
+		error_ = ssh_mac_error;
+		logger_.log(logger::debug, "SSH decrypt_aead verifying tag failed");
+		return span{};
+	}
+
+	std::uint8_t padding = std::to_integer<std::uint8_t>(out.data());
+	crypto_in_.current_packet.data_size = crypto_in_.current_packet.packet_size - packet_header_size - padding - crypto_in_.integrity_size;
+	return span{out.subspan(padding_size, crypto_in_.current_packet.data_size)};
+}
+
+span ssh_transport::decrypt_with_mac(const_span data, span out) {
+	SPSSH_ASSERT(crypto_out_.block_size >= minimum_block_size, "invalid block size");
+	SPSSH_ASSERT(crypto_out_.current_packet.packet_size >= crypto_out_.block_size, "invalid packet size");
+	SPSSH_ASSERT(crypto_out_.integrity_size > 0, "invalid integrity size");
+	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_out_.integrity_size, "Invalid tag buffer");
+
+	// here the first block is already decrypted so that we found the packet_length
+	std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
+
+	// if we are not doing decryption in place, copy the first block to out
+	if(data.data() != out.data()) {
+		std::memcpy(out.data(), data.data(), crypto_out_.block_size);
+	}
+	data = data.subspan(crypto_out_.block_size);
+
+	std::size_t decrypt_size = crypto_out_.current_packet.packet_size - crypto_out_.block_size;
+	crypto_out_.cipher.process(data.subspan(0, decrypt_size), out.subspan(crypto_out_.block_size, decrypt_size));
+
+	std::byte seq_buf[4];
+	// convert the packet sequence to binary and process for mac
+	u32ton(crypto_out_.packet_sequence, seq_buf);
+
+	crypto_out_.mac->process(span{seq_buf, 4});
+	// process the packet for mac
+	crypto_out_.mac->process(out.subspan(0, crypto_out_.current_packet.packet_size - crypto_out_.integrity_size));
+
+	// get the mac
+	crypto_out_.mac->result(crypto_in_.tag_buffer);
+
+	// check the tag matches
+	if(std::memcmp(crypto_in_.tag_buffer.data()
+		, out.data() + crypto_out_.current_packet.packet_size + crypto_out_.integrity_size
+		, crypto_out_.integrity_size) != 0)
+	{
+		error_ = ssh_mac_error;
+		logger_.log(logger::debug, "SSH decrypt_with_mac verifying mac failed");
+		return span{};
+	}
+
+	crypto_in_.current_packet.data_size = crypto_in_.current_packet.packet_size - packet_header_size - padding - crypto_in_.integrity_size;
+	return span{out.subspan(packet_header_size, crypto_in_.current_packet.data_size)};
 }
 
 }

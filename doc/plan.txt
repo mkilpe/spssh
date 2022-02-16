@@ -1,10 +1,11 @@
 
 Overview:
 * SSH/SFTP server side
-  * Primary use is FileZilla server
+  * Primary use case is FileZilla server
 * SSH/SFTP client side
 * other SSH subsystems (scp, forwarding, shell)?
-* Analyzing/Stress testing client
+* Analyzing/Correctness/Stress testing client and/or server?
+* Own protocol over SSH (remote object?)
 
 
 Implementation:
@@ -20,9 +21,10 @@ SFTP version 3
 Requirements:
  * All components are separate and easy to test
  * No dependency to networking layer
+ * Minimal dependencies in general
  * All well tested
  * Virtual filesystem to handle all filesystem operations
- * Abstract crypto operations - support at least Nettle
+ * Abstract crypto operations - support at least Nettle and SP crypto abstraction
  * Start with:
    * KEX: X25519 (ECDH with Curve25519 and SHA-256)
    * Host key format: ssh-ed25519
@@ -46,4 +48,6 @@ HMAC-SHA256: https://www.rfc-editor.org/rfc/rfc6668.html
 SFTP: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02
 IANA name allocation: https://www.iana.org/assignments/ssh-parameters/ssh-parameters.xhtml
 
+Other:
+Asym key package: https://datatracker.ietf.org/doc/html/rfc5958
 
