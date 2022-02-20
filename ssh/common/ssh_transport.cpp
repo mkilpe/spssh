@@ -49,7 +49,10 @@ void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
 
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
-		send_packet(ser::disconnect(code, message));
+		send_packet( [&](span out) {
+			ser::disconnect::save s(code, message, "");
+			return s.write(out);
+		});
 	}
 	set_state(ssh_state::disconnected);
 }
@@ -285,10 +288,9 @@ virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const
 
 	if(type == ssh_disconnect) {
 
-		ser::disconnect packet;
-		auto & [code, desc] = packet.load(payload);
-
-		if(ser) {
+		ser::disconnect::load packet(payload);
+		if(packet) {
+			auto & [code, desc] = packet;
 			error_ = code;
 			error_msg_ = desc;
 		}
