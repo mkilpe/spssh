@@ -44,6 +44,30 @@ public:
 		return out_.size() - pos_;
 	}
 
+	bool save(std::uint32_t v) {
+		bool ret = size_left() >= 4;
+		if(ret) {
+			add_uint32(v);
+		}
+		return ret;
+	}
+
+	bool save(std::uint8_t v) {
+		bool ret = size_left() >= 1;
+		if(ret) {
+			add_uint8(v);
+		}
+		return ret;
+	}
+
+	bool save(std::string_view v) {
+		bool ret = size_left() >= 4+s.size()
+		if(ret) {
+			add_string(v);
+		}
+		return ret;
+	}
+
 	void add_uint32(std::uint32_t v) {
 		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
 		u32ton(v, out_+pos_);
@@ -57,7 +81,7 @@ public:
 	}
 
 	void add_string(std::string_view s) {
-		SPSSH_ASSERT(size_left() >= s.size(), "illegal buffer size");
+		SPSSH_ASSERT(size_left() >= 4+s.size(), "illegal buffer size");
 		add_uint32(s.size());
 		std::memcpy(out_.data()+pos_, s.data(), s.size());
 		pos_ += s.size();
@@ -107,6 +131,34 @@ public:
 
 	std::size_t size_left() const {
 		return in_.size() - pos_;
+	}
+
+	bool load(std::uint32_t& v) {
+		bool ret = size_left() >= 4;
+		if(ret) {
+			v = ntou32(in_);
+			pos_ += 4;
+		}
+		return ret;
+	}
+
+	bool load(std::uint8_t& v) {
+		bool ret = size_left() >= 4;
+		if(ret) {
+			v = ntou32(in_);
+			pos_ += 4;
+		}
+		return ret;
+	}
+
+	bool load(std::string_view& v) {
+		std::uint32_t size;
+		bool ret = load(size) && size_left() >= size;
+		if(ret) {
+			v = std::string_view{reinterpret_cast<char const*>(in_.data())+pos_, size};
+			pos_ += size;
+		}
+		return ret;
 	}
 
 	std::optional<std::uint32_t> extract_uint32() {

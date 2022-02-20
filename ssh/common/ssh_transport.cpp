@@ -31,6 +31,14 @@ void ssh_transport::set_state(ssh_state s) {
 	state_ = s;
 }
 
+ssh_error_code ssh_transport::error() const {
+	return error_;
+}
+
+std::string ssh_transport::error_message() const {
+	return error_msg_;
+}
+
 /*
    byte      SSH_MSG_DISCONNECT
    uint32    reason code
@@ -41,15 +49,7 @@ void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
 
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
-		ssh_bp_encoder p{config_, crypto_out_, output_};
-
-		transport_message msg{p, ssh_disconnect, uint32_size + string_size(message.size()) + string_size(0)};
-		msg.add_uint32(code);
-		msg.add_string(message);
-		msg.add_string("");
-		msg.done();
-
-		p.send_packet();
+		send_packet(ser::disconnect(code, message));
 	}
 	set_state(ssh_state::disconnected);
 }
@@ -103,15 +103,15 @@ layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
 	if(crypto_in_.current_packet.status == packet_status::waiting_data) {
 		// see if we have whole packet already
 		if(crypto_in_.current_packet.packet_size <= in.size()) {
-			crypto_in_.current_packet.payload = decrypt_packet(in.get());
+			auto data = in.get();
+			crypto_in_.current_packet.payload = decrypt_packet(data, data);
 		} else {
 			return layer_op::want_more;
 		}
 	}
 
 	if(crypto_in_.current_packet.status == packet_status::data_ready) {
-		return handle_transport_payload(crypto_in_.current_packet.payload);
-		// if success .. crypto_in_.current_packet.clear();
+		return process_transport_packet(crypto_in_.current_packet.payload);
 	}
 
 	// if we get here something went wrong, disconnect...
@@ -169,7 +169,7 @@ bool ssh_transport::try_decode_header(span in_data) {
 	return true;
 }
 
-span ssh_transport::decrypt_packet(span in_data) {
+span ssh_transport::decrypt_packet(const_span in_data, span out_data) {
 	SPSSH_ASSERT(crypto_in_.current_packet.packet_size <= in_data.size(), "Invalid data size");
 
 	span ret;
@@ -177,13 +177,13 @@ span ssh_transport::decrypt_packet(span in_data) {
 	// are we encrypted?
 	if(crypto_in_.cipher) {
 		if(crypto_in_.cipher->is_aead()) {
-			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_), data_, data_);
+			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_), in_data, out_data);
 		} else {
-			ret = decrypt_with_mac(data_, data_);
+			ret = decrypt_with_mac(in_data, out_data);
 		}
 	} else {
 		std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
-		ret = span{data_.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding)};
+		ret = span{out_data.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding)};
 	}
 
 	if(!ret.empty()) {
@@ -267,6 +267,44 @@ span ssh_transport::decrypt_with_mac(const_span data, span out) {
 
 	crypto_in_.current_packet.data_size = crypto_in_.current_packet.packet_size - packet_header_size - padding - crypto_in_.integrity_size;
 	return span{out.subspan(packet_header_size, crypto_in_.current_packet.data_size)};
+}
+
+layer_op ssh_transport::process_transport_packet(span payload) {
+	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
+	ssh_packet_type type = payload[0];
+	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
+	if(handle_transport_packet(type, payload.subspan(1))) {
+		crypto_in_.current_packet.clear();
+	}
+}
+
+
+
+virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
+	ssh_bf_reader read(payload);
+
+	if(type == ssh_disconnect) {
+
+		ser::disconnect packet;
+		auto & [code, desc] = packet.load(payload);
+
+		if(ser) {
+			error_ = code;
+			error_msg_ = desc;
+		}
+		set_state(ssh_state::disconnected);
+
+		logger_.log(logger::debug, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
+
+	} else if(type == ssh_ignore) {
+
+	} else if(type == ssh_unimplemented) {
+
+	} else if(type == ssh_debug) {
+
+	} else {
+
+	}
 }
 
 }

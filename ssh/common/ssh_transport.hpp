@@ -35,11 +35,12 @@ public:
 	ssh_state state() const;
 	void set_state(ssh_state);
 
-	//get error
+	ssh_error_code error() const;
+	std::string error_message() const;
 
 protected:
 	virtual void on_version_exchange(ssh_version const&);
-	virtual ??? handle_transport_payload(span payload);
+	virtual bool handle_transport_payload(ssh_packet_type, const_span payload);
 
 private: // init & generic packet handling
 	layer_op handle_version_exchange(in_buffer& in);
@@ -49,9 +50,10 @@ private: // init & generic packet handling
 private: // input
 	bool set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
 	bool try_decode_header(span in_data);
-	span decrypt_packet(span in_data);
+	span decrypt_packet(const_span in_data, span out_data);
 	span decrypt_aead(aead_cipher& cip, const_span data, span out);
 	span decrypt_with_mac(const_span data, span out);
+	layer_op process_transport_payload(span payload);
 
 private: // output
 
@@ -63,6 +65,7 @@ private: // data
 
 	ssh_state state_{ssh_state::none};
 	ssh_error_code error_{};
+	std::string error_msg_;
 
 	bool client_version_received_{};
 	ssh_version client_version_;
