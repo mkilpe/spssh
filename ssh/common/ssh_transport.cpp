@@ -293,10 +293,12 @@ virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const
 			auto & [code, desc] = packet;
 			error_ = code;
 			error_msg_ = desc;
+		} else {
+			logger_.log(logger::debug, "SSH Invalid disconnect packet from remote");
 		}
 		set_state(ssh_state::disconnected);
 
-		logger_.log(logger::debug, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
+		logger_.log(logger::info, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
 
 	} else if(type == ssh_ignore) {
 

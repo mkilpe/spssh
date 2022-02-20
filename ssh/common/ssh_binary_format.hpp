@@ -60,6 +60,14 @@ public:
 		return ret;
 	}
 
+	bool save(bool v) {
+		bool ret = size_left() >= 1;
+		if(ret) {
+			add_uint8(v);
+		}
+		return ret;
+	}
+
 	bool save(std::string_view v) {
 		bool ret = size_left() >= 4+s.size()
 		if(ret) {
@@ -143,10 +151,17 @@ public:
 	}
 
 	bool load(std::uint8_t& v) {
-		bool ret = size_left() >= 4;
+		bool ret = size_left() >= 1;
 		if(ret) {
-			v = ntou32(in_);
-			pos_ += 4;
+			v = std::to_integer<std::uint8_t>(in_[pos_++]);
+		}
+		return ret;
+	}
+
+	bool load(bool& v) {
+		bool ret = size_left() >= 1;
+		if(ret) {
+			v = std::to_integer<std::uint8_t>(in_[pos_++]) != 0;
 		}
 		return ret;
 	}

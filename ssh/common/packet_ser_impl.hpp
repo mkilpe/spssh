@@ -8,6 +8,10 @@
 
 namespace securepath::ssh::ser {
 
+struct boolean {
+	bool var{};
+};
+
 struct byte {
 	std::uint8_t var{};
 };
