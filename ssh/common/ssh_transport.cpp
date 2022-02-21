@@ -1,7 +1,7 @@
 
 #include "ssh_transport.hpp"
 #include "protocol_helpers.hpp"
-#include "transport_message.hpp"
+#include "packet_ser_impl.hpp"
 
 namespace securepath::ssh {
 
@@ -49,10 +49,11 @@ void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
 
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
-		send_packet( [&](span out) {
+		send_packet<ser::disconnect>(code, message, "");
+		/*send_packet( [&](span out) {
 			ser::disconnect::save s(code, message, "");
 			return s.write(out);
-		});
+		});*/
 	}
 	set_state(ssh_state::disconnected);
 }
@@ -85,36 +86,32 @@ layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 	if(state() == ssh_state::disconnected) {
 		return layer_op::disconnected;
 	} else if(state() == ssh_state::version_exchange) {
-		return layer_op::read_more;
+		return layer_op::want_read_more;
 	} else {
 		return layer_op::none;
 	}
 }
 
-layer_op ssh_transport::handle_packet(span payload) {
-
-}
-
 layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
+	auto data = in.get();
 
 	if(crypto_in_.current_packet.status == packet_status::waiting_header) {
-		if(!try_decode_header(in.get())) {
-			return layer_op::want_more;
+		if(!try_decode_header(data)) {
+			return layer_op::want_read_more;
 		}
 	}
 
 	if(crypto_in_.current_packet.status == packet_status::waiting_data) {
 		// see if we have whole packet already
-		if(crypto_in_.current_packet.packet_size <= in.size()) {
-			auto data = in.get();
+		if(crypto_in_.current_packet.packet_size <= data.size()) {
 			crypto_in_.current_packet.payload = decrypt_packet(data, data);
 		} else {
-			return layer_op::want_more;
+			return layer_op::want_read_more;
 		}
 	}
 
 	if(crypto_in_.current_packet.status == packet_status::data_ready) {
-		return process_transport_packet(crypto_in_.current_packet.payload);
+		return process_transport_payload(crypto_in_.current_packet.payload);
 	}
 
 	// if we get here something went wrong, disconnect...
@@ -147,27 +144,29 @@ bool ssh_transport::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::u
 		crypto_in_.integrity_size = crypto_in_.mac->size();
 	}
 
-	crypto_in_.block_size = std::max(minimum_block_size, crypto_in_.cipher->cipher_block_size());
+	crypto_in_.block_size = std::max(minimum_block_size, crypto_in_.cipher->block_size());
 	SPSSH_ASSERT(crypto_in_.block_size < maximum_padding_size, "too big cipher block size");
 
 	crypto_in_.tag_buffer.resize(crypto_in_.integrity_size);
+
+	return true;
 }
 
 bool ssh_transport::try_decode_header(span in_data) {
-	if(data.size() < crypto_in_.block_size) {
+	if(in_data.size() < crypto_in_.block_size) {
 		return false;
 	}
 
 	// check if the  packet length is encrypted or not
 	if(crypto_in_.cipher && !crypto_in_.cipher->is_aead()) {
 		// decrypt just the first block to get the length
-		auto block_span = data_.subspan(0, crypto_in_.block_size);
+		auto block_span = in_data.subspan(0, crypto_in_.block_size);
 		crypto_in_.cipher->process(block_span, block_span);
 	}
 
-	crypto_in_.current_packet.packet_size = packet_lenght_size + ntou32(data_.data()) + integrity_size_;
+	crypto_in_.current_packet.packet_size = packet_lenght_size + ntou32(in_data.data()) + crypto_in_.integrity_size;
 	crypto_in_.current_packet.status = packet_status::waiting_data;
-	logger_.log(logger::debug, "SSH try_decode_header [size={}]", crypto_in_.packet_header.packet_size);
+	logger_.log(logger::debug, "SSH try_decode_header [size={}]", crypto_in_.current_packet.packet_size);
 
 	return true;
 }
@@ -180,13 +179,13 @@ span ssh_transport::decrypt_packet(const_span in_data, span out_data) {
 	// are we encrypted?
 	if(crypto_in_.cipher) {
 		if(crypto_in_.cipher->is_aead()) {
-			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_), in_data, out_data);
+			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_.cipher), in_data, out_data);
 		} else {
 			ret = decrypt_with_mac(in_data, out_data);
 		}
 	} else {
-		std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
-		ret = span{out_data.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding)};
+		std::uint8_t padding = std::to_integer<std::uint8_t>(in_data[packet_lenght_size]);
+		ret = out_data.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding);
 	}
 
 	if(!ret.empty()) {
@@ -199,10 +198,10 @@ span ssh_transport::decrypt_packet(const_span in_data, span out_data) {
 
 
 span ssh_transport::decrypt_aead(aead_cipher& cip, const_span data, span out) {
-	SPSSH_ASSERT(crypto_out_.block_size >= minimum_block_size, "invalid block size");
-	SPSSH_ASSERT(crypto_out_.current_packet.packet_size >= crypto_out_.block_size, "invalid packet size");
-	SPSSH_ASSERT(crypto_out_.integrity_size > 0, "invalid integrity size");
-	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_out_.integrity_size, "Invalid tag buffer");
+	SPSSH_ASSERT(crypto_in_.block_size >= minimum_block_size, "invalid block size");
+	SPSSH_ASSERT(crypto_in_.current_packet.packet_size >= crypto_in_.block_size, "invalid packet size");
+	SPSSH_ASSERT(crypto_in_.integrity_size > 0, "invalid integrity size");
+	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_in_.integrity_size, "Invalid tag buffer");
 
 	// first handle the non-encrypted authenticated data
 	cip.process_auth(data.subspan(0, packet_lenght_size));
@@ -224,44 +223,44 @@ span ssh_transport::decrypt_aead(aead_cipher& cip, const_span data, span out) {
 		return span{};
 	}
 
-	std::uint8_t padding = std::to_integer<std::uint8_t>(out.data());
+	std::uint8_t padding = std::to_integer<std::uint8_t>(*out.data());
 	crypto_in_.current_packet.data_size = crypto_in_.current_packet.packet_size - packet_header_size - padding - crypto_in_.integrity_size;
 	return span{out.subspan(padding_size, crypto_in_.current_packet.data_size)};
 }
 
 span ssh_transport::decrypt_with_mac(const_span data, span out) {
-	SPSSH_ASSERT(crypto_out_.block_size >= minimum_block_size, "invalid block size");
-	SPSSH_ASSERT(crypto_out_.current_packet.packet_size >= crypto_out_.block_size, "invalid packet size");
-	SPSSH_ASSERT(crypto_out_.integrity_size > 0, "invalid integrity size");
-	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_out_.integrity_size, "Invalid tag buffer");
+	SPSSH_ASSERT(crypto_in_.block_size >= minimum_block_size, "invalid block size");
+	SPSSH_ASSERT(crypto_in_.current_packet.packet_size >= crypto_in_.block_size, "invalid packet size");
+	SPSSH_ASSERT(crypto_in_.integrity_size > 0, "invalid integrity size");
+	SPSSH_ASSERT(crypto_in_.tag_buffer.size() == crypto_in_.integrity_size, "Invalid tag buffer");
 
 	// here the first block is already decrypted so that we found the packet_length
-	std::uint8_t padding = std::to_integer<std::uint8_t>(data.data() + packet_lenght_size);
+	std::uint8_t padding = std::to_integer<std::uint8_t>(data[packet_lenght_size]);
 
 	// if we are not doing decryption in place, copy the first block to out
 	if(data.data() != out.data()) {
-		std::memcpy(out.data(), data.data(), crypto_out_.block_size);
+		std::memcpy(out.data(), data.data(), crypto_in_.block_size);
 	}
-	data = data.subspan(crypto_out_.block_size);
+	data = data.subspan(crypto_in_.block_size);
 
-	std::size_t decrypt_size = crypto_out_.current_packet.packet_size - crypto_out_.block_size;
-	crypto_out_.cipher.process(data.subspan(0, decrypt_size), out.subspan(crypto_out_.block_size, decrypt_size));
+	std::size_t decrypt_size = crypto_in_.current_packet.packet_size - crypto_in_.block_size;
+	crypto_in_.cipher->process(data.subspan(0, decrypt_size), out.subspan(crypto_in_.block_size, decrypt_size));
 
 	std::byte seq_buf[4];
 	// convert the packet sequence to binary and process for mac
-	u32ton(crypto_out_.packet_sequence, seq_buf);
+	u32ton(crypto_in_.packet_sequence, seq_buf);
 
-	crypto_out_.mac->process(span{seq_buf, 4});
+	crypto_in_.mac->process(span{seq_buf, 4});
 	// process the packet for mac
-	crypto_out_.mac->process(out.subspan(0, crypto_out_.current_packet.packet_size - crypto_out_.integrity_size));
+	crypto_in_.mac->process(out.subspan(0, crypto_in_.current_packet.packet_size - crypto_in_.integrity_size));
 
 	// get the mac
-	crypto_out_.mac->result(crypto_in_.tag_buffer);
+	crypto_in_.mac->result(crypto_in_.tag_buffer);
 
 	// check the tag matches
 	if(std::memcmp(crypto_in_.tag_buffer.data()
-		, out.data() + crypto_out_.current_packet.packet_size + crypto_out_.integrity_size
-		, crypto_out_.integrity_size) != 0)
+		, out.data() + crypto_in_.current_packet.packet_size + crypto_in_.integrity_size
+		, crypto_in_.integrity_size) != 0)
 	{
 		error_ = ssh_mac_error;
 		logger_.log(logger::debug, "SSH decrypt_with_mac verifying mac failed");
@@ -272,26 +271,25 @@ span ssh_transport::decrypt_with_mac(const_span data, span out) {
 	return span{out.subspan(packet_header_size, crypto_in_.current_packet.data_size)};
 }
 
-layer_op ssh_transport::process_transport_packet(span payload) {
+layer_op ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
-	ssh_packet_type type = payload[0];
+	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
-	if(handle_transport_packet(type, payload.subspan(1))) {
+	if(handle_transport_payload(type, payload.subspan(1))) {
 		crypto_in_.current_packet.clear();
 	}
+	return layer_op::none;
 }
 
-
-
-virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
+bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
 	ssh_bf_reader read(payload);
 
 	if(type == ssh_disconnect) {
 
 		ser::disconnect::load packet(payload);
 		if(packet) {
-			auto & [code, desc] = packet;
-			error_ = code;
+			auto & [code, desc, ignore] = packet;
+			error_ = ssh_error_code(code);
 			error_msg_ = desc;
 		} else {
 			logger_.log(logger::debug, "SSH Invalid disconnect packet from remote");
@@ -299,6 +297,7 @@ virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const
 		set_state(ssh_state::disconnected);
 
 		logger_.log(logger::info, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
+		return true;
 
 	} else if(type == ssh_ignore) {
 
@@ -306,9 +305,38 @@ virtual bool ssh_transport::handle_transport_payload(ssh_packet_type type, const
 
 	} else if(type == ssh_debug) {
 
-	} else {
-
 	}
+
+	return false;
+}
+
+span ssh_transport::get_out_buffer(std::size_t size) {
+	return {};
+}
+
+void ssh_transport::commit_out_buffer(span buf, std::size_t size) {
+
+}
+
+template<typename Packet, typename... Args>
+bool ssh_transport::send_packet(Args&&... args) {
+	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", Packet::packet_type);
+
+	typename Packet::save packet(std::forward<Args>(args)...);
+	std::size_t size = packet.size();
+	span buf = get_out_buffer(size);
+	bool ret = !buf.empty();
+	if(ret) {
+		ret = packet.write(buf);
+		if(ret) {
+			commit_out_buffer(buf, packet.serialised_size());
+		} else {
+			logger_.log(logger::debug, "SSH send_packet failed to serialise packet [type={}]", Packet::packet_type);
+		}
+	} else {
+		logger_.log(logger::debug, "SSH send_packet could not get enough buffer to send packet [size={}, type={}]", size, Packet::packet_type);
+	}
+	return ret;
 }
 
 }

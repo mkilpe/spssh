@@ -8,7 +8,7 @@ namespace securepath::ssh {
 class mac {
 public:
 	mac(std::size_t size)
-	: size_(bsize)
+	: size_(size)
 	{}
 
 	virtual ~mac() = default;

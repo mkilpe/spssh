@@ -47,7 +47,7 @@ enum ssh_packet_type : std::uint8_t {
 	// 192-255	Reserved for Private Use (local extensions)
 };
 
-enum ssh_error_code {
+enum ssh_error_code : std::uint32_t {
 	ssh_noerror                        = 0,
 	ssh_host_not_allowed_to_connect    = 1,
 	ssh_protocol_error                 = 2,

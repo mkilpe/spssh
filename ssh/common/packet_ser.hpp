@@ -1,7 +1,7 @@
 #ifndef SP_SHH_PACKET_SER_HEADER
 #define SP_SHH_PACKET_SER_HEADER
 
-#include "types.hpp"
+#include "packet_types.hpp"
 
 namespace securepath::ssh::ser {
 
@@ -48,7 +48,7 @@ using ignore = ssh_packet_ser
 	string    message in ISO-10646 UTF-8 encoding [RFC3629]
 	string    language tag [RFC3066]
 */
-using ignore = ssh_packet_ser
+using debug = ssh_packet_ser
 <
 	ssh_debug,
 	boolean,

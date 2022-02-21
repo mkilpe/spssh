@@ -4,6 +4,8 @@
 #include "types.hpp"
 #include "ssh/crypto/random.hpp"
 
+#include <optional>
+
 namespace securepath::ssh {
 
 void u32ton(std::uint32_t v, std::byte* out) {
@@ -29,7 +31,7 @@ public:
 	}
 
 	span used_span() const {
-		return span{out_.data(), pos_};
+		return out_.subspan(0, pos_);
 	}
 
 	span total_span() const {
@@ -69,7 +71,7 @@ public:
 	}
 
 	bool save(std::string_view v) {
-		bool ret = size_left() >= 4+s.size()
+		bool ret = size_left() >= 4+v.size();
 		if(ret) {
 			add_string(v);
 		}
@@ -78,7 +80,7 @@ public:
 
 	void add_uint32(std::uint32_t v) {
 		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
-		u32ton(v, out_+pos_);
+		u32ton(v, out_.data()+pos_);
 		pos_ += 4;
 	}
 
@@ -126,7 +128,7 @@ public:
 	}
 
 	const_span used_span() const {
-		return span{in_.data(), pos_};
+		return in_.subspan(0, pos_);
 	}
 
 	const_span total_span() const {
@@ -144,7 +146,7 @@ public:
 	bool load(std::uint32_t& v) {
 		bool ret = size_left() >= 4;
 		if(ret) {
-			v = ntou32(in_);
+			v = ntou32(in_.data() + pos_);
 			pos_ += 4;
 		}
 		return ret;
@@ -179,17 +181,18 @@ public:
 	std::optional<std::uint32_t> extract_uint32() {
 		std::optional<std::uint32_t> v;
 		if(size_left() >= 4) {
-			v = ntou32(in_);
+			v = ntou32(in_.data()+pos_);
 			pos_ += 4;
 		}
 		return v;
 	}
 
-	std::optional<std::uint8_t> extract_uint8() const {
+	std::optional<std::uint8_t> extract_uint8() {
 		std::optional<std::uint8_t> v;
 		if(size_left() >= 1) {
 			v =  std::to_integer<std::uint8_t>(in_[pos_++]);
 		}
+		return v;
 	}
 
 	std::optional<std::string> extract_string() {
@@ -214,6 +217,8 @@ public:
 private:
 	const_span in_;
 	std::size_t pos_;
+};
+
 }
 
 #endif

@@ -2,6 +2,7 @@
 
 #include "ssh_config.hpp"
 #include "ssh_binary_format.hpp"
+#include "types.hpp"
 
 namespace securepath::ssh {
 
@@ -103,7 +104,7 @@ std::size ssh_bp_encoder::encrypt(const_span data, span out) {
 		if(stream_.is_aead()) {
 			res = aead_encrypt(static_cast<aead_cipher&>(*stream_), data, out);
 		} else {
-			SPSSH_ASSERT(stream_.mac);
+			SPSSH_ASSERT(stream_.mac, "MAC object not set");
 			res = encrypt_with_mac(data, out);
 		}
 	}

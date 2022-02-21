@@ -19,7 +19,9 @@ struct ssh_version {
 	std::string comment;
 };
 
-#define SPSSH_ASSERT(cond, message) assert((cond) && (#message))
+#if !defined(SPSSH_ASSERT) && !defined(NDEBUG)
+#	define SPSSH_ASSERT(cond, message) assert((cond) && (#message))
+#endif
 
 }
 

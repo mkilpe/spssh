@@ -4,9 +4,11 @@
 #include "buffers.hpp"
 #include "ssh/crypto/cipher.hpp"
 #include "ssh/crypto/compression.hpp"
+#include "ssh/crypto/mac.hpp"
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
 namespace securepath::ssh {
 
@@ -86,9 +88,9 @@ public:
 private:
 	std::size_t calculate_size(std::size_t) const;
 	std::size_t calculate_min_padding(std::size_t) const;
-	std::size encrypt(const_span data, span out);
-	std::size aead_encrypt(aead_cipher& cip, const_span data, span out);
-	std::size encrypt_with_mac(const_span data, span out);
+	std::size_t encrypt(const_span data, span out);
+	std::size_t aead_encrypt(aead_cipher& cip, const_span data, span out);
+	std::size_t encrypt_with_mac(const_span data, span out);
 
 private:
 	ssh_config const& config_;

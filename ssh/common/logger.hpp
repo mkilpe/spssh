@@ -3,10 +3,15 @@
 
 #include "types.hpp"
 
-#include <format>
+//not yet supported by gcc
+//#include <format>
 #include <source_location>
 
 namespace securepath::ssh {
+
+// very simple formatting to replace std::format until gcc supports it
+template<typename... Args>
+std::string my_simple_format(std::string_view fmt, Args const&...);
 
 class logger {
 public:
@@ -26,12 +31,23 @@ public:
 	logger(logger const&) = delete;
 	logger& operator=(logger const&) = delete;
 
+	struct log_type {
+		log_type(logger::type t, std::source_location location = std::source_location::current())
+		: type(t)
+		, location(std::move(location))
+		{}
+
+		logger::type type;
+		std::source_location location;
+	};
+
 	template<typename... Args>
-	void log(type t, std::string_view fmt, Args&&... args
-		, std::source_location location = std::source_location::current())
+	void log(log_type t, std::string_view format, Args&&... args)
 	{
-		if(would_log(t)) {
-			log_line(t, std::format(fmt, std::forward<Args>(args)...), std::move(location));
+		if(would_log(t.type)) {
+			//todo: wait gcc to support std::format to enable this
+			//log_line(t, std::format(fmt, std::forward<Args>(args)...), std::move(location));
+			log_line(t.type, my_simple_format(format, std::forward<Args>(args)...), std::move(t.location));
 		}
 	}
 
@@ -44,6 +60,12 @@ public:
 private:
 	type level_{log_all};
 };
+
+template<typename... Args>
+std::string my_simple_format(std::string_view fmt, Args const&...) {
+	//todo: implement
+	return std::string(fmt);
+}
 
 }
 
