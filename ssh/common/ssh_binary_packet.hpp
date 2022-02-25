@@ -66,7 +66,8 @@ struct out_packet_info {
 };
 
 struct stream_out_crypto : public stream_crypto {
-	//stream_out_buffer buffer;
+	// buffer for output data
+	std::vector<std::byte> buffer;
 };
 
 class ssh_binary_packet {
@@ -75,6 +76,8 @@ public:
 
 	ssh_error_code error() const;
 	std::string error_message() const;
+
+	void set_error(ssh_error_code code, std::string_view message);
 
 public: //input
 	bool set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
@@ -93,6 +96,9 @@ public: //output
 
 	bool create_out_packet(out_packet_info const&, const_span data, span out);
 	bool create_out_packet_in_place(out_packet_info const&, span data);
+private:
+	bool resize_out_buffer(std::size_t);
+	void shrink_out_buffer();
 
 protected:
 	ssh_config const& config_;

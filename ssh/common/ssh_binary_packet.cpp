@@ -148,6 +148,33 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	return span{out.subspan(packet_header_size, crypto_in_.current_packet.data_size)};
 }
 
+ssh_error_code ssh_binary_packet::error() const {
+	return error_;
+}
+
+std::string ssh_binary_packet::error_message() const {
+	return error_msg_;
+}
+
+void ssh_binary_packet::set_error(ssh_error_code code, std::string_view message) {
+	error_ = code;
+	error_ msg_ = message;
+}
+
+bool ssh_binary_packet::resize_out_buffer(std::size_t size) {
+	//todo: implement using allocator
+	set_error(ssh_error_code::spssh_memory_error, "could not allocate memory");
+	return false;
+}
+
+void ssh_binary_packet::shrink_out_buffer() {
+	if(config_.always_shrink_out_buffer) {
+		logger_.log(logger::debug_verbose, "SSH shrink_out_buffer [old size={}, new size={}]", crypto_out_.buffer.size(), crypto_out_.min_out_buffer_size);
+		crypto_out_.buffer.resize(crypto_out_.min_out_buffer_size);
+		crypto_out_.buffer.shrink_to_fit();
+	}
+}
+
 out_packet_info ssh_binary_packet::out_packet_size(std::size_t data_size) const {
 	std::size_t packet_size_without_padding = header_size + data_size + crypto_out_.integrity_size;
 
@@ -158,6 +185,7 @@ out_packet_info ssh_binary_packet::out_packet_size(std::size_t data_size) const 
 		if(max) {
 			// todo: change random_uint to be object
 			padding_size += random_uint(0, max) * crypto_out_.block_size;
+			logger_.log(logger::debug_verbose, "SSH adding random padding [size={}]", padding_size);
 		}
 	}
 
@@ -212,13 +240,26 @@ void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 	}
 }
 
-bool ssh_binary_packet::create_out_packet(const_span data, span out) {
+bool ssh_binary_packet::create_out_packet(const_span data) {
+	if(crypto_out_.compression) {
+		//todo
+	}
+	auto sizes = out_packet_size(data.size());
+	if(!resize_out_buffer(sizes.size)) {
+		return false;
+	}
 
+	//...
+
+
+	shrink_out_buffer();
 }
 
 bool ssh_binary_packet::create_out_packet_in_place(out_packet_info const& info, span data) {
 	SPSSH_ASSERT(data.size() == info.payload_size, "invalid payload size");
 	SPSSH_ASSERT(!crypto_out_.compression, "can't do in place buffer manipulation with compression");
+
+	logger_.log(logger::debug_trace, "SSH create_out_packet_in_place [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
 
 	ssh_bf_writer p(data);
 

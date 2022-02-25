@@ -31,14 +31,6 @@ void ssh_transport::set_state(ssh_state s) {
 	state_ = s;
 }
 
-ssh_error_code ssh_transport::error() const {
-	return error_;
-}
-
-std::string ssh_transport::error_message() const {
-	return error_msg_;
-}
-
 /*
    byte      SSH_MSG_DISCONNECT
    uint32    reason code

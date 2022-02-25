@@ -63,10 +63,13 @@ enum ssh_error_code : std::uint32_t {
 	ssh_too_many_connections           = 12,
 	ssh_auth_cancelled_by_user         = 13,
 	ssh_no_more_auth_methods_available = 14,
-	ssh_illegal_user_name              = 15
+	ssh_illegal_user_name              = 15,
 
 	//0x00000010-0xFDFFFFFF	Unassigned
 	//0xFE000000-0xFFFFFFFF	Reserved for Private Use
+
+	//spssh defined errors
+	spssh_memory_error                 = 0xFFFF0001
 };
 
 }
