@@ -10,9 +10,9 @@ namespace securepath::ssh {
  */
 class ssh_server : private ssh_transport {
 public:
-	ssh_server(ssh_config const&, fz::logger_interface* logger = nullptr);
+	ssh_server(ssh_config const&, logger& log, out_buffer&);
 
-
+private:
 };
 
 }

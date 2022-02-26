@@ -2,7 +2,7 @@
 
 #include "ssh_config.hpp"
 #include "ssh_constants.hpp"
-#include "ssh_binary_format.hpp"
+#include "ssh_binary_util.hpp"
 #include "types.hpp"
 
 namespace securepath::ssh {
@@ -42,7 +42,7 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 	}
 
 	crypto_in_.current_packet.packet_size = packet_lenght_size + ntou32(in_data.data()) + crypto_in_.integrity_size;
-	crypto_in_.current_packet.status = packet_status::waiting_data;
+	crypto_in_.current_packet.status = in_packet_status::waiting_data;
 	logger_.log(logger::debug, "SSH try_decode_header [size={}]", crypto_in_.current_packet.packet_size);
 
 	return true;
@@ -66,7 +66,7 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 	}
 
 	if(!ret.empty()) {
-		crypto_in_.current_packet.status = packet_status::data_ready;
+		crypto_in_.current_packet.status = in_packet_status::data_ready;
 		// incremented for every packet and let wrap around
 		++crypto_in_.packet_sequence;
 	}
@@ -158,27 +158,30 @@ std::string ssh_binary_packet::error_message() const {
 
 void ssh_binary_packet::set_error(ssh_error_code code, std::string_view message) {
 	error_ = code;
-	error_ msg_ = message;
+	error_msg_ = message;
 }
 
 bool ssh_binary_packet::resize_out_buffer(std::size_t size) {
-	//todo: implement using allocator
-	set_error(ssh_error_code::spssh_memory_error, "could not allocate memory");
-	return false;
+	bool ret = size <= config_.max_out_buffer_size;
+	if(ret) {
+		crypto_out_.buffer.resize(size);
+	} else {
+		set_error(ssh_error_code::spssh_memory_error, "asking for bigger buffer than max_out_buffer_size");
+	}
+	return ret;
 }
 
 void ssh_binary_packet::shrink_out_buffer() {
 	if(config_.always_shrink_out_buffer) {
-		logger_.log(logger::debug_verbose, "SSH shrink_out_buffer [old size={}, new size={}]", crypto_out_.buffer.size(), crypto_out_.min_out_buffer_size);
-		crypto_out_.buffer.resize(crypto_out_.min_out_buffer_size);
+		logger_.log(logger::debug_verbose, "SSH shrink_out_buffer [old size={}, new size={}]", crypto_out_.buffer.size(), config_.min_out_buffer_size);
+		crypto_out_.buffer.resize(config_.min_out_buffer_size);
 		crypto_out_.buffer.shrink_to_fit();
 	}
 }
 
-out_packet_info ssh_binary_packet::out_packet_size(std::size_t data_size) const {
-	std::size_t packet_size_without_padding = header_size + data_size + crypto_out_.integrity_size;
+std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t data_size, out_buffer& buf) {
 
-	std::size_t padding_size = minimum_padding();
+	std::size_t padding_size = minimum_padding(packet_header_size + data_size);
 	if(config_.random_packet_padding) {
 		// add random padding to make traffic analysing harder
 		std::size_t max = (maximum_padding_size - padding_size) / crypto_out_.block_size;
@@ -189,7 +192,32 @@ out_packet_info ssh_binary_packet::out_packet_size(std::size_t data_size) const 
 		}
 	}
 
-	return out_packet_info{packet_size_without_padding + padding_size, data_size, padding_size};
+	out_packet_record res
+		{ packet_header_size + data_size + padding_size + crypto_out_.integrity_size
+		, data_size
+		, padding_size
+		};
+
+	res.out_buffer = buf.get(res.size);
+
+	if(res.out_buffer.empty()) {
+		logger_.log(logger::info, "SSH alloc_out_packet failed to allocate output buffer [size={}]", res.size);
+		return std::nullopt;
+	}
+
+	if(config_.use_in_place_buffer) {
+		res.data_buffer = res.out_buffer;
+	} else {
+		if(!resize_out_buffer(res.size)) {
+			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate data buffer [size={}]", res.size);
+			return std::nullopt;
+		}
+		res.data_buffer = crypto_out_.buffer;
+	}
+
+	res.data = res.data_buffer.subspan(packet_header_size, data_size);
+
+	return res;
 }
 
 std::size_t ssh_binary_packet::minimum_padding(std::size_t header_payload_size) const {
@@ -231,7 +259,7 @@ void ssh_binary_packet::encrypt_with_mac(const_span data, span out) {
 
 void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 	if(crypto_out_.cipher) {
-		if(crypto_out_.is_aead()) {
+		if(crypto_out_.cipher->is_aead()) {
 			aead_encrypt(static_cast<aead_cipher&>(*crypto_out_.cipher), data, out);
 		} else {
 			SPSSH_ASSERT(crypto_out_.mac, "MAC object not set");
@@ -240,28 +268,10 @@ void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 	}
 }
 
-bool ssh_binary_packet::create_out_packet(const_span data) {
-	if(crypto_out_.compression) {
-		//todo
-	}
-	auto sizes = out_packet_size(data.size());
-	if(!resize_out_buffer(sizes.size)) {
-		return false;
-	}
+void ssh_binary_packet::create_out_packet(out_packet_record const& info) {
+	logger_.log(logger::debug_trace, "SSH create_out_packet [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
 
-	//...
-
-
-	shrink_out_buffer();
-}
-
-bool ssh_binary_packet::create_out_packet_in_place(out_packet_info const& info, span data) {
-	SPSSH_ASSERT(data.size() == info.payload_size, "invalid payload size");
-	SPSSH_ASSERT(!crypto_out_.compression, "can't do in place buffer manipulation with compression");
-
-	logger_.log(logger::debug_trace, "SSH create_out_packet_in_place [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
-
-	ssh_bf_writer p(data);
+	ssh_bf_writer p(info.data_buffer);
 
 	p.add_uint32(1 + info.payload_size + info.padding_size); // padding_length + payload + padding
 	p.add_uint8(info.padding_size);
@@ -269,11 +279,16 @@ bool ssh_binary_packet::create_out_packet_in_place(out_packet_info const& info, 
 	// todo: change this to use object for randomness
 	p.add_random_range(info.padding_size);
 
-	encrypt_packet(p.used_span(), p.total_span());
+	encrypt_packet(info.data_buffer, info.out_buffer);
 
 	// incremented for every packet and let wrap around
 	++crypto_out_.packet_sequence;
+
+	if(!config_.use_in_place_buffer) {
+		shrink_out_buffer();
+	}
 }
+
 
 }
 

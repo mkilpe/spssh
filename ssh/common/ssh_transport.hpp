@@ -58,9 +58,7 @@ private: // output
 	bool send_packet(Args&&... args);
 
 private: // data
-	ssh_config const& config_;
 	out_buffer& output_;
-	logger& logger_;
 
 	ssh_state state_{ssh_state::none};
 

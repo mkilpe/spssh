@@ -2,7 +2,7 @@
 #define SP_SHH_PACKET_SER_IMPL_HEADER
 
 #include "packet_ser.hpp"
-#include "ssh_binary_format.hpp"
+#include "ssh_binary_util.hpp"
 
 #include <tuple>
 #include <utility>

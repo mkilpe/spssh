@@ -6,9 +6,8 @@
 namespace securepath::ssh {
 
 ssh_transport::ssh_transport(ssh_config const& c, out_buffer& b, logger& l)
-: config_(c)
+: ssh_binary_packet(c, l)
 , output_(b)
-, logger_(l)
 {
 }
 
@@ -31,21 +30,11 @@ void ssh_transport::set_state(ssh_state s) {
 	state_ = s;
 }
 
-/*
-   byte      SSH_MSG_DISCONNECT
-   uint32    reason code
-   string    description in ISO-10646 UTF-8 encoding [RFC3629]
-   string    language tag [RFC3066]
-*/
 void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
 
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
 		send_packet<ser::disconnect>(code, message, "");
-		/*send_packet( [&](span out) {
-			ser::disconnect::save s(code, message, "");
-			return s.write(out);
-		});*/
 	}
 	set_state(ssh_state::disconnected);
 }
@@ -87,13 +76,13 @@ layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
 	auto data = in.get();
 
-	if(crypto_in_.current_packet.status == packet_status::waiting_header) {
+	if(crypto_in_.current_packet.status == in_packet_status::waiting_header) {
 		if(!try_decode_header(data)) {
 			return layer_op::want_read_more;
 		}
 	}
 
-	if(crypto_in_.current_packet.status == packet_status::waiting_data) {
+	if(crypto_in_.current_packet.status == in_packet_status::waiting_data) {
 		// see if we have whole packet already
 		if(crypto_in_.current_packet.packet_size <= data.size()) {
 			crypto_in_.current_packet.payload = decrypt_packet(data, data);
@@ -102,7 +91,7 @@ layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
 		}
 	}
 
-	if(crypto_in_.current_packet.status == packet_status::data_ready) {
+	if(crypto_in_.current_packet.status == in_packet_status::data_ready) {
 		return process_transport_payload(crypto_in_.current_packet.payload);
 	}
 
@@ -176,19 +165,16 @@ bool ssh_transport::send_packet(Args&&... args) {
 
 	typename Packet::save packet(std::forward<Args>(args)...);
 	std::size_t size = packet.size();
-	span buf = get_out_buffer(size);
-	bool ret = !buf.empty();
-	if(ret) {
-		ret = packet.write(buf);
-		if(ret) {
-			commit_out_buffer(buf, packet.serialised_size());
-		} else {
-			logger_.log(logger::debug, "SSH send_packet failed to serialise packet [type={}]", Packet::packet_type);
-		}
-	} else {
-		logger_.log(logger::debug, "SSH send_packet could not get enough buffer to send packet [size={}, type={}]", size, Packet::packet_type);
+
+	auto rec = alloc_out_packet(size, output_);
+
+	if(rec && packet.write(rec->data)) {
+		create_out_packet(*rec);
+		output_.commit(rec->size);
+		return true;
 	}
-	return ret;
+
+	return false;
 }
 
 }

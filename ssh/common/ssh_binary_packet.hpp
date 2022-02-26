@@ -2,11 +2,15 @@
 #define SP_SHH_BINARY_PACKET_HEADER
 
 #include "buffers.hpp"
+#include "logger.hpp"
+#include "packet_types.hpp"
+#include "ssh_constants.hpp"
 #include "ssh/crypto/cipher.hpp"
 #include "ssh/crypto/compression.hpp"
 #include "ssh/crypto/mac.hpp"
 
 #include <cstring>
+#include <optional>
 #include <memory>
 #include <vector>
 
@@ -56,13 +60,19 @@ struct stream_in_crypto : public stream_crypto {
 	std::vector<std::byte> tag_buffer;
 };
 
-struct out_packet_info {
+struct out_packet_record {
 	// size of the whole packet with padding and integrity
 	std::size_t size{};
 	// size of the payload
 	std::size_t payload_size{};
 	// size of the random padding
 	std::size_t padding_size{};
+	// this is where the payload is written to, sub-span of data_buffer
+	span data;
+	// buffer for the whole transport packet
+	span data_buffer;
+	// the out buffer
+	span out_buffer;
 };
 
 struct stream_out_crypto : public stream_crypto {
@@ -87,15 +97,14 @@ public: //input
 	span decrypt_with_mac(const_span data, span out);
 
 public: //output
-	out_packet_info out_packet_size(std::size_t data_size) const;
+	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size, out_buffer&);
 	std::size_t minimum_padding(std::size_t header_payload_size) const;
 
 	void aead_encrypt(aead_cipher& cip, const_span data, span out);
 	void encrypt_with_mac(const_span data, span out);
 	void encrypt_packet(const_span data, span out);
 
-	bool create_out_packet(out_packet_info const&, const_span data, span out);
-	bool create_out_packet_in_place(out_packet_info const&, span data);
+	void create_out_packet(out_packet_record const&);
 private:
 	bool resize_out_buffer(std::size_t);
 	void shrink_out_buffer();

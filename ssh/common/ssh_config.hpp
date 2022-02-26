@@ -15,7 +15,6 @@ struct ssh_config {
 	// supported kex
 	// supported ciphers/macs
 	// supported compression
-	// max packet size
 	// re-key interval
 
 	// add random size of padding for each packet
@@ -29,6 +28,9 @@ struct ssh_config {
 
 	// should we force shrinking of the output buffer after each packet
 	bool always_shrink_out_buffer{};
+
+	// use in place operations for output buffer, this disables compression
+	bool use_in_place_buffer{true};
 };
 
 }

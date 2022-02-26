@@ -11,8 +11,8 @@ class string_in_buffer : public in_buffer {
 public:
 	string_in_buffer(std::string s) : data(s) {}
 
-	const_span get() const override {
-		return const_span{reinterpret_cast<std::byte const*>(data.data()+consumed), data.size()-consumed};
+	span get() override {
+		return span{reinterpret_cast<std::byte*>(data.data()+consumed), data.size()-consumed};
 	}
 
 	void consume(std::size_t size) override {
@@ -52,8 +52,8 @@ public:
 
 class string_io_buffer : public in_buffer, public out_buffer {
 public:
-	const_span get() const override {
-		return const_span{reinterpret_cast<std::byte const*>(data.data()), pos};
+	span get() override {
+		return span{reinterpret_cast<std::byte*>(data.data()), pos};
 	}
 
 	void consume(std::size_t size) override {
