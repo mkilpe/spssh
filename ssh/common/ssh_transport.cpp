@@ -151,14 +151,6 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 	return false;
 }
 
-span ssh_transport::get_out_buffer(std::size_t size) {
-	return {};
-}
-
-void ssh_transport::commit_out_buffer(span buf, std::size_t size) {
-
-}
-
 template<typename Packet, typename... Args>
 bool ssh_transport::send_packet(Args&&... args) {
 	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", Packet::packet_type);

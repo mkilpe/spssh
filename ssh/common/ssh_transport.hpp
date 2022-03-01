@@ -51,9 +51,6 @@ private: // input
 	layer_op process_transport_payload(span payload);
 
 private: // output
-	span get_out_buffer(std::size_t size);
-	void commit_out_buffer(span buf, std::size_t size);
-
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args);
 
