@@ -5,6 +5,7 @@
 
 //not yet supported by gcc
 //#include <format>
+#include <sstream>
 #include <source_location>
 
 namespace securepath::ssh {
@@ -25,6 +26,10 @@ public:
 		log_none = 0,
 		log_all = info | error | debug | debug_trace | debug_verbose
 	};
+
+	logger(type t = log_all)
+	: level_(t)
+	{}
 
 	virtual ~logger() = default;
 
@@ -61,11 +66,38 @@ private:
 	type level_{log_all};
 };
 
+// only support {} placeholder until we have std::format, and no escaping
 template<typename... Args>
-std::string my_simple_format(std::string_view fmt, Args const&...) {
-	//todo: implement
-	return std::string(fmt);
+std::string my_simple_format(std::string_view fmt, Args const&... args) {
+	std::ostringstream out;
+	std::string_view::size_type pos = 0;
+
+	auto replace = [&](auto&& arg) {
+		if(pos != std::string_view::npos) {
+			auto f = fmt.find("{}", pos);
+			if(f != std::string_view::npos) {
+				out << fmt.substr(pos, f-pos);
+				out << arg;
+				pos = f+2;
+			}
+		}
+	};
+
+	(replace(args), ...);
+
+	if(pos < fmt.size()) {
+		out << fmt.substr(pos);
+	}
+
+	return out.str();
 }
+
+class stdout_logger : public logger {
+public:
+	using logger::logger;
+
+	void log_line(type, std::string&&, std::source_location&&) override;
+};
 
 }
 

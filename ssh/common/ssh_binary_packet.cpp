@@ -1,5 +1,6 @@
 #include "ssh_binary_packet.hpp"
 
+#include "logger.hpp"
 #include "ssh_config.hpp"
 #include "ssh_constants.hpp"
 #include "ssh_binary_util.hpp"
@@ -7,6 +8,11 @@
 
 namespace securepath::ssh {
 
+ssh_binary_packet::ssh_binary_packet(ssh_config const& config, logger& logger)
+: config_(config)
+, logger_(logger)
+{
+}
 
 bool ssh_binary_packet::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
 	logger_.log(logger::debug, "SSH starting to encrypt");
@@ -62,7 +68,13 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 		}
 	} else {
 		std::uint8_t padding = std::to_integer<std::uint8_t>(in_data[packet_lenght_size]);
-		ret = out_data.subspan(packet_header_size, crypto_in_.current_packet.packet_size - packet_header_size - padding);
+		std::size_t size = crypto_in_.current_packet.packet_size - packet_header_size - padding;
+		if(in_data.data() != out_data.data()) {
+			std::memcpy(out_data.data(), in_data.data() + packet_header_size, size);
+			ret = out_data.subspan(0, size);
+		} else {
+			ret = out_data.subspan(packet_header_size, size);
+		}
 	}
 
 	if(!ret.empty()) {

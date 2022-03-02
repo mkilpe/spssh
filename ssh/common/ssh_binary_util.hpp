@@ -4,18 +4,19 @@
 #include "types.hpp"
 #include "ssh/crypto/random.hpp"
 
+#include <cstring>
 #include <optional>
 
 namespace securepath::ssh {
 
-void u32ton(std::uint32_t v, std::byte* out) {
+inline void u32ton(std::uint32_t v, std::byte* out) {
 	out[0] = std::byte((v >> 24) & 0xff);
 	out[1] = std::byte((v >> 16) & 0xff);
 	out[2] = std::byte((v >> 8) & 0xff);
 	out[3] = std::byte(v & 0xff);
 }
 
-std::uint32_t ntou32(std::byte const* in) {
+inline std::uint32_t ntou32(std::byte const* in) {
 	return (std::to_integer<std::uint32_t>(in[0]) << 24)
 			| (std::to_integer<std::uint32_t>(in[1]) << 16)
 			| (std::to_integer<std::uint32_t>(in[2]) << 8)

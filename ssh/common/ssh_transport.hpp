@@ -7,6 +7,8 @@
 #include "ssh_layer.hpp"
 #include "ssh_binary_packet.hpp"
 
+#include <iosfwd>
+
 namespace securepath::ssh {
 
 class in_buffer;
@@ -19,8 +21,10 @@ enum class ssh_state {
 	transport,
 	user_authentication,
 	subsystem,
-	disconnected
+	disconnected,
 };
+std::string_view to_string(ssh_state);
+std::ostream& operator<<(std::ostream&, ssh_state);
 
 /** \brief SSH Version 2 transport layer
  */

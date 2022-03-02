@@ -11,35 +11,35 @@ namespace securepath::ssh::ser {
 
 struct boolean {
 	using type = bool;
-	bool value{};
+	type value{};
 	static constexpr std::size_t static_size = 1;
-	std::size_t size() const {	return 1; }
+	std::size_t size() const {	return static_size; }
 };
 
 struct byte {
 	using type = std::uint8_t;
-	std::uint8_t value{};
+	type value{};
 	static constexpr std::size_t static_size = 1;
-	std::size_t size() const {	return 1; }
+	std::size_t size() const {	return static_size; }
 };
 
 struct uint32 {
 	using type = std::uint32_t;
-	std::uint32_t value{};
+	type value{};
 	static constexpr std::size_t static_size = 4;
-	std::size_t size() const {	return 4; }
+	std::size_t size() const {	return static_size; }
 };
 
 struct string {
 	using type = std::string_view;
-	std::string_view value{};
+	type value{};
 	static constexpr std::size_t static_size = 4;
 	std::size_t size() const {	return static_size + value.size(); }
 };
 
 struct data {
 	using type = const_span;
-	const_span value{};
+	type value{};
 	static constexpr std::size_t static_size = 4;
 	std::size_t size() const {	return static_size + value.size(); }
 };
@@ -85,6 +85,8 @@ struct ssh_packet_ser<Type, TypeTags...>::save {
 	bool write(span out) {
 		ssh_bf_writer writer(out);
 
+		writer.save(std::uint8_t(Type));
+
 		bool ret = std::apply(
 			[&](auto&&... args) {
 				return (( writer.save(args.value) ) && ...);
@@ -99,7 +101,8 @@ struct ssh_packet_ser<Type, TypeTags...>::save {
 
 	/// This can be used to allocate buffer for the write()
 	std::size_t size() const {
-		return std::apply(
+		// type tag size + rest of the packet size
+		return byte::static_size + std::apply(
 			[&](auto&&... args) {
 				return (( args.size() ) + ...);
 			}, m_);
@@ -122,16 +125,17 @@ struct ssh_packet_ser_load {
 	using members = std::tuple<TypeTags...>;
 
 	/// expect the type tag to be in front of the given span
-	ssh_packet_ser_load(match_type_tag expected_tag, const_span in_data)
+	ssh_packet_ser_load(match_type_tag, const_span in_data)
 	{
 		ssh_bf_reader reader(in_data);
 		std::uint8_t tag{};
+
 		if(reader.load(tag) && tag == Type) {
 			load_data(reader);
 		}
 	}
 
-	/// expect the type already matched, so there should not be the type in in_data any more
+	/// expect the type already matched, so there should not be the type tag in in_data any more
 	ssh_packet_ser_load(const_span in_data)
 	{
 		ssh_bf_reader reader(in_data);

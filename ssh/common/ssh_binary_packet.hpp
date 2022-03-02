@@ -93,18 +93,21 @@ public: //input
 	bool set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
 	bool try_decode_header(span in_data);
 	span decrypt_packet(const_span in_data, span out_data);
-	span decrypt_aead(aead_cipher& cip, const_span data, span out);
-	span decrypt_with_mac(const_span data, span out);
 
 public: //output
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size, out_buffer&);
-	std::size_t minimum_padding(std::size_t header_payload_size) const;
+	void create_out_packet(out_packet_record const&);
 
+protected: //input
+	span decrypt_aead(aead_cipher& cip, const_span data, span out);
+	span decrypt_with_mac(const_span data, span out);
+
+protected: //output
+	std::size_t minimum_padding(std::size_t header_payload_size) const;
 	void aead_encrypt(aead_cipher& cip, const_span data, span out);
 	void encrypt_with_mac(const_span data, span out);
 	void encrypt_packet(const_span data, span out);
 
-	void create_out_packet(out_packet_record const&);
 private:
 	bool resize_out_buffer(std::size_t);
 	void shrink_out_buffer();

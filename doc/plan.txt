@@ -48,6 +48,8 @@ HMAC-SHA256: https://www.rfc-editor.org/rfc/rfc6668.html
 SFTP: https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02
 IANA name allocation: https://www.iana.org/assignments/ssh-parameters/ssh-parameters.xhtml
 Ed25519 pub key algos: https://datatracker.ietf.org/doc/html/rfc8709
+EdDSA: https://datatracker.ietf.org/doc/html/rfc8032
+Elliptic Curves for Security: https://datatracker.ietf.org/doc/html/rfc7748
 
 Other:
 Asym key package: https://datatracker.ietf.org/doc/html/rfc5958

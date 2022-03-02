@@ -3,7 +3,27 @@
 #include "protocol_helpers.hpp"
 #include "packet_ser_impl.hpp"
 
+#include <ostream>
+
 namespace securepath::ssh {
+
+char const* const state_strings[] =
+	{ "none"
+	, "version_exchange"
+	, "kex"
+	, "transport"
+	, "user_authentication"
+	, "subsystem"
+	, "disconnected"
+	};
+
+std::string_view to_string(ssh_state s) {
+	return state_strings[std::size_t(s)];
+}
+
+std::ostream& operator<<(std::ostream& out, ssh_state state) {
+	return out << to_string(state);
+}
 
 ssh_transport::ssh_transport(ssh_config const& c, out_buffer& b, logger& l)
 : ssh_binary_packet(c, l)
