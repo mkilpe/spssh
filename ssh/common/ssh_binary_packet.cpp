@@ -213,6 +213,7 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 	res.out_buffer = buf.get(res.size);
 
 	if(res.out_buffer.empty()) {
+		set_error(ssh_error_code::spssh_memory_error, "SSH alloc_out_packet failed");
 		logger_.log(logger::info, "SSH alloc_out_packet failed to allocate output buffer [size={}]", res.size);
 		return std::nullopt;
 	}

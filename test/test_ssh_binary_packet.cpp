@@ -45,6 +45,10 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	return false;
 }
 
+//std::size_t max_out_buffer_size{128*1024};
+//bool use_in_place_buffer{true};
+//bool random_packet_padding{true};
+
 TEST_CASE("ssh_binary_packet", "[unit]") {
 	ssh_config config;
 	string_io_buffer buf;
@@ -68,4 +72,16 @@ TEST_CASE("ssh_binary_packet", "[unit]") {
 	CHECK(ignore == "test 2");
 }
 
+TEST_CASE("ssh_binary_packet failing", "[unit]") {
+	ssh_config config;
+	ssh_config.max_out_buffer_size = 25;
+	ssh_config.use_in_place_buffer = false;
+	string_io_buffer buf;
+	stdout_logger logger;
+	std::byte temp_buf[1024] = {};
+
+	ssh_binary_packet bp_1(config, logger);
+	CHECK(!send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
+	CHECK(bp_1.error() == );
+}
 }
