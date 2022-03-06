@@ -3,6 +3,9 @@
 
 #include "packet_types.hpp"
 
+#include <string_view>
+#include <vector>
+
 namespace securepath::ssh::ser {
 
 // type tags for packet serialisation
@@ -12,8 +15,11 @@ struct uint32;
 struct uint64;
 struct mpint;
 struct string;
-struct string_list;
-struct data;
+struct name_list;
+using name_list_t = std::vector<std::string_view>;
+
+template<std::size_t size>
+struct bytes;
 
 template<ssh_packet_type, typename... TypeTags>
 class ssh_packet_ser;
@@ -63,6 +69,41 @@ using debug = ssh_packet_ser
 using unimplemented = ssh_packet_ser
 <
 	ssh_unimplemented,
+	uint32
+>;
+
+/*
+	byte         SSH_MSG_KEXINIT
+	byte[16]     cookie (random bytes)
+	name-list    kex_algorithms
+	name-list    server_host_key_algorithms
+	name-list    encryption_algorithms_client_to_server
+	name-list    encryption_algorithms_server_to_client
+	name-list    mac_algorithms_client_to_server
+	name-list    mac_algorithms_server_to_client
+	name-list    compression_algorithms_client_to_server
+	name-list    compression_algorithms_server_to_client
+	name-list    languages_client_to_server
+	name-list    languages_server_to_client
+	boolean      first_kex_packet_follows
+	uint32       0 (reserved for future extension)
+*/
+using kexinit = ssh_packet_ser
+<
+	ssh_kexinit,
+	byte,
+	bytes<16>,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	name_list,
+	boolean,
 	uint32
 >;
 

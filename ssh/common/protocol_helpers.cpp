@@ -97,5 +97,36 @@ version_parse_result parse_ssh_version(in_buffer& in, bool allow_non_version_lin
 	return result;
 }
 
+bool parse_string_list(std::string_view view, std::vector<std::string_view>& out) {
+	std::string_view::size_type start = 0, end = 0;
+
+	if(!view.empty()) {
+		while(end != std::string_view::npos) {
+			end = view.find_first_of(',', start);
+			if(end == std::string_view::npos) {
+				out.emplace_back(view.substr(start));
+			} else {
+				out.emplace_back(view.substr(start, end-start));
+			}
+			start = end + 1;
+		}
+	}
+
+	return true;
+}
+
+bool to_string_list(std::vector<std::string_view> const& in, std::string& out) {
+	bool first = true;
+	for(auto&& v : in) {
+		if(v.empty()) return false;
+		if(v.find(',') != std::string_view::npos) return false;
+		if(!first) out += ",";
+
+		first = false;
+		out += v;
+	}
+	return true;
+}
+
 }
 

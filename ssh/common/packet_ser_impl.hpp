@@ -3,46 +3,112 @@
 
 #include "packet_ser.hpp"
 #include "ssh_binary_util.hpp"
+#include "protocol_helpers.hpp"
 
+#include <vector>
 #include <tuple>
 #include <utility>
 
 namespace securepath::ssh::ser {
 
-struct boolean {
-	using type = bool;
-	type value{};
+template<typename Type>
+struct type_base {
+	using type = Type;
+	type data{};
+
+	type_base() = default;
+	type_base(type t) : data(t) {};
+
+	bool load(ssh_bf_reader& r) {
+		return r.load(data);
+	}
+
+	bool save(ssh_bf_writer& w) const {
+		return w.save(data);
+	}
+
+	type& view() {
+		return data;
+	}
+};
+
+struct boolean : type_base<bool> {
+	using type_base::type_base;
 	static constexpr std::size_t static_size = 1;
 	std::size_t size() const {	return static_size; }
 };
 
-struct byte {
-	using type = std::uint8_t;
-	type value{};
+struct byte : type_base<std::byte> {
+	using type_base::type_base;
 	static constexpr std::size_t static_size = 1;
 	std::size_t size() const {	return static_size; }
 };
 
-struct uint32 {
-	using type = std::uint32_t;
-	type value{};
+struct uint32 : type_base<std::uint32_t> {
+	using type_base::type_base;
 	static constexpr std::size_t static_size = 4;
 	std::size_t size() const {	return static_size; }
 };
 
-struct string {
-	using type = std::string_view;
-	type value{};
+struct string : type_base<std::string_view> {
+	using type_base::type_base;
 	static constexpr std::size_t static_size = 4;
-	std::size_t size() const {	return static_size + value.size(); }
+	std::size_t size() const {	return static_size + data.size(); }
 };
 
-struct data {
-	using type = const_span;
+struct name_list {
+	using type = std::vector<std::string_view>;
+
+	name_list() = default;
+	name_list(type const& t) : error(!to_string_list(t, data)) {}
+
 	type value{};
+	std::string data{};
+	bool error{};
+
 	static constexpr std::size_t static_size = 4;
-	std::size_t size() const {	return static_size + value.size(); }
+	std::size_t size() const {
+		return static_size + data.size();
+	}
+
+	bool load(ssh_bf_reader& r) {
+		std::string_view in;
+		return r.load(in) && parse_string_list(in, value);
+	}
+
+	bool save(ssh_bf_writer& w) const {
+		return !error && w.save(data);
+	}
+
+	type& view() {
+		return value;
+	}
 };
+
+template<std::size_t Size>
+struct bytes {
+	using type = std::span<std::byte, Size>;
+	type data{};
+
+	bytes() = default;
+	bytes(type t) : data(t) {}
+
+	static constexpr std::size_t static_size = Size;
+	std::size_t size() const { return Size; }
+
+	bool load(ssh_bf_reader& r) {
+		return r.load(data);
+	}
+
+	bool save(ssh_bf_writer& w) const {
+		return w.save(data);
+	}
+
+	type& view() {
+		return data;
+	}
+};
+
 
 template<ssh_packet_type Type, typename... TypeTags> struct ssh_packet_ser_load;
 
@@ -89,7 +155,7 @@ struct ssh_packet_ser<Type, TypeTags...>::save {
 
 		bool ret = std::apply(
 			[&](auto&&... args) {
-				return (( writer.save(args.value) ) && ...);
+				return (( args.save(writer) ) && ...);
 			}, m_);
 
 		if(ret) {
@@ -148,14 +214,14 @@ struct ssh_packet_ser_load {
 
 	template<std::size_t Index>
 	auto&& get() {
-		return std::get<Index>(m_).value;
+		return std::get<Index>(m_).view();
 	}
 
 private:
 	void load_data(ssh_bf_reader& reader) {
 		result_ = std::apply(
 			[&](auto&&... args) {
-				return (( reader.load(args.value) ) && ...);
+				return (( args.load(reader) ) && ...);
 			}, m_);
 
 		if(result_) {

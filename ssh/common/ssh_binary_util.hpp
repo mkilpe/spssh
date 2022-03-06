@@ -79,6 +79,17 @@ public:
 		return ret;
 	}
 
+	template<std::size_t S>
+	bool save(std::span<std::byte, S> const& s) {
+		bool ret = size_left() >= s.size();
+		if(ret) {
+			std::memcpy(out_.data()+pos_, s.data(), s.size());
+			pos_ += s.size();
+		}
+		return ret;
+	}
+
+
 	void add_uint32(std::uint32_t v) {
 		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
 		u32ton(v, out_.data()+pos_);
@@ -175,6 +186,16 @@ public:
 		if(ret) {
 			v = std::string_view{reinterpret_cast<char const*>(in_.data())+pos_, size};
 			pos_ += size;
+		}
+		return ret;
+	}
+
+	template<std::size_t S>
+	bool load(std::span<std::byte, S>& s) {
+		bool ret = size_left() >= s.size();
+		if(ret) {
+			std::memcpy(s.data(), in_.data()+pos_, s.size());
+			pos_ += s.size();
 		}
 		return ret;
 	}
