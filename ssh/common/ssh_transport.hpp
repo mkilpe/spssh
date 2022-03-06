@@ -39,12 +39,17 @@ public:
 	ssh_state state() const;
 	void set_state(ssh_state);
 
+	out_buffer& output_buffer() { return output_; }
+
 	using ssh_binary_packet::error;
 	using ssh_binary_packet::error_message;
 
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_transport_payload(ssh_packet_type, const_span payload);
+
+protected:
+	using ssh_binary_packet::config_;
 
 private: // init & generic packet handling
 	layer_op handle_version_exchange(in_buffer& in);
@@ -63,8 +68,8 @@ private: // data
 
 	ssh_state state_{ssh_state::none};
 
-	bool client_version_received_{};
-	ssh_version client_version_;
+	bool remote_version_received_{};
+	ssh_version remote_version_;
 
 	// current kex
 };

@@ -8,7 +8,7 @@ bool out_buffer::write(std::string_view v) {
 	span s = get(v.size());
 	if(!s.empty()) {
 		std::memcpy(s.data(), v.data(), s.size());
-		commit(v.size());
+		commit(s.size());
 	}
 	return !s.empty();
 }

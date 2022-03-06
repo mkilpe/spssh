@@ -56,6 +56,16 @@ using debug = ssh_packet_ser
 	string
 >;
 
+/*
+	byte      SSH_MSG_UNIMPLEMENTED
+	uint32    packet sequence number of rejected message
+*/
+using unimplemented = ssh_packet_ser
+<
+	ssh_unimplemented,
+	uint32
+>;
+
 }
 
 #endif

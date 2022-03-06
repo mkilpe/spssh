@@ -118,7 +118,7 @@ private:
 	std::size_t size_{};
 };
 
-struct match_type_tag {} match_type_t;
+struct match_type_tag {} constexpr match_type_t;
 
 template<ssh_packet_type Type, typename... TypeTags>
 struct ssh_packet_ser_load {

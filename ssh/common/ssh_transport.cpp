@@ -51,7 +51,7 @@ void ssh_transport::set_state(ssh_state s) {
 }
 
 void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
-	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", state(), code, message);
+	logger_.log(logger::debug, "SSH disconnect [state={}, code={}, msg={}]", to_string(state()), code, message);
 
 	if(state() != ssh_state::none && state() != ssh_state::disconnected) {
 		send_packet<ser::disconnect>(code, message, "");
@@ -65,6 +65,7 @@ void ssh_transport::set_error_and_disconnect(ssh_error_code code) {
 }
 
 layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
+	logger_.log(logger::debug_trace, "SSH handle_version_exchange [state={}]", to_string(state()));
 	if(state() == ssh_state::none) {
 		if(!send_version_string(config_.my_version, output_)) {
 			set_state(ssh_state::disconnected);
@@ -73,14 +74,17 @@ layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 		}
 	}
 	if(state() == ssh_state::version_exchange) {
-		if(!client_version_received_) {
-			auto res = parse_ssh_version(in, false, client_version_);
+		if(!remote_version_received_) {
+			auto res = parse_ssh_version(in, false, remote_version_);
 			if(res == version_parse_result::ok) {
-				client_version_received_ = true;
+				remote_version_received_ = true;
 				set_state(ssh_state::kex);
-				on_version_exchange(client_version_);
+				on_version_exchange(remote_version_);
 			} else if(res == version_parse_result::error) {
+				set_error(ssh_protocol_error, "failed to parse protocol version information");
 				set_state(ssh_state::disconnected);
+			} else {
+				logger_.log(logger::debug_trace, "parse_ssh_version requires more data");
 			}
 		}
 	}
@@ -146,7 +150,6 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 	ssh_bf_reader read(payload);
 
 	if(type == ssh_disconnect) {
-
 		ser::disconnect::load packet(payload);
 		if(packet) {
 			auto & [code, desc, ignore] = packet;
@@ -161,11 +164,31 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 		return true;
 
 	} else if(type == ssh_ignore) {
-
+		ser::ignore::load packet(payload);
+		if(packet) {
+			logger_.log(logger::debug_trace, "SSH ignore packet received");
+		} else {
+			logger_.log(logger::debug_trace, "SSH received invalid ignore packet");
+		}
 	} else if(type == ssh_unimplemented) {
-
+		ser::unimplemented::load packet(payload);
+		if(packet) {
+			auto & [seq] = packet;
+			logger_.log(logger::debug, "SSH unimplemented packet received [seq={}]", seq);
+		} else {
+			logger_.log(logger::debug_trace, "SSH received invalid unimplemented packet");
+		}
 	} else if(type == ssh_debug) {
-
+		ser::debug::load packet(payload);
+		if(packet) {
+			auto & [always_display, message, lang] = packet;
+			logger_.log(logger::debug, "SSH debug packet received [always_display={}, message={}, lange={}]", always_display, message, lang);
+		} else {
+			logger_.log(logger::debug_trace, "SSH received invalid debug packet");
+		}
+	} else {
+		logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
+		send_packet<ser::unimplemented>(crypto_in_.packet_sequence-1);
 	}
 
 	return false;
@@ -174,19 +197,7 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 template<typename Packet, typename... Args>
 bool ssh_transport::send_packet(Args&&... args) {
 	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", Packet::packet_type);
-
-	typename Packet::save packet(std::forward<Args>(args)...);
-	std::size_t size = packet.size();
-
-	auto rec = alloc_out_packet(size, output_);
-
-	if(rec && packet.write(rec->data)) {
-		create_out_packet(*rec);
-		output_.commit(rec->size);
-		return true;
-	}
-
-	return false;
+	return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
 }
 
 }

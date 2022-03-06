@@ -23,11 +23,8 @@ struct ssh_config {
 	// maximum output buffer size, single transport packet cannot be bigger than this
 	std::size_t max_out_buffer_size{128*1024};
 
-	// minimum output buffer size, this is the size allocated at the beginning and shrinked to
-	std::size_t min_out_buffer_size{16*1024};
-
-	// should we force shrinking of the output buffer after each packet
-	bool always_shrink_out_buffer{};
+	// size to shrink the output buffer after handling output packet
+	std::size_t shrink_out_buffer_size{std::size_t(-1)};
 
 	// use in place operations for output buffer, this disables compression
 	bool use_in_place_buffer{true};

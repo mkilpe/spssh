@@ -71,13 +71,22 @@ struct out_packet_record {
 	span data;
 	// buffer for the whole transport packet
 	span data_buffer;
-	// the out buffer
-	span out_buffer;
+
+	void clear() {
+		size = 0;
+		payload_size = 0;
+		padding_size = 0;
+		data = {};
+		data_buffer = {};
+	}
 };
 
 struct stream_out_crypto : public stream_crypto {
 	// buffer for output data
 	std::vector<std::byte> buffer;
+	// the higher layer uses this to store the current out packet info, so that in
+	// case out_buffer.get fails, we can re-try after flushing buffers (only useful when not doing in place buffering)
+	out_packet_record current_packet;
 };
 
 class ssh_binary_packet {
@@ -96,7 +105,10 @@ public: //input
 
 public: //output
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size, out_buffer&);
-	void create_out_packet(out_packet_record const&);
+	bool create_out_packet(out_packet_record const&, out_buffer&);
+
+	/// Uses crypto_out_.current_packet info to try continue failed sending (return false in case of in place buffers)
+	bool retry_send(out_buffer&);
 
 protected: //input
 	span decrypt_aead(aead_cipher& cip, const_span data, span out);
@@ -113,6 +125,9 @@ private:
 	void shrink_out_buffer();
 
 protected:
+	template<typename Packet, typename... Args>
+	friend bool send_packet(ssh_binary_packet&, out_buffer&, Args&&...);
+
 	ssh_config const& config_;
 	logger& logger_;
 
@@ -122,6 +137,24 @@ protected:
 	stream_in_crypto  crypto_in_;
 	stream_out_crypto crypto_out_;
 };
+
+template<typename Packet, typename... Args>
+bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
+	typename Packet::save packet(std::forward<Args>(args)...);
+	std::size_t size = packet.size();
+
+	auto rec = bp.alloc_out_packet(size, out);
+
+	if(rec && packet.write(rec->data)) {
+		bp.crypto_out_.current_packet = *rec;
+		return bp.create_out_packet(bp.crypto_out_.current_packet, out);
+	} else {
+		bp.crypto_out_.current_packet.clear();
+		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
+	}
+
+	return false;
+}
 
 
 }
