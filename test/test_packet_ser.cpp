@@ -61,7 +61,6 @@ TEST_CASE("packet serialisation without typetag", "[unit]") {
 	CHECK(m2 == "test 2");
 }
 
-
 TEST_CASE("packet serialisation name-list", "[unit]") {
 	std::byte temp[256] = {};
 	using test_type = ser::ssh_packet_ser<ssh_disconnect, ser::name_list>;
@@ -74,6 +73,21 @@ TEST_CASE("packet serialisation name-list", "[unit]") {
 
 	auto & [list] = lp;
 	CHECK(list == ser::name_list_t{"test 1", "test 2", "hipshops"});
+}
+
+TEST_CASE("packet serialisation bytes-n", "[unit]") {
+	std::byte temp[256] = {};
+	using test_type = ser::ssh_packet_ser<ssh_disconnect, ser::bytes<10>>;
+
+	test_type::save sp(std::span<std::byte const, 10>((std::byte const*)"1234567890", 10));
+	REQUIRE(sp.write(temp));
+
+	test_type::load lp(ser::match_type_t, temp);
+	REQUIRE(lp);
+
+	auto & [bytes] = lp;
+	CHECK(bytes.size() == 10);
+	CHECK(std::memcmp(bytes.data(), "1234567890", 10) == 0);
 }
 
 }

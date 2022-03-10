@@ -62,6 +62,10 @@ public:
 		return t & level_;
 	}
 
+	void set_level(type t) {
+		level_ = t;
+	}
+
 private:
 	type level_{log_all};
 };

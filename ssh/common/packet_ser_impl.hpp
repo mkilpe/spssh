@@ -87,8 +87,10 @@ struct name_list {
 
 template<std::size_t Size>
 struct bytes {
-	using type = std::span<std::byte, Size>;
-	type data{};
+	using type = std::span<std::byte const, Size>;
+
+	// constant size span is not default constructible
+	std::optional<type> data{};
 
 	bytes() = default;
 	bytes(type t) : data(t) {}
@@ -101,11 +103,13 @@ struct bytes {
 	}
 
 	bool save(ssh_bf_writer& w) const {
-		return w.save(data);
+		SPSSH_ASSERT(data, "invalid state");
+		return w.save(data.value());
 	}
 
 	type& view() {
-		return data;
+		SPSSH_ASSERT(data, "invalid state");
+		return data.value();
 	}
 };
 

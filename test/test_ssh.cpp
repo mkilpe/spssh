@@ -1,4 +1,5 @@
 
+#include "log.hpp"
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/client/ssh_client.hpp"
@@ -40,9 +41,8 @@ bool run(test_client& client, test_server& server) {
 }
 
 TEST_CASE("ssh test 1", "[unit]") {
-	stdout_logger log;
-	test_server server(log);
-	test_client client(log);
+	test_server server(test_log());
+	test_client client(test_log());
 
 	client.send_initial_packet();
 	CHECK(run(client, server));
@@ -53,9 +53,8 @@ TEST_CASE("ssh test 1", "[unit]") {
 
 
 TEST_CASE("ssh failing version exchange", "[unit]") {
-	stdout_logger log;
-	test_server server(log);
-	test_client client(log, ssh_config{.my_version = ssh_version{.ssh="1.0"}});
+	test_server server(test_log());
+	test_client client(test_log(), ssh_config{.my_version = ssh_version{.ssh="1.0"}});
 
 	client.send_initial_packet();
 	CHECK(!run(client, server));

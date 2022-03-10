@@ -1,7 +1,6 @@
 #include "ssh_binary_packet.hpp"
 
 #include "logger.hpp"
-#include "ssh_config.hpp"
 #include "ssh_constants.hpp"
 #include "ssh_binary_util.hpp"
 #include "types.hpp"
@@ -324,6 +323,7 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 
 	out_buf.commit(info.size);
 	if(!config_.use_in_place_buffer) {
+		crypto_out_.current_packet = std::nullopt;
 		shrink_out_buffer();
 	}
 
@@ -337,11 +337,11 @@ bool ssh_binary_packet::retry_send(out_buffer& out) {
 		return false;
 	}
 
-	if(crypto_out_.current_packet.size == 0) {
+	if(!crypto_out_.current_packet) {
 		return false;
 	}
 
-	return create_out_packet(crypto_out_.current_packet, out);
+	return create_out_packet(*crypto_out_.current_packet, out);
 }
 
 }

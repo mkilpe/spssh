@@ -129,6 +129,13 @@ layer_op ssh_transport::handle(in_buffer& in) {
 	if(state() == ssh_state::disconnected) {
 		return layer_op::disconnected;
 	}
+
+	if(crypto_out_.current_packet) {
+		if(!retry_send(output_)) {
+			return layer_op::want_write_more;
+		}
+	}
+
 	if(state() == ssh_state::none || state() == ssh_state::version_exchange) {
 		return handle_version_exchange(in);
 	}

@@ -1,6 +1,7 @@
 #ifndef SP_SHH_BINARY_PACKET_HEADER
 #define SP_SHH_BINARY_PACKET_HEADER
 
+#include "ssh_config.hpp"
 #include "buffers.hpp"
 #include "logger.hpp"
 #include "packet_types.hpp"
@@ -15,8 +16,6 @@
 #include <vector>
 
 namespace securepath::ssh {
-
-class ssh_config;
 
 /// Necessary crypto components and buffers for single stream (i.e. one direction communication)
 struct stream_crypto {
@@ -71,14 +70,6 @@ struct out_packet_record {
 	span data;
 	// buffer for the whole transport packet
 	span data_buffer;
-
-	void clear() {
-		size = 0;
-		payload_size = 0;
-		padding_size = 0;
-		data = {};
-		data_buffer = {};
-	}
 };
 
 struct stream_out_crypto : public stream_crypto {
@@ -86,7 +77,7 @@ struct stream_out_crypto : public stream_crypto {
 	std::vector<std::byte> buffer;
 	// the higher layer uses this to store the current out packet info, so that in
 	// case out_buffer.get fails, we can re-try after flushing buffers (only useful when not doing in place buffering)
-	out_packet_record current_packet;
+	std::optional<out_packet_record> current_packet;
 };
 
 class ssh_binary_packet {
@@ -146,10 +137,11 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	auto rec = bp.alloc_out_packet(size, out);
 
 	if(rec && packet.write(rec->data)) {
-		bp.crypto_out_.current_packet = *rec;
-		return bp.create_out_packet(bp.crypto_out_.current_packet, out);
+		if(!bp.config_.use_in_place_buffer) {
+			bp.crypto_out_.current_packet = *rec;
+		}
+		return bp.create_out_packet(*rec, out);
 	} else {
-		bp.crypto_out_.current_packet.clear();
 		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
 	}
 

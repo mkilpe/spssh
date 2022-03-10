@@ -1,4 +1,5 @@
 
+#include "log.hpp"
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/common/packet_ser.hpp"
@@ -36,14 +37,13 @@ TEST_CASE("ssh_binary_packet", "[unit]") {
 
 	ssh_config config = test_configs[config_i];
 	string_io_buffer buf;
-	stdout_logger logger;
 	std::byte temp_buf[1024] = {};
 
-	ssh_binary_packet bp_1(config, logger);
+	ssh_binary_packet bp_1(config, test_log());
 	REQUIRE(send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
 	CHECK(buf.used_size() > 0);
 
-	ssh_binary_packet bp_2(config, logger);
+	ssh_binary_packet bp_2(config, test_log());
 	REQUIRE(bp_2.try_decode_header(buf.get()));
 	auto span = bp_2.decrypt_packet(buf.get(), temp_buf);
 	REQUIRE(!span.empty());
@@ -62,16 +62,15 @@ TEST_CASE("ssh_binary_packet retry sending", "[unit]") {
 	ssh_config config{.use_in_place_buffer = false};
 	string_out_buffer out_too_small{10};
 	string_io_buffer buf;
-	stdout_logger logger;
 	std::byte temp_buf[1024] = {};
 
-	ssh_binary_packet bp_1(config, logger);
+	ssh_binary_packet bp_1(config, test_log());
 	REQUIRE(!send_packet<ser::disconnect>(bp_1, out_too_small, 1, "test 1", "test 2"));
 	CHECK(bp_1.error() == ssh_noerror);
 	REQUIRE(!bp_1.retry_send(out_too_small));
 	REQUIRE(bp_1.retry_send(buf));
 
-	ssh_binary_packet bp_2(config, logger);
+	ssh_binary_packet bp_2(config, test_log());
 	REQUIRE(bp_2.try_decode_header(buf.get()));
 	auto span = bp_2.decrypt_packet(buf.get(), temp_buf);
 	CHECK(bp_1.error() == ssh_noerror);
@@ -92,10 +91,9 @@ TEST_CASE("ssh_binary_packet failing", "[unit]") {
 	config.use_in_place_buffer = false;
 
 	string_io_buffer buf;
-	stdout_logger logger;
 	std::byte temp_buf[1024] = {};
 
-	ssh_binary_packet bp_1(config, logger);
+	ssh_binary_packet bp_1(config, test_log());
 	CHECK(!send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
 	CHECK(bp_1.error() == spssh_memory_error);
 }

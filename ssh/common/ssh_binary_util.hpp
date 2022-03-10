@@ -80,7 +80,7 @@ public:
 	}
 
 	template<std::size_t S>
-	bool save(std::span<std::byte, S> const& s) {
+	bool save(std::span<std::byte const, S> const& s) {
 		bool ret = size_left() >= s.size();
 		if(ret) {
 			std::memcpy(out_.data()+pos_, s.data(), s.size());
@@ -88,7 +88,6 @@ public:
 		}
 		return ret;
 	}
-
 
 	void add_uint32(std::uint32_t v) {
 		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
@@ -191,11 +190,11 @@ public:
 	}
 
 	template<std::size_t S>
-	bool load(std::span<std::byte, S>& s) {
-		bool ret = size_left() >= s.size();
+	bool load(std::optional<std::span<std::byte const, S>>& s) {
+		bool ret = size_left() >= S;
 		if(ret) {
-			std::memcpy(s.data(), in_.data()+pos_, s.size());
-			pos_ += s.size();
+			s = std::span<std::byte const, S>(in_.data()+pos_, S);
+			pos_ += S;
 		}
 		return ret;
 	}
