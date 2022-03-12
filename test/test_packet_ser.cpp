@@ -1,8 +1,8 @@
 
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
-#include "ssh/common/packet_ser.hpp"
-#include "ssh/common/packet_ser_impl.hpp"
+#include "ssh/core/packet_ser.hpp"
+#include "ssh/core/packet_ser_impl.hpp"
 
 #include <securepath/test_frame/test_suite.hpp>
 #include <securepath/test_frame/test_utils.hpp>

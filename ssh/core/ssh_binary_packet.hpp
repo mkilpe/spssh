@@ -2,9 +2,9 @@
 #define SP_SHH_BINARY_PACKET_HEADER
 
 #include "ssh_config.hpp"
-#include "buffers.hpp"
-#include "logger.hpp"
 #include "packet_types.hpp"
+#include "ssh/common/buffers.hpp"
+#include "ssh/common/logger.hpp"
 #include "ssh_constants.hpp"
 #include "ssh/crypto/cipher.hpp"
 #include "ssh/crypto/compression.hpp"
@@ -30,6 +30,9 @@ struct stream_crypto {
 
 	// this is mac->size() or aead_cipher->tag_size() when we are encrypting, otherwise 0
 	std::uint32_t integrity_size{};
+
+	// bytes that has been transferred
+	std::uint64_t transferred_bytes{};
 };
 
 /// status of incoming packet that is currently being handled

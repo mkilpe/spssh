@@ -1,7 +1,7 @@
 #ifndef SP_SHH_CLIENT_HEADER
 #define SP_SHH_CLIENT_HEADER
 
-#include "ssh/common/ssh_transport.hpp"
+#include "ssh/core/ssh_transport.hpp"
 
 namespace securepath::ssh {
 

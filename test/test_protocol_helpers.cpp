@@ -1,6 +1,6 @@
 
 #include "test_buffers.hpp"
-#include "ssh/common/protocol_helpers.hpp"
+#include "ssh/core/protocol_helpers.hpp"
 
 #include <securepath/test_frame/test_suite.hpp>
 #include <securepath/test_frame/test_utils.hpp>

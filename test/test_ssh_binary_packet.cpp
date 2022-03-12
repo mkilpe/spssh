@@ -2,10 +2,10 @@
 #include "log.hpp"
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
-#include "ssh/common/packet_ser.hpp"
-#include "ssh/common/packet_ser_impl.hpp"
-#include "ssh/common/ssh_binary_packet.hpp"
-#include "ssh/common/ssh_config.hpp"
+#include "ssh/core/packet_ser.hpp"
+#include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/ssh_binary_packet.hpp"
+#include "ssh/core/ssh_config.hpp"
 
 #include <securepath/test_frame/test_suite.hpp>
 #include <securepath/test_frame/test_utils.hpp>

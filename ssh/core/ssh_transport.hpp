@@ -1,11 +1,12 @@
 #ifndef SP_SHH_TRANSPORT_HEADER
 #define SP_SHH_TRANSPORT_HEADER
 
-#include "logger.hpp"
 #include "packet_types.hpp"
 #include "ssh_config.hpp"
 #include "ssh_layer.hpp"
 #include "ssh_binary_packet.hpp"
+
+#include "ssh/common/logger.hpp"
 
 #include <iosfwd>
 
@@ -72,6 +73,7 @@ private: // data
 	ssh_version remote_version_;
 
 	// current kex
+	std::unique_ptr<kex> kex_;
 };
 
 }

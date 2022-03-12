@@ -1,5 +1,5 @@
 #include "ssh_client.hpp"
-#include "ssh/common/protocol_helpers.hpp"
+#include "ssh/core/protocol_helpers.hpp"
 
 namespace securepath::ssh {
 

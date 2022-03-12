@@ -1,9 +1,9 @@
 #include "ssh_binary_packet.hpp"
 
-#include "logger.hpp"
 #include "ssh_constants.hpp"
 #include "ssh_binary_util.hpp"
-#include "types.hpp"
+#include "ssh/common/logger.hpp"
+#include "ssh/common/types.hpp"
 
 namespace securepath::ssh {
 
@@ -86,6 +86,7 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 		crypto_in_.current_packet.status = in_packet_status::data_ready;
 		// incremented for every packet and let wrap around
 		++crypto_in_.packet_sequence;
+		crypto_in_.transferred_bytes += in_data.size();
 	}
 	return ret;
 }
@@ -320,6 +321,7 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 
 	// incremented for every packet and let wrap around
 	++crypto_out_.packet_sequence;
+	crypto_out_.transferred_bytes += info.size;
 
 	out_buf.commit(info.size);
 	if(!config_.use_in_place_buffer) {

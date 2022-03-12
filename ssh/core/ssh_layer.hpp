@@ -1,7 +1,7 @@
 #ifndef SP_SSH_LAYER_HEADER
 #define SP_SSH_LAYER_HEADER
 
-#include "types.hpp"
+#include "ssh/common/types.hpp"
 
 namespace securepath::ssh {
 

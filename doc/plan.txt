@@ -6,6 +6,8 @@ Overview:
 * other SSH subsystems (scp, forwarding, shell)?
 * Analyzing/Correctness/Stress testing client and/or server?
 * Own protocol over SSH (remote object?)
+* Make it easy for people to make their own protocols over ssh
+* asio integration
 
 
 Implementation:
@@ -31,6 +33,8 @@ Requirements:
    * Cipher: AES-256 GCM
    * Optional compression support
  * Consider that authentication/sftp file operations and so on can be async
+ * SSH Private key generation (at least ed25519)
+ * SSH Public key handling (extract type, fingerprint and components for primary types used)
 
 References:
 

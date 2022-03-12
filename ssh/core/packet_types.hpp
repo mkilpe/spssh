@@ -1,7 +1,7 @@
 #ifndef SP_SHH_PACKET_TYPES_HEADER
 #define SP_SHH_PACKET_TYPES_HEADER
 
-#include "types.hpp"
+#include "ssh/common/types.hpp"
 
 namespace securepath::ssh {
 

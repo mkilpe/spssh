@@ -1,8 +1,8 @@
 #ifndef SP_SHH_PROTOCOL_HELPERS_HEADER
 #define SP_SHH_PROTOCOL_HELPERS_HEADER
 
-#include "types.hpp"
-#include "buffers.hpp"
+#include "ssh/common/types.hpp"
+#include "ssh/common/buffers.hpp"
 
 #include <string_view>
 #include <vector>

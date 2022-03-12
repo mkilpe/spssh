@@ -1,7 +1,7 @@
 #ifndef SP_SHH_BINARY_FORMAT_HEADER
 #define SP_SHH_BINARY_FORMAT_HEADER
 
-#include "types.hpp"
+#include "ssh/common/types.hpp"
 #include "ssh/crypto/random.hpp"
 
 #include <cstring>
