@@ -35,7 +35,7 @@ ssh_config test_configs[] =
 TEST_CASE("ssh_binary_packet", "[unit]") {
 	auto config_i = GENERATE(range(0, int(sizeof(test_configs)/sizeof(ssh_config))), 1);
 
-	ssh_config config = test_configs[config_i];
+	ssh_config const& config = test_configs[config_i];
 	string_io_buffer buf;
 	std::byte temp_buf[1024] = {};
 

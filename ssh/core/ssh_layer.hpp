@@ -5,7 +5,6 @@
 
 namespace securepath::ssh {
 
-class in_buffer;
 class out_buffer;
 
 enum class layer_op {

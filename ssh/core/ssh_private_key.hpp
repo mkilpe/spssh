@@ -2,6 +2,8 @@
 #define SP_SHH_PRIVATE_KEY_HEADER
 
 #include "ssh_public_key.hpp"
+#include "ssh/crypto/private_key.hpp"
+#include <memory>
 
 namespace securepath::ssh {
 
@@ -9,11 +11,13 @@ namespace securepath::ssh {
  */
 class ssh_private_key {
 public:
-	ssh_key_type type() const;
+	ssh_private_key() = default;
+	ssh_private_key(std::unique_ptr<private_key>);
+
+	key_type type() const;
 
 private:
-	ssh_key_type type_{ssh_key_type::unknown};
-	std::vector<std::byte> data_;
+	std::unique_ptr<private_key> key_impl_;
 };
 
 }

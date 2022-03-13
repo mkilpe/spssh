@@ -10,12 +10,10 @@
 
 namespace securepath::ssh {
 
-class cipher;
-class mac;
-
-using kex_list = algo_list<kex_type, kex>;
-using cipher_list = algo_list<cipher_type, cipher>;
-using mac_list = algo_list<mac_type, mac>;
+using kex_list = algo_list<kex_type>;
+using cipher_list = algo_list<cipher_type>;
+using mac_list = algo_list<mac_type>;
+using compress_list = algo_list<compress_type>;
 
 /** \brief SSH Version 2 Configuration
  */
@@ -30,14 +28,20 @@ struct ssh_config {
 	// supported kex
 	kex_list kexes;
 
-	// supported ciphers
-	cipher_list ciphers;
+	// supported ciphers client->server
+	cipher_list client_server_ciphers;
+	// supported ciphers server->client
+	cipher_list server_client_ciphers;
 
-	// supported macs
-	mac_list macs;
+	// supported macs client->server
+	mac_list client_server_macs;
+	// supported macs server->client
+	mac_list server_client_macs;
 
-	// supported compression
-	// todo: implement
+	// supported compression client->server
+	compress_list client_server_compress;
+	// supported compression server->client
+	compress_list server_client_compress;
 
 	// re-key interval in bytes (== 0 means no rekeying)
 	std::uint64_t rekey_inverval{1024ULL*1024*1024*2};
@@ -53,6 +57,9 @@ struct ssh_config {
 
 	// use in place operations for output buffer, this disables compression
 	bool use_in_place_buffer{true};
+
+public:
+	std::vector<std::string_view> host_key_list() const;
 };
 
 }

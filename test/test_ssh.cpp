@@ -2,6 +2,7 @@
 #include "log.hpp"
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
+#include "ssh/crypto/private_key.hpp"
 #include "ssh/client/ssh_client.hpp"
 #include "ssh/server/ssh_server.hpp"
 
@@ -11,7 +12,7 @@
 namespace securepath::ssh::test {
 
 struct test_context {
-	test_context(logger& l, ssh_config c = {}) : log(l), config(c) {}
+	test_context(logger& l, ssh_config c = {}) : log(l), config(std::move(c)) {}
 
 	logger& log;
 	ssh_config config;

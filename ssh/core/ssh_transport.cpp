@@ -78,8 +78,10 @@ layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 			auto res = parse_ssh_version(in, false, remote_version_);
 			if(res == version_parse_result::ok) {
 				remote_version_received_ = true;
-				set_state(ssh_state::kex);
 				on_version_exchange(remote_version_);
+				if(error_ == ssh_noerror) {
+					set_state(ssh_state::kex);
+				}
 			} else if(res == version_parse_result::error) {
 				set_error(ssh_protocol_error, "failed to parse protocol version information");
 				set_state(ssh_state::disconnected);
@@ -205,6 +207,33 @@ template<typename Packet, typename... Args>
 bool ssh_transport::send_packet(Args&&... args) {
 	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", Packet::packet_type);
 	return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
+}
+
+void ssh_transport::send_kex_init(bool send_first_packet) {
+	SPSSH_ASSERT(!kex_, "invalid state");
+
+	kex_cookie_.resize(cookie_size);
+	random_bytes(kex_cookie_);
+
+	send_packet<ser::kexinit>(
+		std::span<std::byte const, cookie_size>(kex_cookie_),
+		config_.kexes.name_list(),
+		config_.host_key_list(),
+		config_.client_server_ciphers.name_list(),
+		config_.server_client_ciphers.name_list(),
+		config_.client_server_macs.name_list(),
+		config_.server_client_macs.name_list(),
+		config_.client_server_compress.name_list(),
+		config_.server_client_compress.name_list(),
+		std::vector<std::string_view>(), //languages client to server
+		std::vector<std::string_view>(), //languages server to client
+		send_first_packet,
+		0   // reserved for future use
+		);
+
+	if(send_first_packet && !config_.kexes.empty()) {
+
+	}
 }
 
 }

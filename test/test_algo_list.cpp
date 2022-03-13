@@ -21,30 +21,35 @@ std::string_view to_string(test_algos t) {
 	return "unknown";
 }
 
-struct test_base {
-	test_base(test_algos t) : type(t) {}
-	test_algos type;
-};
-
-std::unique_ptr<test_base> test_ctor(test_algos t) {
-	return std::make_unique<test_base>(t);
-}
 }
 
 TEST_CASE("algo_list", "[unit]") {
 	using enum test_algos;
 	{
-		algo_list<test_algos, test_base> list;
-		CHECK(list.name_list() == "");
+		algo_list<test_algos> list;
+		CHECK(list.name_list().empty());
+		CHECK(list.name_list_string() == "");
+
+		list.add_back(test1);
+		CHECK(list.name_list_string() == "test1");
+		list.add_back(test2);
+		CHECK(list.name_list_string() == "test1,test2");
+		list.add_front(test3);
+		CHECK(list.name_list_string() == "test3,test1,test2");
+		list.remove(test1);
+		CHECK(list.name_list_string() == "test3,test2");
+
+		CHECK(list.front() == test3);
 	}
 	{
-		algo_list<test_algos, test_base> list(test_ctor, {test1,test2,test3});
-		CHECK(list.name_list() == "test1,test2,test3");
-		CHECK(list.construct(test2)->type == test2);
+		algo_list<test_algos> list({test1,test2,test3});
+		CHECK(list.name_list() == std::vector<std::string_view>({"test1", "test2", "test3"}));
+		CHECK(list.name_list_string() == "test1,test2,test3");
 	}
 	{
-		algo_list<test_algos, test_base> list(test_ctor, {test3,test1});
-		CHECK(list.name_list() == "test3,test1");
+		algo_list<test_algos> list({test3,test1});
+		CHECK(list.name_list() == std::vector<std::string_view>({"test3", "test1"}));
+		CHECK(list.name_list_string() == "test3,test1");
 	}
 }
 

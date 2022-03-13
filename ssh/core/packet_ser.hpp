@@ -91,7 +91,6 @@ using unimplemented = ssh_packet_ser
 using kexinit = ssh_packet_ser
 <
 	ssh_kexinit,
-	byte,
 	bytes<16>,
 	name_list,
 	name_list,

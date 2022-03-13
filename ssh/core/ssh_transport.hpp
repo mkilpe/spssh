@@ -53,9 +53,12 @@ protected:
 	using ssh_binary_packet::config_;
 
 private: // init & generic packet handling
+	void set_error_and_disconnect(ssh_error_code);
+
 	layer_op handle_version_exchange(in_buffer& in);
 	layer_op handle_binary_packet(in_buffer& in);
-	void set_error_and_disconnect(ssh_error_code);
+
+	void send_kex_init(bool send_first_packet);
 
 private: // input
 	layer_op process_transport_payload(span payload);
@@ -72,7 +75,8 @@ private: // data
 	bool remote_version_received_{};
 	ssh_version remote_version_;
 
-	// current kex
+	// kex data
+	std::vector<std::byte> kex_cookie_;
 	std::unique_ptr<kex> kex_;
 };
 

@@ -7,7 +7,7 @@
 #include "ssh/common/logger.hpp"
 #include "ssh_constants.hpp"
 #include "ssh/crypto/cipher.hpp"
-#include "ssh/crypto/compression.hpp"
+#include "ssh/crypto/compress.hpp"
 #include "ssh/crypto/mac.hpp"
 
 #include <cstring>
@@ -23,7 +23,7 @@ struct stream_crypto {
 	std::uint32_t packet_sequence{};
 	std::uint32_t block_size{minimum_block_size};
 
-	std::unique_ptr<compression> compress;
+	std::unique_ptr<ssh::compress> compress;
 	std::unique_ptr<ssh::cipher> cipher;
 	// this is only used if !cipher->is_aead()
 	std::unique_ptr<ssh::mac> mac;

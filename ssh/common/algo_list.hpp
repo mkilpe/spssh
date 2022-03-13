@@ -4,27 +4,66 @@
 #include "util.hpp"
 #include "types.hpp"
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <vector>
 
 namespace securepath::ssh {
 
-template<typename Type, typename Impl>
+template<typename Type>
 class algo_list {
 public:
 	using algo_type = Type;
-	using ctor = std::function<std::unique_ptr<Impl> (algo_type)>;
 
 	algo_list() = default;
-	algo_list(ctor func, std::vector<algo_type> algos)
+	algo_list(std::vector<algo_type> algos)
 	: algos_(std::move(algos))
-	, function_(std::move(func))
 	{
 	}
 
+	void add_back(algo_type t) {
+		for(auto&& v : algos_) {
+			if(v == t) return;
+		}
+		algos_.push_back(t);
+	}
+
+	void add_front(algo_type t) {
+		for(auto&& v : algos_) {
+			if(v == t) return;
+		}
+		algos_.insert(algos_.begin(), t);
+	}
+
+	void remove(algo_type t) {
+		auto it = std::find(algos_.begin(), algos_.end(), t);
+		if(it != algos_.end()) {
+			algos_.erase(it);
+		}
+	}
+
+	bool empty() const {
+		return algos_.empty();
+	}
+
+	algo_type front() const {
+		SPSSH_ASSERT(!empty(), "invalid state");
+		return algos_.front();
+	}
+
 	/// Turn the list of algorithms to ssh name-list
-	std::string name_list() const {
+	std::vector<std::string_view> name_list() const {
+		std::vector<std::string_view> res;
+		res.reserve(algos_.size());
+		for(auto&& v : algos_) {
+			res.push_back(to_string(v));
+		}
+		return res;
+	}
+
+	/// Turn the list of algorithms to ssh name-list string
+	std::string name_list_string() const {
 		std::string res;
 		bool first = true;
 		for(auto&& v : algos_) {
@@ -37,15 +76,8 @@ public:
 		return res;
 	}
 
-	/// construct given algorithm
-	std::unique_ptr<Impl> construct(algo_type type) const {
-		SPSSH_ASSERT(function_, "invalid state");
-		return function_(type);
-	}
-
 private:
 	std::vector<algo_type> algos_;
-	std::function<std::unique_ptr<Impl> (algo_type)> function_;
 };
 
 }
