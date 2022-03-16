@@ -2,6 +2,7 @@
 #define SP_SHH_BINARY_PACKET_HEADER
 
 #include "ssh_config.hpp"
+#include "errors.hpp"
 #include "packet_types.hpp"
 #include "ssh/common/buffers.hpp"
 #include "ssh/common/logger.hpp"
@@ -73,14 +74,15 @@ struct out_packet_record {
 	span data;
 	// buffer for the whole transport packet
 	span data_buffer;
+	// if this record is in-place allocated
+	bool inplace{};
 };
 
 struct stream_out_crypto : public stream_crypto {
-	// buffer for output data
+	// buffer for output data, contains the encrypted ready packet to be send
 	std::vector<std::byte> buffer;
-	// the higher layer uses this to store the current out packet info, so that in
-	// case out_buffer.get fails, we can re-try after flushing buffers (only useful when not doing in place buffering)
-	std::optional<out_packet_record> current_packet;
+	// the unhandled portion of buffer, always from the start of the buffer
+	span data;
 };
 
 class ssh_binary_packet {
@@ -101,8 +103,8 @@ public: //output
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size, out_buffer&);
 	bool create_out_packet(out_packet_record const&, out_buffer&);
 
-	/// Uses crypto_out_.current_packet info to try continue failed sending (return false in case of in place buffers)
-	bool retry_send(out_buffer&);
+	/// try to send pending data out from the buffers
+	bool send_pending(out_buffer&);
 
 protected: //input
 	span decrypt_aead(aead_cipher& cip, const_span data, span out);
@@ -121,6 +123,7 @@ private:
 protected:
 	template<typename Packet, typename... Args>
 	friend bool send_packet(ssh_binary_packet&, out_buffer&, Args&&...);
+	friend bool send_payload(ssh_binary_packet& bp, std::vector<std::byte> const& payload, out_buffer& out);
 
 	ssh_config const& config_;
 	logger& logger_;
@@ -140,9 +143,6 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	auto rec = bp.alloc_out_packet(size, out);
 
 	if(rec && packet.write(rec->data)) {
-		if(!bp.config_.use_in_place_buffer) {
-			bp.crypto_out_.current_packet = *rec;
-		}
 		return bp.create_out_packet(*rec, out);
 	} else {
 		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
@@ -151,6 +151,7 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	return false;
 }
 
+bool send_payload(ssh_binary_packet& bp, std::vector<std::byte> const& payload, out_buffer& out);
 
 }
 

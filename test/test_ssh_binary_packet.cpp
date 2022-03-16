@@ -26,10 +26,9 @@ namespace securepath::ssh::test {
 ssh_config test_configs[] =
 	{
 		{}
-		,{.use_in_place_buffer = false}
 		,{.random_packet_padding = false}
-		,{.max_out_buffer_size = 1024, .use_in_place_buffer = false}
-		,{.shrink_out_buffer_size = 0, .use_in_place_buffer = false}
+		,{.max_out_buffer_size = 1024}
+		,{.shrink_out_buffer_size = 0}
 	};
 
 TEST_CASE("ssh_binary_packet", "[unit]") {
@@ -59,16 +58,21 @@ TEST_CASE("ssh_binary_packet", "[unit]") {
 
 TEST_CASE("ssh_binary_packet retry sending", "[unit]") {
 
-	ssh_config config{.use_in_place_buffer = false};
+	ssh_config config{};
 	string_out_buffer out_too_small{10};
 	string_io_buffer buf;
 	std::byte temp_buf[1024] = {};
 
 	ssh_binary_packet bp_1(config, test_log());
-	REQUIRE(!send_packet<ser::disconnect>(bp_1, out_too_small, 1, "test 1", "test 2"));
+
+	//put the packet in buffer
+	REQUIRE(send_packet<ser::disconnect>(bp_1, out_too_small, 1, "test 1", "test 2"));
 	CHECK(bp_1.error() == ssh_noerror);
-	REQUIRE(!bp_1.retry_send(out_too_small));
-	REQUIRE(bp_1.retry_send(buf));
+
+	REQUIRE(!bp_1.send_pending(out_too_small));
+	buf.data += out_too_small.data;
+	buf.pos  += buf.data.size();
+	REQUIRE(bp_1.send_pending(buf));
 
 	ssh_binary_packet bp_2(config, test_log());
 	REQUIRE(bp_2.try_decode_header(buf.get()));
@@ -88,13 +92,11 @@ TEST_CASE("ssh_binary_packet retry sending", "[unit]") {
 TEST_CASE("ssh_binary_packet failing", "[unit]") {
 	ssh_config config;
 	config.max_out_buffer_size = 25;
-	config.use_in_place_buffer = false;
 
-	string_io_buffer buf;
-	std::byte temp_buf[1024] = {};
+	string_out_buffer out_too_small{10};
 
 	ssh_binary_packet bp_1(config, test_log());
-	CHECK(!send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
+	CHECK(!send_packet<ser::disconnect>(bp_1, out_too_small, 1, "test 1", "test 2"));
 	CHECK(bp_1.error() == spssh_memory_error);
 }
 }

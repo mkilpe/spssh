@@ -57,8 +57,11 @@ private: // init & generic packet handling
 
 	layer_op handle_version_exchange(in_buffer& in);
 	layer_op handle_binary_packet(in_buffer& in);
+	layer_op handle_kex_packet(ssh_packet_type type, const_span payload);
+	layer_op handle_kexinit_packet(const_span payload);
 
-	void send_kex_init(bool send_first_packet);
+	bool send_kex_init(bool send_first_packet);
+	void send_kex_guess();
 
 private: // input
 	layer_op process_transport_payload(span payload);
@@ -76,7 +79,12 @@ private: // data
 	ssh_version remote_version_;
 
 	// kex data
+	bool kexinit_sent_{};
+	bool kexinit_received_{};
 	std::vector<std::byte> kex_cookie_;
+
+	kex_init_data kex_data_;
+
 	std::unique_ptr<kex> kex_;
 };
 

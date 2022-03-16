@@ -25,7 +25,8 @@ mac_type mac_type_from_string(std::string_view);
 
 // nothing supported for now
 enum class compress_type {
-	unknown = 0
+	unknown = 0,
+	none
 };
 
 std::string_view to_string(compress_type);

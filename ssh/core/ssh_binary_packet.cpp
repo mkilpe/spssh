@@ -133,7 +133,7 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	std::uint8_t padding = std::to_integer<std::uint8_t>(data[packet_lenght_size]);
 
 	// if we are not doing decryption in place, copy the first block to out
-	if(!config_.use_in_place_buffer) {
+	if(data.data() != out.data()) {
 		std::memcpy(out.data(), data.data(), crypto_in_.block_size);
 	}
 	data = data.subspan(crypto_in_.block_size);
@@ -180,18 +180,28 @@ void ssh_binary_packet::set_error(ssh_error_code code, std::string_view message)
 }
 
 bool ssh_binary_packet::resize_out_buffer(std::size_t size) {
-	logger_.log(logger::debug_trace, "SSH resize_out_buffer [size={}]", size);
-	bool ret = size <= config_.max_out_buffer_size;
+	logger_.log(logger::debug_trace, "SSH resize_out_buffer [size={}, buf size={}, buf used={}]", size, crypto_out_.buffer.size(), crypto_out_.data.size());
+
+	std::size_t used_size = crypto_out_.data.size();
+	std::size_t free_size = crypto_out_.buffer.size() - used_size;
+
+	bool ret = free_size < size;
 	if(ret) {
-		crypto_out_.buffer.resize(size);
-	} else {
-		set_error(ssh_error_code::spssh_memory_error, "asking for bigger buffer than max_out_buffer_size");
+		std::size_t new_size = crypto_out_.buffer.size() + size - free_size;
+		ret = new_size <= config_.max_out_buffer_size;
+		if(ret) {
+			crypto_out_.buffer.resize(new_size);
+			crypto_out_.data = span(crypto_out_.buffer).subspan(0, used_size);
+		} else {
+			set_error(ssh_error_code::spssh_memory_error, "asking for bigger buffer than max_out_buffer_size");
+		}
 	}
+
 	return ret;
 }
 
 void ssh_binary_packet::shrink_out_buffer() {
-	if(config_.shrink_out_buffer_size < crypto_out_.buffer.size()) {
+	if(crypto_out_.data.empty() && config_.shrink_out_buffer_size < crypto_out_.buffer.size()) {
 		logger_.log(logger::debug_verbose, "SSH shrink_out_buffer [old size={}, new size={}]", crypto_out_.buffer.size(), config_.shrink_out_buffer_size);
 		crypto_out_.buffer.resize(config_.shrink_out_buffer_size);
 		crypto_out_.buffer.shrink_to_fit();
@@ -218,20 +228,22 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 		};
 
 
-	if(config_.use_in_place_buffer) {
-		res.data_buffer = buf.get(res.size);
+	// check if we have pending data to write out
+	if(crypto_out_.data.empty()) {
+		logger_.log(logger::debug_trace, "SSH trying inplace sending");
 
-		if(res.data_buffer.empty()) {
-			set_error(ssh_error_code::spssh_memory_error, "SSH alloc_out_packet failed");
-			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate output buffer [size={}]", res.size);
-			return std::nullopt;
-		}
-	} else {
+		res.data_buffer = buf.get(res.size);
+	}
+
+	// remember if we are in-place allocated, so that we know to commit after sending
+	res.inplace = !res.data_buffer.empty();
+
+	if(res.data_buffer.empty()) {
 		if(!resize_out_buffer(res.size)) {
 			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate data buffer [size={}]", res.size);
 			return std::nullopt;
 		}
-		res.data_buffer = crypto_out_.buffer;
+		res.data_buffer = span(crypto_out_.buffer).subspan(crypto_out_.data.size());
 	}
 
 	res.data = res.data_buffer.subspan(packet_header_size, data_size);
@@ -252,7 +264,7 @@ void ssh_binary_packet::aead_encrypt(aead_cipher& cip, const_span data, span out
 	// authenticate the packet length as we don't encrypt it
 	cip.process_auth(data.subspan(0, packet_lenght_size));
 	// if we are not doing things _in place_, copy the packet length to output buffer
-	if(!config_.use_in_place_buffer) {
+	if(data.data() != out.data()) {
 		std::memcpy(out.data(), data.data(), packet_lenght_size);
 	}
 	data = data.subspan(packet_lenght_size);
@@ -284,30 +296,15 @@ void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 			SPSSH_ASSERT(crypto_out_.mac, "MAC object not set");
 			encrypt_with_mac(data, out);
 		}
-	} else if(!config_.use_in_place_buffer) {
+	} else if(data.data() != out.data()) {
 		SPSSH_ASSERT(out.size() >= data.size(), "invalid out buffer size");
 		std::memcpy(out.data(), data.data(), data.size());
 	}
 }
 
-/*
-	If not using use_in_place_buffer, this function can return false when allocating out buf fails
-	In this case no error is set, and one can try to call this function again after the out buffers
-	are flushed.
-*/
+//q: can this fail? currently we have the crypto_out_.data left with crap in that case
 bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buffer& out_buf) {
 	logger_.log(logger::debug_trace, "SSH create_out_packet [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
-
-	span out = info.data_buffer;
-	if(!config_.use_in_place_buffer) {
-		// if not in place buffer, try to get enough space from the buf to write the output
-		out = out_buf.get(info.size);
-
-		if(out.empty()) {
-			logger_.log(logger::info, "SSH encrypt_packet failed to allocate output buffer [size={}]", info.size);
-			return false;
-		}
-	}
 
 	ssh_bf_writer p(info.data_buffer);
 
@@ -317,33 +314,57 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 	// todo: change this to use object for randomness
 	p.add_random_range(info.padding_size);
 
-	encrypt_packet(info.data_buffer, out);
+	encrypt_packet(info.data_buffer, info.data_buffer);
 
 	// incremented for every packet and let wrap around
 	++crypto_out_.packet_sequence;
 	crypto_out_.transferred_bytes += info.size;
 
-	out_buf.commit(info.size);
-	if(!config_.use_in_place_buffer) {
-		crypto_out_.current_packet = std::nullopt;
-		shrink_out_buffer();
+	if(info.inplace) {
+		out_buf.commit(info.size);
+	} else {
+		crypto_out_.data = info.data_buffer;
 	}
 
 	return true;
 }
 
-bool ssh_binary_packet::retry_send(out_buffer& out) {
-	logger_.log(logger::debug_trace, "SSH retry_send");
+bool ssh_binary_packet::send_pending(out_buffer& out) {
+	logger_.log(logger::debug_trace, "SSH send_pending [data size={}]", crypto_out_.data.size());
 
-	if(config_.use_in_place_buffer) {
-		return false;
+	if(!crypto_out_.data.empty()) {
+		std::size_t ask_size = std::min(out.max_size(), crypto_out_.data.size());
+		if(ask_size) {
+			auto buf = out.get(ask_size);
+			if(!buf.empty()) {
+				copy(crypto_out_.data.subspan(0, ask_size), buf);
+				out.commit(ask_size);
+
+				if(crypto_out_.data.size() > ask_size) {
+					span left = crypto_out_.data.subspan(ask_size);
+					std::memmove(crypto_out_.buffer.data(), left.data(), left.size());
+					crypto_out_.data = span(crypto_out_.buffer).subspan(0, left.size());
+				} else {
+					crypto_out_.data = span();
+					shrink_out_buffer();
+				}
+			}
+		}
 	}
 
-	if(!crypto_out_.current_packet) {
-		return false;
+	return crypto_out_.data.empty();
+}
+
+bool send_payload(ssh_binary_packet& bp, std::vector<std::byte> const& payload, out_buffer& out) {
+	auto rec = bp.alloc_out_packet(payload.size(), out);
+	if(rec) {
+		copy(payload, rec->data);
+		return bp.create_out_packet(*rec, out);
+	} else {
+		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending payload");
 	}
 
-	return create_out_packet(*crypto_out_.current_packet, out);
+	return false;
 }
 
 }

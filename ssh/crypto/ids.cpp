@@ -30,12 +30,15 @@ mac_type mac_type_from_string(std::string_view s) {
 	return unknown;
 }
 
-std::string_view to_string(compress_type) {
+std::string_view to_string(compress_type t) {
+	using enum compress_type;
+	if(t == none) return "none";
 	return "unknown";
 }
 
-compress_type compress_type_from_string(std::string_view) {
+compress_type compress_type_from_string(std::string_view s) {
 	using enum compress_type;
+	if(s == "none") return none;
 	return unknown;
 }
 

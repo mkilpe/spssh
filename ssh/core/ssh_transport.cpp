@@ -46,6 +46,7 @@ ssh_state ssh_transport::state() const {
 }
 
 void ssh_transport::set_state(ssh_state s) {
+	SPSSH_ASSERT(state_ != ssh_state::disconnected, "already in disconnected state");
 	//t: debug check for state changes
 	state_ = s;
 }
@@ -60,6 +61,8 @@ void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
 }
 
 void ssh_transport::set_error_and_disconnect(ssh_error_code code) {
+	logger_.log(logger::debug_trace, "SSH setting error [error={}]", code);
+	SPSSH_ASSERT(error_ == ssh_noerror, "already error set");
 	error_ = code;
 	disconnect(code);
 }
@@ -132,32 +135,39 @@ layer_op ssh_transport::handle(in_buffer& in) {
 		return layer_op::disconnected;
 	}
 
-	if(crypto_out_.current_packet) {
-		if(!retry_send(output_)) {
-			return layer_op::want_write_more;
-		}
+	if(!send_pending(output_)) {
+		return layer_op::want_write_more;
 	}
 
 	if(state() == ssh_state::none || state() == ssh_state::version_exchange) {
 		return handle_version_exchange(in);
 	}
 
-	return handle_binary_packet(in);
+	if(state() == ssh_state::kex && kex_data_.local_kexinit.empty()) {
+		//send kexinit if we haven't done so yet
+		return send_kex_init(config_.guess_kex_packet)
+			? layer_op::want_read_more : layer_op::disconnected;
+	}
+
+	layer_op r = handle_binary_packet(in);
+	return state() == ssh_state::disconnected ? layer_op::disconnected : r;
 }
 
 layer_op ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
-	if(handle_transport_payload(type, payload.subspan(1))) {
+
+	if(state() == ssh_state::kex) {
+		// give whole payload as we need to save it for kex
+		return handle_kex_packet(type, payload);
+	} else if(handle_transport_payload(type, payload.subspan(1))) {
 		crypto_in_.current_packet.clear();
 	}
 	return layer_op::none;
 }
 
 bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
-	ssh_bf_reader read(payload);
-
 	if(type == ssh_disconnect) {
 		ser::disconnect::load packet(payload);
 		if(packet) {
@@ -170,14 +180,13 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 		set_state(ssh_state::disconnected);
 
 		logger_.log(logger::info, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
-		return true;
-
 	} else if(type == ssh_ignore) {
 		ser::ignore::load packet(payload);
 		if(packet) {
 			logger_.log(logger::debug_trace, "SSH ignore packet received");
 		} else {
 			logger_.log(logger::debug_trace, "SSH received invalid ignore packet");
+			set_error_and_disconnect(ssh_protocol_error);
 		}
 	} else if(type == ssh_unimplemented) {
 		ser::unimplemented::load packet(payload);
@@ -186,6 +195,7 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 			logger_.log(logger::debug, "SSH unimplemented packet received [seq={}]", seq);
 		} else {
 			logger_.log(logger::debug_trace, "SSH received invalid unimplemented packet");
+			set_error_and_disconnect(ssh_protocol_error);
 		}
 	} else if(type == ssh_debug) {
 		ser::debug::load packet(payload);
@@ -194,13 +204,14 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 			logger_.log(logger::debug, "SSH debug packet received [always_display={}, message={}, lange={}]", always_display, message, lang);
 		} else {
 			logger_.log(logger::debug_trace, "SSH received invalid debug packet");
+			set_error_and_disconnect(ssh_protocol_error);
 		}
 	} else {
 		logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
 		send_packet<ser::unimplemented>(crypto_in_.packet_sequence-1);
 	}
 
-	return false;
+	return true;
 }
 
 template<typename Packet, typename... Args>
@@ -209,13 +220,19 @@ bool ssh_transport::send_packet(Args&&... args) {
 	return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
 }
 
-void ssh_transport::send_kex_init(bool send_first_packet) {
+bool ssh_transport::send_kex_init(bool send_first_packet) {
 	SPSSH_ASSERT(!kex_, "invalid state");
+
+	if(config_.kexes.empty()) {
+		logger_.log(logger::error, "SSH No kex algorithms set, aborting...");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		return false;
+	}
 
 	kex_cookie_.resize(cookie_size);
 	random_bytes(kex_cookie_);
 
-	send_packet<ser::kexinit>(
+	bool ret = ser::serialise_to_vector<ser::kexinit>(kex_data_.local_kexinit,
 		std::span<std::byte const, cookie_size>(kex_cookie_),
 		config_.kexes.name_list(),
 		config_.host_key_list(),
@@ -231,9 +248,71 @@ void ssh_transport::send_kex_init(bool send_first_packet) {
 		0   // reserved for future use
 		);
 
-	if(send_first_packet && !config_.kexes.empty()) {
-
+	if(ret) {
+		ret = send_payload(*this, kex_data_.local_kexinit, output_);
 	}
+
+	if(ret) {
+		if(send_first_packet) {
+			send_kex_guess();
+		}
+	}
+
+	return ret;
+}
+
+void ssh_transport::send_kex_guess() {
+	//todo
+}
+
+layer_op ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
+	if(kexinit_received_) {
+		SPSSH_ASSERT(kex_, "invalid state");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		return layer_op::disconnected;
+	} else {
+		// not yet received, so this must be it
+		if(type != ssh_kexinit) {
+			logger_.log(logger::error, "SSH Received packet other than kexinit [type={}]", type);
+			set_error_and_disconnect(ssh_key_exchange_failed);
+			return layer_op::disconnected;
+		}
+
+		return handle_kexinit_packet(payload);
+	}
+}
+
+
+layer_op ssh_transport::handle_kexinit_packet(const_span payload) {
+	ser::kexinit::load packet(ser::match_type_t, payload);
+	if(!packet) {
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		logger_.log(logger::error, "SSH Invalid kexinit packet from remove");
+		return layer_op::disconnected;
+	}
+
+	auto & [
+		kex_cookie,
+		kexes,
+		host_keys,
+		client_server_ciphers,
+		server_client_ciphers,
+		client_server_macs,
+		server_client_macs,
+		client_server_compress,
+		server_client_compress,
+		lang_client_server,
+		lang_server_client,
+		sent_first_packet,
+		reserved
+			] = packet;
+
+/*	if(ret) {
+		kex_data_.remote_kexinit = std::vector<std::byte>{payload.begin(), payload.end()};
+	}
+*/
+
+	return layer_op::want_write_more; //??
 }
 
 }

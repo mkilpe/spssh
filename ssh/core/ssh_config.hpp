@@ -55,8 +55,8 @@ struct ssh_config {
 	// size to shrink the output buffer after handling output packet
 	std::size_t shrink_out_buffer_size{std::size_t(-1)};
 
-	// use in place operations for output buffer, this disables compression
-	bool use_in_place_buffer{true};
+	// send initial guess of kex before receiving remote side kex-init packet
+	bool guess_kex_packet{false};
 
 public:
 	std::vector<std::string_view> host_key_list() const;

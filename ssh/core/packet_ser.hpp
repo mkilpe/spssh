@@ -106,6 +106,15 @@ using kexinit = ssh_packet_ser
 	uint32
 >;
 
+
+
+template<typename Packet, typename... Args>
+bool serialise_to_vector(std::vector<std::byte>& out, Args&&... args) {
+	typename Packet::save packet(std::forward<Args>(args)...);
+	out.resize(packet.size());
+	return packet.write(out);
+}
+
 }
 
 #endif

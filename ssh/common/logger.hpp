@@ -17,11 +17,11 @@ std::string my_simple_format(std::string_view fmt, Args const&...);
 class logger {
 public:
 	enum type {
-		info          = 0x1,
-		error         = 0x2,
+		error         = 0x1,
+		info          = 0x2,
 		debug         = 0x4,
-		debug_trace   = 0x8,
-		debug_verbose = 0x10,
+		debug_verbose = 0x08,
+		debug_trace   = 0x10,
 
 		log_none = 0,
 		log_all = info | error | debug | debug_trace | debug_verbose
