@@ -67,7 +67,7 @@ void ssh_transport::set_error_and_disconnect(ssh_error_code code) {
 	disconnect(code);
 }
 
-layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
+void ssh_transport::handle_version_exchange(in_buffer& in) {
 	logger_.log(logger::debug_trace, "SSH handle_version_exchange [state={}]", to_string(state()));
 	if(state() == ssh_state::none) {
 		if(!send_version_string(config_.my_version, output_)) {
@@ -93,78 +93,69 @@ layer_op ssh_transport::handle_version_exchange(in_buffer& in) {
 			}
 		}
 	}
-	if(state() == ssh_state::disconnected) {
-		return layer_op::disconnected;
-	} else if(state() == ssh_state::version_exchange) {
-		return layer_op::want_read_more;
-	} else {
-		return layer_op::none;
-	}
 }
 
-layer_op ssh_transport::handle_binary_packet(in_buffer& in) {
+void ssh_transport::handle_binary_packet(in_buffer& in) {
 	auto data = in.get();
 
 	if(crypto_in_.current_packet.status == in_packet_status::waiting_header) {
-		if(!try_decode_header(data)) {
-			return layer_op::want_read_more;
-		}
+		try_decode_header(data);
 	}
 
 	if(crypto_in_.current_packet.status == in_packet_status::waiting_data) {
 		// see if we have whole packet already
 		if(crypto_in_.current_packet.packet_size <= data.size()) {
-			crypto_in_.current_packet.payload = decrypt_packet(data, data);
-		} else {
-			return layer_op::want_read_more;
+			decrypt_packet(data, data);
 		}
 	}
 
 	if(crypto_in_.current_packet.status == in_packet_status::data_ready) {
-		return process_transport_payload(crypto_in_.current_packet.payload);
+		process_transport_payload(crypto_in_.current_packet.payload);
 	}
-
-	// if we get here something went wrong, disconnect...
-	set_error_and_disconnect(ssh_protocol_error);
-
-	return layer_op::disconnected;
 }
 
-layer_op ssh_transport::handle(in_buffer& in) {
-	if(state() == ssh_state::disconnected) {
-		return layer_op::disconnected;
+transport_op ssh_transport::handle(in_buffer& in) {
+	// we try to write even in case of disconnect (maybe we want to send disconnect packet)
+	if(!send_pending(output_)) {
+		return transport_op::want_write_more;
 	}
 
-	if(!send_pending(output_)) {
-		return layer_op::want_write_more;
+	if(state() == ssh_state::disconnected) {
+		return transport_op::disconnected;
 	}
 
 	if(state() == ssh_state::none || state() == ssh_state::version_exchange) {
-		return handle_version_exchange(in);
+		handle_version_exchange(in);
+	} else {
+		handle_binary_packet(in);
 	}
 
-	if(state() == ssh_state::kex && kex_data_.local_kexinit.empty()) {
-		//send kexinit if we haven't done so yet
-		return send_kex_init(config_.guess_kex_packet)
-			? layer_op::want_read_more : layer_op::disconnected;
+	if(!crypto_out_.data.empty()) {
+		return transport_op::want_write_more;
+	} else if(state() == ssh_state::disconnected) {
+		return transport_op::disconnected;
 	}
 
-	layer_op r = handle_binary_packet(in);
-	return state() == ssh_state::disconnected ? layer_op::disconnected : r;
+	return transport_op::want_read_more;
 }
 
-layer_op ssh_transport::process_transport_payload(span payload) {
+void ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
 
+	bool res = false;
+
 	if(state() == ssh_state::kex) {
 		// give whole payload as we need to save it for kex
-		return handle_kex_packet(type, payload);
-	} else if(handle_transport_payload(type, payload.subspan(1))) {
+		res = handle_kex_packet(type, payload);
+	} else {
+		res = handle_transport_payload(type, payload.subspan(1));
+	}
+
+	if(res) {
 		crypto_in_.current_packet.clear();
 	}
-	return layer_op::none;
 }
 
 bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
@@ -265,17 +256,26 @@ void ssh_transport::send_kex_guess() {
 	//todo
 }
 
-layer_op ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
+bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
+
+	// where to put this so it happens before reading anything?
+	if(kex_data_.local_kexinit.empty()) {
+		//send kexinit if we haven't done so yet
+		if(!send_kex_init(config_.guess_kex_packet)) {
+			return false;
+		}
+	}
+
 	if(kexinit_received_) {
 		SPSSH_ASSERT(kex_, "invalid state");
 		set_error_and_disconnect(ssh_key_exchange_failed);
-		return layer_op::disconnected;
+		return false;
 	} else {
 		// not yet received, so this must be it
 		if(type != ssh_kexinit) {
 			logger_.log(logger::error, "SSH Received packet other than kexinit [type={}]", type);
 			set_error_and_disconnect(ssh_key_exchange_failed);
-			return layer_op::disconnected;
+			return false;
 		}
 
 		return handle_kexinit_packet(payload);
@@ -283,12 +283,12 @@ layer_op ssh_transport::handle_kex_packet(ssh_packet_type type, const_span paylo
 }
 
 
-layer_op ssh_transport::handle_kexinit_packet(const_span payload) {
+bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	ser::kexinit::load packet(ser::match_type_t, payload);
 	if(!packet) {
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		logger_.log(logger::error, "SSH Invalid kexinit packet from remove");
-		return layer_op::disconnected;
+		return false;
 	}
 
 	auto & [
@@ -312,7 +312,7 @@ layer_op ssh_transport::handle_kexinit_packet(const_span payload) {
 	}
 */
 
-	return layer_op::want_write_more; //??
+	return true;
 }
 
 }

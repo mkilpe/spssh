@@ -56,14 +56,14 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 	SPSSH_ASSERT(crypto_in_.current_packet.packet_size <= in_data.size(), "Invalid data size");
 
-	span ret;
+	span payload;
 
 	// are we encrypted?
 	if(crypto_in_.cipher) {
 		if(crypto_in_.cipher->is_aead()) {
-			ret = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_.cipher), in_data, out_data);
+			payload = decrypt_aead(static_cast<aead_cipher&>(*crypto_in_.cipher), in_data, out_data);
 		} else {
-			ret = decrypt_with_mac(in_data, out_data);
+			payload = decrypt_with_mac(in_data, out_data);
 		}
 	} else {
 		std::uint8_t padding = std::to_integer<std::uint8_t>(in_data[packet_lenght_size]);
@@ -72,9 +72,9 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 			if(in_data.data() != out_data.data()) {
 				SPSSH_ASSERT(out_data.size() >= size, "invalid out buffer size");
 				std::memcpy(out_data.data(), in_data.data() + packet_header_size, size);
-				ret = out_data.subspan(0, size);
+				payload = out_data.subspan(0, size);
 			} else {
-				ret = out_data.subspan(packet_header_size, size);
+				payload = out_data.subspan(packet_header_size, size);
 			}
 		} else {
 			// invalid packet
@@ -82,13 +82,14 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 		}
 	}
 
-	if(!ret.empty()) {
+	if(!payload.empty()) {
 		crypto_in_.current_packet.status = in_packet_status::data_ready;
 		// incremented for every packet and let wrap around
 		++crypto_in_.packet_sequence;
 		crypto_in_.transferred_bytes += in_data.size();
+		crypto_in_.current_packet.payload = payload;
 	}
-	return ret;
+	return payload;
 }
 
 

@@ -20,7 +20,7 @@ struct ssh_version {
 };
 
 #if !defined(SPSSH_ASSERT) && !defined(NDEBUG)
-#	define SPSSH_ASSERT(cond, message) assert((cond) && (#message))
+#	define SPSSH_ASSERT(cond, message) assert((cond) && (message))
 #endif
 
 }

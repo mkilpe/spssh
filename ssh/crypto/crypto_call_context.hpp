@@ -5,10 +5,12 @@
 
 namespace securepath::ssh {
 
+class random;
+
 /// Context that is passed to crypto construct functions
-class crypto_call_context {
-public:
+struct crypto_call_context {
 	logger& log;
+	random& rand;
 };
 
 }

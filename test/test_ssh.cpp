@@ -12,29 +12,29 @@
 namespace securepath::ssh::test {
 
 struct test_context {
-	test_context(logger& l, ssh_config c = {}) : log(l), config(std::move(c)) {}
+	test_context(logger& l, std::string tag, ssh_config c = {}) : log(l, tag), config(std::move(c)) {}
 
-	logger& log;
+	session_logger log;
 	ssh_config config;
 	string_io_buffer out_buf;
 };
 
 struct test_client : test_context, ssh_client {
-	test_client(logger& l, ssh_config c = {}) : test_context(l), ssh_client(c, log, out_buf) {}
+	test_client(logger& l, ssh_config c = {}) : test_context(l, "[client] "), ssh_client(c, log, out_buf) {}
 };
 
 struct test_server : test_context, ssh_server {
-	test_server(logger& l, ssh_config c = {}) : test_context(l), ssh_server(c, log, out_buf) {}
+	test_server(logger& l, ssh_config c = {}) : test_context(l, "[server] "), ssh_server(c, log, out_buf) {}
 };
 
 bool run(test_client& client, test_server& server) {
 	bool run = true;
 	while(run) {
 		if(!client.out_buf.empty()) {
-			run = server.handle(client.out_buf) != layer_op::disconnected;
+			run = server.handle(client.out_buf) != transport_op::disconnected;
 		}
 		if(!server.out_buf.empty()) {
-			run = client.handle(server.out_buf) != layer_op::disconnected;
+			run = client.handle(server.out_buf) != transport_op::disconnected;
 		}
 		run = run && (!client.out_buf.empty() || !server.out_buf.empty());
 	}

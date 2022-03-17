@@ -103,6 +103,16 @@ public:
 	void log_line(type, std::string&&, std::source_location&&) override;
 };
 
+class session_logger : public logger {
+public:
+	session_logger(logger&, std::string tag);
+
+	void log_line(type, std::string&&, std::source_location&&) override;
+private:
+	logger& log_;
+	std::string tag_;
+};
+
 }
 
 #endif

@@ -16,7 +16,7 @@ using ctor = std::function<std::unique_ptr<Impl> (Algo, crypto_call_context cons
 
 /// Context that is used to construct all crypto objects
 struct crypto_context {
-
+	random& rand;
 	ctor<cipher_type, cipher> construct_cipher{};
 	ctor<mac_type, mac> construct_mac{};
 	ctor<compress_type, compress> construct_compress{};

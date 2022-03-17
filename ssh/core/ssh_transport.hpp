@@ -27,13 +27,19 @@ enum class ssh_state {
 std::string_view to_string(ssh_state);
 std::ostream& operator<<(std::ostream&, ssh_state);
 
+enum class transport_op {
+	want_read_more,
+	want_write_more,
+	disconnected
+};
+
 /** \brief SSH Version 2 transport layer
  */
 class ssh_transport : private ssh_binary_packet {
 public:
 	ssh_transport(ssh_config const&, out_buffer&, logger&);
 
-	layer_op handle(in_buffer&);
+	transport_op handle(in_buffer&);
 
 	void disconnect(std::uint32_t, std::string_view message = {});
 
@@ -55,16 +61,16 @@ protected:
 private: // init & generic packet handling
 	void set_error_and_disconnect(ssh_error_code);
 
-	layer_op handle_version_exchange(in_buffer& in);
-	layer_op handle_binary_packet(in_buffer& in);
-	layer_op handle_kex_packet(ssh_packet_type type, const_span payload);
-	layer_op handle_kexinit_packet(const_span payload);
+	void handle_version_exchange(in_buffer& in);
+	void handle_binary_packet(in_buffer& in);
+	bool handle_kex_packet(ssh_packet_type type, const_span payload);
+	bool handle_kexinit_packet(const_span payload);
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();
 
 private: // input
-	layer_op process_transport_payload(span payload);
+	void process_transport_payload(span payload);
 
 private: // output
 	template<typename Packet, typename... Args>
