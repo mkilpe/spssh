@@ -22,7 +22,7 @@ include_directories(${my_root_directory}/external/json/include)
 include_directories(${my_root_directory}/external/libfilezilla/lib)
 link_directories(${my_root_directory}/external/libfilezilla/lib)
 
-add_definitions(-DBOOST_JSON_STANDALONE)
+add_definitions(-DBOOST_JSON_STANDALONE -DSPSSH_USE_NETTLE)
 
 # actual projects
 add_subdirectory(ssh)

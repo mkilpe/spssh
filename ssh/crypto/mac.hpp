@@ -26,8 +26,6 @@ private:
 	std::size_t const size_;
 };
 
-
-
 }
 
 #endif

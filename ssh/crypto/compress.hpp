@@ -10,7 +10,7 @@ public:
 	virtual ~compress() = default;
 
 	/// Process block of data (either compress or decompress)
-	virtual bool process(span input, out_buffer&) = 0;
+	virtual bool process(const_span in, span out) = 0;
 };
 
 }

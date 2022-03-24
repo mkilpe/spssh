@@ -19,6 +19,8 @@ std::string_view to_string(kex_type);
 kex_type kex_type_from_string(std::string_view);
 
 struct kex_init_data {
+	ssh_version local_ver;
+	ssh_version remote_ver;
 	std::vector<std::byte> local_kexinit;
 	std::vector<std::byte> remote_kexinit;
 };

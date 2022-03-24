@@ -52,11 +52,15 @@ public:
 		if(would_log(t.type)) {
 			//todo: wait gcc to support std::format to enable this
 			//log_line(t, std::format(fmt, std::forward<Args>(args)...), std::move(location));
-			log_line(t.type, my_simple_format(format, std::forward<Args>(args)...), std::move(t.location));
+			do_log_line(t.type, my_simple_format(format, std::forward<Args>(args)...), std::move(t.location));
 		}
 	}
 
-	virtual void log_line(type, std::string&&, std::source_location&&) = 0;
+	void log_line(type t, std::string&& s, std::source_location&& l) {
+		if(would_log(t)) {
+			do_log_line(t, std::move(s), std::move(l));
+		}
+	}
 
 	bool would_log(type t) const {
 		return t & level_;
@@ -65,6 +69,9 @@ public:
 	void set_level(type t) {
 		level_ = t;
 	}
+
+protected:
+	virtual void do_log_line(type, std::string&&, std::source_location&&) = 0;
 
 private:
 	type level_{log_all};
@@ -100,14 +107,16 @@ class stdout_logger : public logger {
 public:
 	using logger::logger;
 
-	void log_line(type, std::string&&, std::source_location&&) override;
+protected:
+	void do_log_line(type, std::string&&, std::source_location&&) override;
 };
 
 class session_logger : public logger {
 public:
 	session_logger(logger&, std::string tag);
 
-	void log_line(type, std::string&&, std::source_location&&) override;
+protected:
+	void do_log_line(type, std::string&&, std::source_location&&) override;
 private:
 	logger& log_;
 	std::string tag_;

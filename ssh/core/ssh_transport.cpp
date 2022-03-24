@@ -1,6 +1,7 @@
 
 #include "ssh_transport.hpp"
 #include "protocol_helpers.hpp"
+#include "protocol.hpp"
 #include "packet_ser_impl.hpp"
 
 #include <ostream>
@@ -25,10 +26,18 @@ std::ostream& operator<<(std::ostream& out, ssh_state state) {
 	return out << to_string(state);
 }
 
-ssh_transport::ssh_transport(ssh_config const& c, out_buffer& b, logger& l)
+ssh_transport::ssh_transport(ssh_config const& c, logger& l, out_buffer& out, crypto_context cc)
 : ssh_binary_packet(c, l)
-, output_(b)
+, crypto_(std::move(cc))
+, output_(out)
+, rand_(crypto_.construct_random())
 {
+	if(rand_) {
+		set_random(*rand_);
+	} else {
+		logger_.log(logger::error, "SSH Unable to create random generator, double check your set-up");
+		set_state(ssh_state::disconnected, spssh_invalid_setup);
+	}
 }
 
 void ssh_transport::on_version_exchange(ssh_version const& v) {
@@ -45,8 +54,11 @@ ssh_state ssh_transport::state() const {
 	return state_;
 }
 
-void ssh_transport::set_state(ssh_state s) {
+void ssh_transport::set_state(ssh_state s, std::optional<ssh_error_code> err) {
 	SPSSH_ASSERT(state_ != ssh_state::disconnected, "already in disconnected state");
+	if(err) {
+		set_error(*err);
+	}
 	//t: debug check for state changes
 	state_ = s;
 }
@@ -78,18 +90,19 @@ void ssh_transport::handle_version_exchange(in_buffer& in) {
 	}
 	if(state() == ssh_state::version_exchange) {
 		if(!remote_version_received_) {
-			auto res = parse_ssh_version(in, false, remote_version_);
+			auto res = parse_ssh_version(in, false, kex_data_.remote_ver);
 			if(res == version_parse_result::ok) {
 				remote_version_received_ = true;
-				on_version_exchange(remote_version_);
+				on_version_exchange(kex_data_.remote_ver);
 				if(error_ == ssh_noerror) {
+					kex_data_.local_ver = config_.my_version;
 					set_state(ssh_state::kex);
 				}
 			} else if(res == version_parse_result::error) {
 				set_error(ssh_protocol_error, "failed to parse protocol version information");
 				set_state(ssh_state::disconnected);
 			} else {
-				logger_.log(logger::debug_trace, "parse_ssh_version requires more data");
+				logger_.log(logger::debug_trace, "parse_ssh_version requires more data [in_buffer.size={}]", in.get().size());
 			}
 		}
 	}
@@ -98,23 +111,26 @@ void ssh_transport::handle_version_exchange(in_buffer& in) {
 void ssh_transport::handle_binary_packet(in_buffer& in) {
 	auto data = in.get();
 
-	if(crypto_in_.current_packet.status == in_packet_status::waiting_header) {
+	if(stream_in_.current_packet.status == in_packet_status::waiting_header) {
 		try_decode_header(data);
 	}
 
-	if(crypto_in_.current_packet.status == in_packet_status::waiting_data) {
+	if(stream_in_.current_packet.status == in_packet_status::waiting_data) {
 		// see if we have whole packet already
-		if(crypto_in_.current_packet.packet_size <= data.size()) {
+		if(stream_in_.current_packet.packet_size <= data.size()) {
 			decrypt_packet(data, data);
 		}
 	}
 
-	if(crypto_in_.current_packet.status == in_packet_status::data_ready) {
-		process_transport_payload(crypto_in_.current_packet.payload);
+	if(stream_in_.current_packet.status == in_packet_status::data_ready) {
+		if(process_transport_payload(stream_in_.current_packet.payload)) {
+			in.consume(stream_in_.current_packet.packet_size);
+			stream_in_.current_packet.clear();
+		}
 	}
 }
 
-transport_op ssh_transport::handle(in_buffer& in) {
+transport_op ssh_transport::process(in_buffer& in) {
 	// we try to write even in case of disconnect (maybe we want to send disconnect packet)
 	if(!send_pending(output_)) {
 		return transport_op::want_write_more;
@@ -130,7 +146,7 @@ transport_op ssh_transport::handle(in_buffer& in) {
 		handle_binary_packet(in);
 	}
 
-	if(!crypto_out_.data.empty()) {
+	if(!stream_out_.data.empty()) {
 		return transport_op::want_write_more;
 	} else if(state() == ssh_state::disconnected) {
 		return transport_op::disconnected;
@@ -139,38 +155,42 @@ transport_op ssh_transport::handle(in_buffer& in) {
 	return transport_op::want_read_more;
 }
 
-void ssh_transport::process_transport_payload(span payload) {
+bool ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
 
-	bool res = false;
+	// first see if it is basic packet, we handle these at all states
+	bool res = handle_basic_packets(type, payload.subspan(1));
 
-	if(state() == ssh_state::kex) {
-		// give whole payload as we need to save it for kex
-		res = handle_kex_packet(type, payload);
-	} else {
-		res = handle_transport_payload(type, payload.subspan(1));
+	if(!res) {
+		if(state() == ssh_state::kex) {
+			// give whole payload as we need to save it for kex
+			res = handle_kex_packet(type, payload);
+		} else {
+			logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
+			send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
+			res = true;
+		}
 	}
 
-	if(res) {
-		crypto_in_.current_packet.clear();
-	}
+	return res;
 }
 
-bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span payload) {
+bool ssh_transport::handle_basic_packets(ssh_packet_type type, const_span payload) {
+	bool ret = true;
 	if(type == ssh_disconnect) {
 		ser::disconnect::load packet(payload);
 		if(packet) {
 			auto & [code, desc, ignore] = packet;
 			error_ = ssh_error_code(code);
 			error_msg_ = desc;
+			logger_.log(logger::info, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
 		} else {
 			logger_.log(logger::debug, "SSH Invalid disconnect packet from remote");
+			set_error(ssh_protocol_error);
 		}
 		set_state(ssh_state::disconnected);
-
-		logger_.log(logger::info, "SSH Disconnect from remote [code={}, msg={}]", error_, error_msg_);
 	} else if(type == ssh_ignore) {
 		ser::ignore::load packet(payload);
 		if(packet) {
@@ -198,11 +218,10 @@ bool ssh_transport::handle_transport_payload(ssh_packet_type type, const_span pa
 			set_error_and_disconnect(ssh_protocol_error);
 		}
 	} else {
-		logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
-		send_packet<ser::unimplemented>(crypto_in_.packet_sequence-1);
+		ret = false;
 	}
 
-	return true;
+	return ret;
 }
 
 template<typename Packet, typename... Args>
@@ -221,7 +240,7 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 	}
 
 	kex_cookie_.resize(cookie_size);
-	random_bytes(kex_cookie_);
+	rand_->random_bytes(kex_cookie_);
 
 	bool ret = ser::serialise_to_vector<ser::kexinit>(kex_data_.local_kexinit,
 		std::span<std::byte const, cookie_size>(kex_cookie_),

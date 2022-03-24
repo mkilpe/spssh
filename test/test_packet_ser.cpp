@@ -3,6 +3,7 @@
 #include "ssh/common/logger.hpp"
 #include "ssh/core/packet_ser.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/protocol.hpp"
 
 #include <securepath/test_frame/test_suite.hpp>
 #include <securepath/test_frame/test_utils.hpp>
@@ -26,11 +27,34 @@ bool test_packet_ser(Args&&... args) {
 	return check_tuple(lp, std::make_index_sequence<sizeof...(Args)>(), std::forward<Args>(args)...);
 }
 
+struct test_span : std::span<std::byte const, 16> {
+	using span::span;
+};
+
+bool operator==(std::span<std::byte const, 16> const& l, test_span const& r) {
+	return std::memcmp(l.data(), r.data(), 16) == 0;
+}
+
 TEST_CASE("packet serialisation", "[unit]") {
 	CHECK(test_packet_ser<ser::disconnect>(1, "test 1", "test 2"));
 	CHECK(test_packet_ser<ser::unimplemented>(25));
 	CHECK(test_packet_ser<ser::debug>(true, "test 1", "test 2"));
 	CHECK(test_packet_ser<ser::ignore>("test 1"));
+	CHECK(test_packet_ser<ser::kexinit>(
+		test_span((std::byte const*)"1234567890123456", 16),
+			std::vector<std::string_view>{"1", "2", "3"},
+			std::vector<std::string_view>{"4", "5"},
+			std::vector<std::string_view>{},
+			std::vector<std::string_view>{"6", "7", "8"},
+			std::vector<std::string_view>{"9"},
+			std::vector<std::string_view>{"10", "11", "12", "13"},
+			std::vector<std::string_view>{"14", "15"},
+			std::vector<std::string_view>{},
+			std::vector<std::string_view>{"16", "17", "18"},
+			std::vector<std::string_view>{"19"},
+			true,
+			1
+		));
 }
 
 TEST_CASE("packet serialisation simple", "[unit]") {

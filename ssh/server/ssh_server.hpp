@@ -10,7 +10,7 @@ namespace securepath::ssh {
  */
 class ssh_server : public ssh_transport {
 public:
-	ssh_server(ssh_config const&, logger& log, out_buffer&);
+	ssh_server(ssh_config const&, logger& log, out_buffer&, crypto_context = default_crypto_context());
 
 private:
 };

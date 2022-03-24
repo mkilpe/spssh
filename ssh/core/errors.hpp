@@ -27,8 +27,9 @@ enum ssh_error_code : std::uint32_t {
 	//0xFE000000-0xFFFFFFFF	Reserved for Private Use
 
 	//spssh defined errors
-	spssh_memory_error                 = 0xFFFF0001,
-	spssh_invalid_packet               = 0xFFFF0002,
+	spssh_invalid_setup                = 0xFFFF0001,
+	spssh_memory_error                 = 0xFFFF0002,
+	spssh_invalid_packet               = 0xFFFF0003
 };
 
 }

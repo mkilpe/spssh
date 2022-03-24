@@ -30,12 +30,8 @@ struct test_server : test_context, ssh_server {
 bool run(test_client& client, test_server& server) {
 	bool run = true;
 	while(run) {
-		if(!client.out_buf.empty()) {
-			run = server.handle(client.out_buf) != transport_op::disconnected;
-		}
-		if(!server.out_buf.empty()) {
-			run = client.handle(server.out_buf) != transport_op::disconnected;
-		}
+		run = client.process(server.out_buf) != transport_op::disconnected;
+		run = server.process(client.out_buf) != transport_op::disconnected || run;
 		run = run && (!client.out_buf.empty() || !server.out_buf.empty());
 	}
 	return client.error() == 0 && server.error() == 0;
@@ -45,7 +41,6 @@ TEST_CASE("ssh test 1", "[unit]") {
 	test_server server(test_log());
 	test_client client(test_log());
 
-	client.send_initial_packet();
 	CHECK(run(client, server));
 
 	CHECK(client.state() == ssh_state::kex);
@@ -57,7 +52,6 @@ TEST_CASE("ssh failing version exchange", "[unit]") {
 	test_server server(test_log());
 	test_client client(test_log(), ssh_config{.my_version = ssh_version{.ssh="1.0"}});
 
-	client.send_initial_packet();
 	CHECK(!run(client, server));
 
 	CHECK(client.state() == ssh_state::disconnected);

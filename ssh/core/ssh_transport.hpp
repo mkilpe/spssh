@@ -7,6 +7,7 @@
 #include "ssh_binary_packet.hpp"
 
 #include "ssh/common/logger.hpp"
+#include "ssh/crypto/crypto_context.hpp"
 
 #include <iosfwd>
 
@@ -37,14 +38,15 @@ enum class transport_op {
  */
 class ssh_transport : private ssh_binary_packet {
 public:
-	ssh_transport(ssh_config const&, out_buffer&, logger&);
+	ssh_transport(ssh_config const&, logger&, out_buffer&, crypto_context);
 
-	transport_op handle(in_buffer&);
+	/// This is the main driving function, reads from in_buffer and writes to out_buffer
+	transport_op process(in_buffer&);
 
 	void disconnect(std::uint32_t, std::string_view message = {});
 
 	ssh_state state() const;
-	void set_state(ssh_state);
+	void set_state(ssh_state, std::optional<ssh_error_code> = std::nullopt);
 
 	out_buffer& output_buffer() { return output_; }
 
@@ -53,7 +55,7 @@ public:
 
 protected:
 	virtual void on_version_exchange(ssh_version const&);
-	virtual bool handle_transport_payload(ssh_packet_type, const_span payload);
+	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
 
 protected:
 	using ssh_binary_packet::config_;
@@ -70,27 +72,27 @@ private: // init & generic packet handling
 	void send_kex_guess();
 
 private: // input
-	void process_transport_payload(span payload);
+	bool process_transport_payload(span payload);
 
 private: // output
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args);
 
 private: // data
+	crypto_context crypto_;
 	out_buffer& output_;
 
 	ssh_state state_{ssh_state::none};
 
 	bool remote_version_received_{};
-	ssh_version remote_version_;
+
+	std::unique_ptr<random> rand_;
 
 	// kex data
-	bool kexinit_sent_{};
 	bool kexinit_received_{};
 	std::vector<std::byte> kex_cookie_;
 
 	kex_init_data kex_data_;
-
 	std::unique_ptr<kex> kex_;
 };
 

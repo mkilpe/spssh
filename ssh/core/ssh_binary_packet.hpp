@@ -10,6 +10,7 @@
 #include "ssh/crypto/cipher.hpp"
 #include "ssh/crypto/compress.hpp"
 #include "ssh/crypto/mac.hpp"
+#include "ssh/crypto/random.hpp"
 
 #include <cstring>
 #include <optional>
@@ -48,12 +49,14 @@ struct in_packet_info {
 	std::size_t packet_size{}; // size of the whole packet, this is available after decrypting the header
 	std::size_t data_size{};   // size of the transport payload, this is available after decrypting whole packet
 	span payload{};            // current decrypted payload to be handled
+	std::uint32_t sequence{};  // sequence number of the incoming packet
 
 	void clear() {
 		status = in_packet_status::waiting_header;
 		packet_size = 0;
 		data_size = 0;
 		payload = {};
+		sequence = 0;
 	}
 };
 
@@ -92,9 +95,10 @@ public:
 	ssh_error_code error() const;
 	std::string error_message() const;
 
-	void set_error(ssh_error_code code, std::string_view message);
+	void set_error(ssh_error_code code, std::string_view message = {});
 
 public: //input
+	void set_random(random&);
 	bool set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
 	bool try_decode_header(span in_data);
 	span decrypt_packet(const_span in_data, span out_data);
@@ -127,12 +131,13 @@ protected:
 
 	ssh_config const& config_;
 	logger& logger_;
+	random* random_{};
 
 	ssh_error_code error_{};
 	std::string error_msg_;
 
-	stream_in_crypto  crypto_in_;
-	stream_out_crypto crypto_out_;
+	stream_in_crypto  stream_in_;
+	stream_out_crypto stream_out_;
 };
 
 template<typename Packet, typename... Args>

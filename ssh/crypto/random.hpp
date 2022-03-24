@@ -5,11 +5,6 @@
 
 namespace securepath::ssh {
 
-void random_bytes(span output);
-
-// returns random std::size_t between [min, max] range
-std::size_t random_uint(std::size_t min, std::size_t max);
-
 /// Interface to get random values/bytes
 class random {
 public:

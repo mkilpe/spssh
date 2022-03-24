@@ -3,17 +3,9 @@
 
 namespace securepath::ssh {
 
-ssh_client::ssh_client(ssh_config const& conf, logger& log, out_buffer& buf)
-: ssh_transport(conf, buf, log)
+ssh_client::ssh_client(ssh_config const& conf, logger& log, out_buffer& out, crypto_context cc)
+: ssh_transport(conf, log, out, std::move(cc))
 {
-}
-
-bool ssh_client::send_initial_packet() {
-	bool ret = send_version_string(config_.my_version, output_buffer());
-	if(ret) {
-		set_state(ssh_state::version_exchange);
-	}
-	return ret;
 }
 
 }

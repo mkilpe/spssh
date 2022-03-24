@@ -50,7 +50,8 @@ public:
 	bool save(std::uint32_t v) {
 		bool ret = size_left() >= 4;
 		if(ret) {
-			add_uint32(v);
+			u32ton(v, out_.data()+pos_);
+			pos_ += 4;
 		}
 		return ret;
 	}
@@ -58,23 +59,22 @@ public:
 	bool save(std::uint8_t v) {
 		bool ret = size_left() >= 1;
 		if(ret) {
-			add_uint8(v);
+			out_[pos_] = std::byte{v};
+			++pos_;
 		}
 		return ret;
 	}
 
 	bool save(bool v) {
-		bool ret = size_left() >= 1;
-		if(ret) {
-			add_uint8(v);
-		}
-		return ret;
+		return save(std::uint8_t{v});
 	}
 
 	bool save(std::string_view v) {
 		bool ret = size_left() >= 4+v.size();
 		if(ret) {
-			add_string(v);
+			save(std::uint32_t(v.size()));
+			std::memcpy(out_.data()+pos_, v.data(), v.size());
+			pos_ += v.size();
 		}
 		return ret;
 	}
@@ -89,40 +89,21 @@ public:
 		return ret;
 	}
 
-	void add_uint32(std::uint32_t v) {
-		SPSSH_ASSERT(size_left() >= 4, "illegal buffer size");
-		u32ton(v, out_.data()+pos_);
-		pos_ += 4;
+	bool add_random_range(random& gen, std::size_t size) {
+		bool ret = size_left() >= size;
+		if(ret) {
+			gen.random_bytes(span{out_.data()+pos_, size});
+			pos_ += size;
+		}
+		return ret;
 	}
 
-	void add_uint8(std::uint8_t v) {
-		SPSSH_ASSERT(size_left() >= 1, "illegal buffer size");
-		out_[pos_] = std::byte{v};
-		++pos_;
-	}
-
-	void add_string(std::string_view s) {
-		SPSSH_ASSERT(size_left() >= 4+s.size(), "illegal buffer size");
-		add_uint32(s.size());
-		std::memcpy(out_.data()+pos_, s.data(), s.size());
-		pos_ += s.size();
-	}
-
-	void add_byte_range(span s) {
-		SPSSH_ASSERT(size_left() >= s.size(), "illegal buffer size");
-		std::memcpy(out_.data()+pos_, s.data(), s.size());
-		pos_ += s.size();
-	}
-
-	void add_random_range(std::size_t size) {
-		SPSSH_ASSERT(size_left() >= size, "illegal buffer size");
-		random_bytes(span{out_.data()+pos_, size});
-		pos_ += size;
-	}
-
-	void jump_over(std::size_t size) {
-		SPSSH_ASSERT(size_left() >= size, "illegal buffer size");
-		pos_ += size;
+	bool jump_over(std::size_t size) {
+		bool ret = size_left() >= size;
+		if(ret) {
+			pos_ += size;
+		}
+		return ret;
 	}
 
 private:
@@ -199,33 +180,6 @@ public:
 		return ret;
 	}
 
-	std::optional<std::uint32_t> extract_uint32() {
-		std::optional<std::uint32_t> v;
-		if(size_left() >= 4) {
-			v = ntou32(in_.data()+pos_);
-			pos_ += 4;
-		}
-		return v;
-	}
-
-	std::optional<std::uint8_t> extract_uint8() {
-		std::optional<std::uint8_t> v;
-		if(size_left() >= 1) {
-			v =  std::to_integer<std::uint8_t>(in_[pos_++]);
-		}
-		return v;
-	}
-
-	std::optional<std::string> extract_string() {
-		std::optional<std::string> v;
-		auto size = extract_uint32();
-		if(size && size_left() >= *size) {
-			v = std::string_view{reinterpret_cast<char const*>(in_.data())+pos_, *size};
-			pos_ += *size;
-		}
-		return v;
-	}
-
 	bool jump_over(std::size_t size) {
 		bool res = size_left() >= size;
 		if(res) {
@@ -233,7 +187,6 @@ public:
 		}
 		return res;
 	}
-
 
 private:
 	const_span in_;

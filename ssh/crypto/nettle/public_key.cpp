@@ -3,6 +3,5 @@
 
 namespace securepath::ssh::nettle {
 
-
 }
 
