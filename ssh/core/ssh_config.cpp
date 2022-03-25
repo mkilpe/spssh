@@ -3,13 +3,15 @@
 
 namespace securepath::ssh {
 
-std::vector<std::string_view> ssh_config::host_key_list() const {
-	std::vector<std::string_view> res;
-	res.reserve(host_keys.size());
-	for(auto&& v : host_keys) {
-		res.push_back(to_string(v.type()));
+bool ssh_config::valid() const {
+	return algorithms.valid();
+}
+
+void ssh_config::set_host_keys_for_server(std::vector<ssh_private_key> keys) {
+	private_keys = std::move(keys);
+	for(auto&& k : private_keys) {
+		algorithms.host_keys.add_back(k.type());
 	}
-	return res;
 }
 
 }

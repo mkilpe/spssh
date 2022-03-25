@@ -21,6 +21,10 @@ public:
 	: algos_(std::move(algos))
 	{
 	}
+	algo_list(std::initializer_list<algo_type> list)
+	: algos_(list)
+	{
+	}
 
 	void add_back(algo_type t) {
 		for(auto&& v : algos_) {
@@ -52,6 +56,10 @@ public:
 		return algos_.front();
 	}
 
+	algo_type preferred() const {
+		return front();
+	}
+
 	/// Turn the list of algorithms to ssh name-list
 	std::vector<std::string_view> name_list() const {
 		std::vector<std::string_view> res;
@@ -76,9 +84,23 @@ public:
 		return res;
 	}
 
+	std::vector<algo_type>::const_iterator begin() const { return algos_.begin(); }
+	std::vector<algo_type>::const_iterator end() const { return algos_.end(); }
+
 private:
 	std::vector<algo_type> algos_;
 };
+
+template<typename Tag> struct type_tag {};
+
+template<typename Type>
+algo_list<Type> algo_list_from_string_list(std::vector<std::string_view> const& list) {
+	algo_list<Type> ret;
+	for(auto&& v : list) {
+		ret.add_back(from_string(type_tag<Type>{}, v));
+	}
+	return ret;
+}
 
 }
 

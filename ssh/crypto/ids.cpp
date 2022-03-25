@@ -9,7 +9,7 @@ std::string_view to_string(cipher_type t) {
 	return "unknown";
 }
 
-cipher_type cipher_type_from_string(std::string_view s) {
+cipher_type from_string(type_tag<cipher_type>, std::string_view s) {
 	using enum cipher_type;
 	if(s == "AEAD_AES_256_GCM") return aes_256_gcm;
 	if(s == "aes256-ctr") return aes_256_ctr;
@@ -23,7 +23,7 @@ std::string_view to_string(mac_type t) {
 	return "unknown";
 }
 
-mac_type mac_type_from_string(std::string_view s) {
+mac_type from_string(type_tag<mac_type>, std::string_view s) {
 	using enum mac_type;
 	if(s == "AEAD_AES_256_GCM") return aes_256_gcm;
 	if(s == "hmac-sha2-256") return hmac_sha2_256;
@@ -36,7 +36,7 @@ std::string_view to_string(compress_type t) {
 	return "unknown";
 }
 
-compress_type compress_type_from_string(std::string_view s) {
+compress_type from_string(type_tag<compress_type>, std::string_view s) {
 	using enum compress_type;
 	if(s == "none") return none;
 	return unknown;
@@ -50,7 +50,7 @@ std::string_view to_string(key_type t) {
 	return "unknown";
 }
 
-key_type ssh_key_type_from_string(std::string_view s) {
+key_type from_string(type_tag<key_type>, std::string_view s) {
 	using enum key_type;
 	if(s == "ssh-rsa") return ssh_rsa;
 	if(s == "ssh-ed25519") return ssh_ed25519;

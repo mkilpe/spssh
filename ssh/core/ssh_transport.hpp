@@ -3,7 +3,6 @@
 
 #include "packet_types.hpp"
 #include "ssh_config.hpp"
-#include "ssh_layer.hpp"
 #include "ssh_binary_packet.hpp"
 
 #include "ssh/common/logger.hpp"

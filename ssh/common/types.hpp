@@ -19,6 +19,11 @@ struct ssh_version {
 	std::string comment;
 };
 
+enum class transport_side {
+	client,
+	server
+};
+
 #if !defined(SPSSH_ASSERT) && !defined(NDEBUG)
 #	define SPSSH_ASSERT(cond, message) assert((cond) && (message))
 #endif

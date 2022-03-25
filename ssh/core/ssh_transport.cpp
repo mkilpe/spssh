@@ -142,6 +142,12 @@ transport_op ssh_transport::process(in_buffer& in) {
 
 	if(state() == ssh_state::none || state() == ssh_state::version_exchange) {
 		handle_version_exchange(in);
+		// if version exchange is done, start kex
+		if(state() == ssh_state::kex) {
+			if(!send_kex_init(config_.guess_kex_packet)) {
+				return transport_op::disconnected;
+			}
+		}
 	} else {
 		handle_binary_packet(in);
 	}
@@ -231,9 +237,10 @@ bool ssh_transport::send_packet(Args&&... args) {
 }
 
 bool ssh_transport::send_kex_init(bool send_first_packet) {
+	logger_.log(logger::debug_trace, "SSH send_kex_init [send guess={}]", send_first_packet);
 	SPSSH_ASSERT(!kex_, "invalid state");
 
-	if(config_.kexes.empty()) {
+	if(config_.algorithms.kexes.empty()) {
 		logger_.log(logger::error, "SSH No kex algorithms set, aborting...");
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		return false;
@@ -244,14 +251,14 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 
 	bool ret = ser::serialise_to_vector<ser::kexinit>(kex_data_.local_kexinit,
 		std::span<std::byte const, cookie_size>(kex_cookie_),
-		config_.kexes.name_list(),
-		config_.host_key_list(),
-		config_.client_server_ciphers.name_list(),
-		config_.server_client_ciphers.name_list(),
-		config_.client_server_macs.name_list(),
-		config_.server_client_macs.name_list(),
-		config_.client_server_compress.name_list(),
-		config_.server_client_compress.name_list(),
+		config_.algorithms.kexes.name_list(),
+		config_.algorithms.host_keys.name_list(),
+		config_.algorithms.client_server_ciphers.name_list(),
+		config_.algorithms.server_client_ciphers.name_list(),
+		config_.algorithms.client_server_macs.name_list(),
+		config_.algorithms.server_client_macs.name_list(),
+		config_.algorithms.client_server_compress.name_list(),
+		config_.algorithms.server_client_compress.name_list(),
 		std::vector<std::string_view>(), //languages client to server
 		std::vector<std::string_view>(), //languages server to client
 		send_first_packet,
@@ -272,21 +279,32 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 }
 
 void ssh_transport::send_kex_guess() {
-	//todo
+	logger_.log(logger::debug_trace, "SSH send_kex_guess");
+
+	auto guess = crypto_config_guess(config_.algorithms, config_.side);
+	if(guess) {
+		// we have valid guess, construct kex and send initial packet
+		kex_ = construct_kex(
+			kex_context{
+				config_,
+				*this,
+				output_,
+				kex_data_,
+				crypto_,
+				crypto_call_context{logger_, *rand_},
+				*guess });
+
+		kex_->initiate();
+	} else {
+		logger_.log(logger::debug, "SSH No valid guess available for crypto configure");
+	}
 }
 
 bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
-
-	// where to put this so it happens before reading anything?
-	if(kex_data_.local_kexinit.empty()) {
-		//send kexinit if we haven't done so yet
-		if(!send_kex_init(config_.guess_kex_packet)) {
-			return false;
-		}
-	}
+	logger_.log(logger::debug_trace, "SSH handle_kex_packet [type={}]", type);
 
 	if(kexinit_received_) {
-		SPSSH_ASSERT(kex_, "invalid state");
+		// todo, handle packet
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		return false;
 	} else {
@@ -303,10 +321,12 @@ bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) 
 
 
 bool ssh_transport::handle_kexinit_packet(const_span payload) {
+	logger_.log(logger::debug_trace, "SSH handle_kexinit_packet");
+
 	ser::kexinit::load packet(ser::match_type_t, payload);
 	if(!packet) {
 		set_error_and_disconnect(ssh_key_exchange_failed);
-		logger_.log(logger::error, "SSH Invalid kexinit packet from remove");
+		logger_.log(logger::error, "SSH Invalid kexinit packet from remote");
 		return false;
 	}
 
@@ -326,6 +346,49 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		reserved
 			] = packet;
 
+	//do some sanity checks
+	if(kexes.empty()
+		|| host_keys.empty()
+		|| client_server_ciphers.empty()
+		|| server_client_ciphers.empty()
+		|| client_server_macs.empty()
+		|| server_client_macs.empty()
+		|| client_server_compress.empty()
+		|| server_client_compress.empty())
+	{
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		logger_.log(logger::error, "SSH Invalid kexinit packet from remote");
+		return false;
+	}
+
+	supported_algorithms remote_algs{
+			algo_list_from_string_list<key_type>(host_keys),
+			algo_list_from_string_list<kex_type>(kexes),
+			algo_list_from_string_list<cipher_type>(client_server_ciphers),
+			algo_list_from_string_list<cipher_type>(server_client_ciphers),
+			algo_list_from_string_list<mac_type>(client_server_macs),
+			algo_list_from_string_list<mac_type>(server_client_macs),
+			algo_list_from_string_list<compress_type>(client_server_compress),
+			algo_list_from_string_list<compress_type>(server_client_compress)};
+
+	// if either side sent a guess, lets see if it is compatible
+	if(kex_ || sent_first_packet) {
+		std::optional<crypto_configuration> my_guess;
+		if(kex_) {
+			my_guess = kex_->crypto_config();
+		} else {
+			my_guess = crypto_config_guess(config_.algorithms, config_.side);
+		}
+
+		if(my_guess) {
+			auto remote_guess = crypto_config_guess(remote_algs
+				, config_.side == transport_side::client ? transport_side::server : transport_side::client);
+
+			if(remote_guess && *my_guess == *remote_guess) {
+				logger_.log(logger::debug, "SSH kex guess matches");
+			}
+		}
+	}
 /*	if(ret) {
 		kex_data_.remote_kexinit = std::vector<std::byte>{payload.begin(), payload.end()};
 	}

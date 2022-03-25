@@ -2,46 +2,23 @@
 #define SP_SHH_CONFIG_HEADER
 
 #include "ssh_private_key.hpp"
-#include "kex.hpp"
-
-#include "ssh/common/types.hpp"
-#include "ssh/common/algo_list.hpp"
-#include "ssh/crypto/ids.hpp"
+#include "supported_algorithms.hpp"
 
 namespace securepath::ssh {
-
-using kex_list = algo_list<kex_type>;
-using cipher_list = algo_list<cipher_type>;
-using mac_list = algo_list<mac_type>;
-using compress_list = algo_list<compress_type>;
 
 /** \brief SSH Version 2 Configuration
  */
 struct ssh_config {
+	transport_side side{transport_side::client};
 
 	// software name and version
 	ssh_version my_version{.ssh="2.0"};
 
-	// host keys
-	std::vector<ssh_private_key> host_keys;
+	// supported algorithms
+	supported_algorithms algorithms;
 
-	// supported kex
-	kex_list kexes;
-
-	// supported ciphers client->server
-	cipher_list client_server_ciphers;
-	// supported ciphers server->client
-	cipher_list server_client_ciphers;
-
-	// supported macs client->server
-	mac_list client_server_macs;
-	// supported macs server->client
-	mac_list server_client_macs;
-
-	// supported compression client->server
-	compress_list client_server_compress;
-	// supported compression server->client
-	compress_list server_client_compress;
+	// host keys for server, possible authentication keys for client
+	std::vector<ssh_private_key> private_keys;
 
 	// re-key interval in bytes (== 0 means no rekeying)
 	std::uint64_t rekey_inverval{1024ULL*1024*1024*2};
@@ -59,7 +36,11 @@ struct ssh_config {
 	bool guess_kex_packet{false};
 
 public:
-	std::vector<std::string_view> host_key_list() const;
+	// simple check that we have at least one kexes, cipher and so on (does not check if the algorithms are compatible)
+	bool valid() const;
+
+	// sets the private_keys and fills the host_keys to match it
+	void set_host_keys_for_server(std::vector<ssh_private_key> keys);
 };
 
 }
