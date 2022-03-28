@@ -15,11 +15,11 @@ using mac_list = algo_list<mac_type>;
 using compress_list = algo_list<compress_type>;
 
 struct supported_algorithms {
-	// supported host key types
-	key_list host_keys;
-
 	// supported kex
 	kex_list kexes;
+
+	// supported host key types
+	key_list host_keys;
 
 	// supported ciphers client->server
 	cipher_list client_server_ciphers;
@@ -37,16 +37,9 @@ struct supported_algorithms {
 	compress_list server_client_compress{compress_type::none};
 
 public:
-	bool valid() const {
-		return !host_keys.empty()
-			&& !kexes.empty()
-			&& !client_server_ciphers.empty()
-			&& !server_client_ciphers.empty()
-			&& !client_server_macs.empty()
-			&& !server_client_macs.empty()
-			&& !client_server_compress.empty()
-			&& !server_client_compress.empty();
-	}
+	bool valid() const;
+
+	void dump(logger&) const;
 };
 
 }

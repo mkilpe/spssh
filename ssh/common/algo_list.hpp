@@ -60,6 +60,13 @@ public:
 		return front();
 	}
 
+	bool supports(algo_type t) const {
+		for(auto&& v : algos_) {
+			if(v == t) return true;
+		}
+		return false;
+	}
+
 	/// Turn the list of algorithms to ssh name-list
 	std::vector<std::string_view> name_list() const {
 		std::vector<std::string_view> res;

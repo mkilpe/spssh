@@ -65,6 +65,7 @@ private: // init & generic packet handling
 	void handle_version_exchange(in_buffer& in);
 	void handle_binary_packet(in_buffer& in);
 	bool handle_kex_packet(ssh_packet_type type, const_span payload);
+	bool handle_raw_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_kexinit_packet(const_span payload);
 
 	bool send_kex_init(bool send_first_packet);
@@ -92,6 +93,7 @@ private: // data
 	std::vector<std::byte> kex_cookie_;
 
 	kex_init_data kex_data_;
+	bool ignore_next_kex_packet_{};
 	std::unique_ptr<kex> kex_;
 };
 

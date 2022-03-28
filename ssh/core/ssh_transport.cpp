@@ -172,7 +172,7 @@ bool ssh_transport::process_transport_payload(span payload) {
 	if(!res) {
 		if(state() == ssh_state::kex) {
 			// give whole payload as we need to save it for kex
-			res = handle_kex_packet(type, payload);
+			res = handle_raw_kex_packet(type, payload);
 		} else {
 			logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
 			send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
@@ -281,32 +281,29 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 void ssh_transport::send_kex_guess() {
 	logger_.log(logger::debug_trace, "SSH send_kex_guess");
 
-	auto guess = crypto_config_guess(config_.algorithms, config_.side);
-	if(guess) {
-		// we have valid guess, construct kex and send initial packet
-		kex_ = construct_kex(
-			kex_context{
-				config_,
-				*this,
-				output_,
-				kex_data_,
-				crypto_,
-				crypto_call_context{logger_, *rand_},
-				*guess });
+	kex_ = construct_kex(config_.algorithms.kexes.preferred(),
+		kex_context{
+			config_,
+			*this,
+			output_,
+			kex_data_,
+			crypto_,
+			crypto_call_context{logger_, *rand_}});
 
-		kex_->initiate();
-	} else {
-		logger_.log(logger::debug, "SSH No valid guess available for crypto configure");
-	}
+	kex_->initiate();
 }
 
-bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
-	logger_.log(logger::debug_trace, "SSH handle_kex_packet [type={}]", type);
+bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span payload) {
+	logger_.log(logger::debug_trace, "SSH handle_raw_kex_packet [type={}]", type);
 
 	if(kexinit_received_) {
-		// todo, handle packet
-		set_error_and_disconnect(ssh_key_exchange_failed);
-		return false;
+		// see if we need to ignore initial guess
+		if(ignore_next_kex_packet_) {
+			ignore_next_kex_packet_ = false;
+			logger_.log(logger::debug_trace, "SSH ignoring kex packet [type={}]", type);
+			return true;
+		}
+		return handle_kex_packet(type, payload);
 	} else {
 		// not yet received, so this must be it
 		if(type != ssh_kexinit) {
@@ -319,6 +316,15 @@ bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) 
 	}
 }
 
+bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
+	if(kex_) {
+		kex_->handle(type, payload); // todo: handle return type
+		return true;
+	} else {
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		return false;
+	}
+}
 
 bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	logger_.log(logger::debug_trace, "SSH handle_kexinit_packet");
@@ -362,8 +368,8 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	}
 
 	supported_algorithms remote_algs{
-			algo_list_from_string_list<key_type>(host_keys),
 			algo_list_from_string_list<kex_type>(kexes),
+			algo_list_from_string_list<key_type>(host_keys),
 			algo_list_from_string_list<cipher_type>(client_server_ciphers),
 			algo_list_from_string_list<cipher_type>(server_client_ciphers),
 			algo_list_from_string_list<mac_type>(client_server_macs),
@@ -371,30 +377,46 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 			algo_list_from_string_list<compress_type>(client_server_compress),
 			algo_list_from_string_list<compress_type>(server_client_compress)};
 
-	// if either side sent a guess, lets see if it is compatible
-	if(kex_ || sent_first_packet) {
-		std::optional<crypto_configuration> my_guess;
-		if(kex_) {
-			my_guess = kex_->crypto_config();
-		} else {
-			my_guess = crypto_config_guess(config_.algorithms, config_.side);
-		}
-
-		if(my_guess) {
-			auto remote_guess = crypto_config_guess(remote_algs
-				, config_.side == transport_side::client ? transport_side::server : transport_side::client);
-
-			if(remote_guess && *my_guess == *remote_guess) {
-				logger_.log(logger::debug, "SSH kex guess matches");
-			}
-		}
+	if(!remote_algs.valid()) {
+		set_error_and_disconnect(ssh_key_exchange_failed);
+		logger_.log(logger::error, "SSH Invalid kexinit packet from remote");
+		return false;
 	}
-/*	if(ret) {
+
+	kexinit_agreement kagree(logger_, config_.side, config_.algorithms);
+	if(kagree.agree(remote_algs)) {
+		auto crypto_conf = kagree.agreed_configuration();
+
+		logger_.log(logger::debug, "SSH kexinit agreed on configuration [{}]", crypto_conf);
+
+		if(!kagree.was_guess_correct()) {
+			// wrong guess, ignore if first packet sent and reset our kex
+			ignore_next_kex_packet_ = sent_first_packet;
+			kex_.reset();
+		}
+
+		// copy the remote kexinit packet for the kex to use for signature
 		kex_data_.remote_kexinit = std::vector<std::byte>{payload.begin(), payload.end()};
-	}
-*/
 
-	return true;
+		if(!kex_) {
+			kex_ = construct_kex(crypto_conf.kex,
+				kex_context{
+					config_,
+					*this,
+					output_,
+					kex_data_,
+					crypto_,
+					crypto_call_context{logger_, *rand_}});
+
+			kex_->initiate();
+		}
+		kex_->set_crypto_configuration(crypto_conf);
+		return true;
+	}
+
+	set_error_and_disconnect(ssh_key_exchange_failed);
+	logger_.log(logger::debug, "SSH kexinit failed, no mathing algorithms found");
+	return false;
 }
 
 }
