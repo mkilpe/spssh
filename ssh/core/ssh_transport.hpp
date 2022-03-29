@@ -33,11 +33,14 @@ enum class transport_op {
 	disconnected
 };
 
+class kex;
+
 /** \brief SSH Version 2 transport layer
  */
 class ssh_transport : private ssh_binary_packet {
 public:
 	ssh_transport(ssh_config const&, logger&, out_buffer&, crypto_context);
+	~ssh_transport();
 
 	/// This is the main driving function, reads from in_buffer and writes to out_buffer
 	transport_op process(in_buffer&);

@@ -21,7 +21,7 @@ using name_list_t = std::vector<std::string_view>;
 template<std::size_t size>
 struct bytes;
 
-template<ssh_packet_type, typename... TypeTags>
+template<std::uint8_t PacketType, typename... TypeTags>
 class ssh_packet_ser;
 
 template<typename Packet, typename... Args>

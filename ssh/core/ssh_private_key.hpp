@@ -15,6 +15,7 @@ public:
 	ssh_private_key(std::unique_ptr<private_key>);
 
 	key_type type() const;
+	ssh_public_key public_key() const;
 
 private:
 	std::unique_ptr<private_key> key_impl_;

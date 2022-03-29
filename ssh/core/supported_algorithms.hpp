@@ -1,7 +1,7 @@
 #ifndef SP_SUPPORTED_ALGORITHMS_HEADER
 #define SP_SUPPORTED_ALGORITHMS_HEADER
 
-#include "kex.hpp"
+#include "kexinit.hpp"
 
 #include "ssh/common/algo_list.hpp"
 #include "ssh/crypto/ids.hpp"

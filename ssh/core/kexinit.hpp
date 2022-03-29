@@ -7,6 +7,7 @@
 #include <iosfwd>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace securepath::ssh {
 
@@ -20,6 +21,13 @@ enum class kex_type {
 std::string_view to_string(kex_type);
 kex_type from_string(type_tag<kex_type>, std::string_view);
 
+struct kex_init_data {
+	ssh_version local_ver;
+	ssh_version remote_ver;
+	std::vector<std::byte> local_kexinit;
+	std::vector<std::byte> remote_kexinit;
+};
+
 struct crypto_configuration {
 	kex_type kex{};
 	key_type host_key{};
@@ -31,6 +39,8 @@ struct crypto_configuration {
 
 		friend bool operator==(type const&, type const&) = default;
 	} in, out;
+
+	bool valid() const;
 
 	friend bool operator==(crypto_configuration const&, crypto_configuration const&) = default;
 };

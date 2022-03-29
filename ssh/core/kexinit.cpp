@@ -30,6 +30,12 @@ std::ostream& operator<<(std::ostream& out, crypto_configuration const& c) {
 		<< "}";
 }
 
+bool crypto_configuration::valid() const {
+	return kex != kex_type::unknown && host_key != key_type::unknown &&
+		in.cipher != cipher_type::unknown && in.mac != mac_type::unknown && in.compress != compress_type::unknown &&
+		out.cipher != cipher_type::unknown && out.mac != mac_type::unknown && out.compress != compress_type::unknown;
+}
+
 static bool is_compatible(kex_type kex, key_type key) {
 	using enum kex_type;
 	if(kex == curve25519_sha256) {

@@ -114,9 +114,9 @@ struct bytes {
 };
 
 
-template<ssh_packet_type Type, typename... TypeTags> struct ssh_packet_ser_load;
+template<std::uint8_t Type, typename... TypeTags> struct ssh_packet_ser_load;
 
-template<ssh_packet_type Type, typename... TypeTags>
+template<std::uint8_t Type, typename... TypeTags>
 struct ssh_packet_ser {
 	/*
 		usage: (using disconnect as example)
@@ -136,7 +136,7 @@ struct ssh_packet_ser {
 	using load = ssh_packet_ser_load<Type, TypeTags...>;
 
 	using members = std::tuple<TypeTags...>;
-	static constexpr ssh_packet_type packet_type = Type;
+	static constexpr std::uint8_t packet_type = Type;
 
 	static constexpr std::size_t static_size = std::apply(
 		[](auto&&... args) {
@@ -145,7 +145,7 @@ struct ssh_packet_ser {
 };
 
 
-template<ssh_packet_type Type, typename... TypeTags>
+template<std::uint8_t Type, typename... TypeTags>
 struct ssh_packet_ser<Type, TypeTags...>::save {
 	save(TypeTags::type const&... values)
 	: m_{values...}
@@ -190,7 +190,7 @@ private:
 
 struct match_type_tag {} constexpr match_type_t;
 
-template<ssh_packet_type Type, typename... TypeTags>
+template<std::uint8_t Type, typename... TypeTags>
 struct ssh_packet_ser_load {
 	using members = std::tuple<TypeTags...>;
 
@@ -242,12 +242,12 @@ private:
 }
 
 namespace std {
-	template<::securepath::ssh::ssh_packet_type Type, typename... Tags>
+	template<uint8_t  Type, typename... Tags>
 	struct tuple_size<::securepath::ssh::ser::ssh_packet_ser_load<Type, Tags...>> {
 		static constexpr std::size_t value = sizeof...(Tags);
 	};
 
-	template<size_t Index, ::securepath::ssh::ssh_packet_type Type, typename... Tags>
+	template<size_t Index, uint8_t Type, typename... Tags>
 	struct tuple_element<Index, ::securepath::ssh::ser::ssh_packet_ser_load<Type, Tags...>> {
 		static_assert(Index < sizeof...(Tags), "Index out of bounds");
 		using type = std::tuple_element_t<Index, typename ::securepath::ssh::ser::ssh_packet_ser<Type, Tags...>::members>::type;

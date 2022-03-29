@@ -58,4 +58,16 @@ key_type from_string(type_tag<key_type>, std::string_view s) {
 	return unknown;
 }
 
+std::string_view to_string(key_exchange_type t) {
+	using enum key_exchange_type;
+	if(t == X25519) return "X25519";
+	return "unknown";
+}
+
+key_exchange_type from_string(type_tag<key_exchange_type>, std::string_view s) {
+	using enum key_exchange_type;
+	if(s == "X25519") return X25519;
+	return unknown;
+}
+
 }

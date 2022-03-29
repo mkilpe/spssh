@@ -24,6 +24,14 @@ enum class transport_side {
 	server
 };
 
+inline std::string_view to_string_view(const_span s) {
+	return std::string_view((char const*)s.data(), s.size());
+}
+
+inline const_span to_span(std::string_view v) {
+	return const_span((std::byte const*)v.data(), v.size());
+}
+
 #if !defined(SPSSH_ASSERT) && !defined(NDEBUG)
 #	define SPSSH_ASSERT(cond, message) assert((cond) && (message))
 #endif

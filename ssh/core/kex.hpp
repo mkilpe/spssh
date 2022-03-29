@@ -3,10 +3,8 @@
 
 #include "kexinit.hpp"
 #include "packet_types.hpp"
+#include "ssh_binary_packet.hpp"
 #include "ssh/crypto/crypto_context.hpp"
-
-#include <optional>
-#include <vector>
 
 namespace securepath::ssh {
 
@@ -44,14 +42,6 @@ protected:
 
 class ssh_config;
 class supported_algorithms;
-
-struct kex_init_data {
-	ssh_version local_ver;
-	ssh_version remote_ver;
-	std::vector<std::byte> local_kexinit;
-	std::vector<std::byte> remote_kexinit;
-};
-
 class ssh_binary_packet;
 class out_buffer;
 
@@ -70,7 +60,7 @@ public:
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
 		logger().log(logger::debug_trace, "SSH kex sending packet [type={}]", Packet::packet_type);
-		return send_packet<Packet>(bpacket_, output_, std::forward<Args>(args)...);
+		return ssh::send_packet<Packet>(bpacket_, output_, std::forward<Args>(args)...);
 	}
 
 	kex_init_data const& init_data() const { return init_data_; }
@@ -87,7 +77,7 @@ private:
 	crypto_call_context call_context_;
 };
 
-std::unique_ptr<kex> construct_kex(kex_type, kex_context);
+std::unique_ptr<kex> construct_kex(transport_side, kex_type, kex_context);
 
 }
 

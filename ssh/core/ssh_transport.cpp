@@ -1,4 +1,5 @@
 
+#include "kex.hpp"
 #include "ssh_transport.hpp"
 #include "protocol_helpers.hpp"
 #include "protocol.hpp"
@@ -38,6 +39,10 @@ ssh_transport::ssh_transport(ssh_config const& c, logger& l, out_buffer& out, cr
 		logger_.log(logger::error, "SSH Unable to create random generator, double check your set-up");
 		set_state(ssh_state::disconnected, spssh_invalid_setup);
 	}
+}
+
+ssh_transport::~ssh_transport()
+{
 }
 
 void ssh_transport::on_version_exchange(ssh_version const& v) {
@@ -281,7 +286,7 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 void ssh_transport::send_kex_guess() {
 	logger_.log(logger::debug_trace, "SSH send_kex_guess");
 
-	kex_ = construct_kex(config_.algorithms.kexes.preferred(),
+	kex_ = construct_kex(config_.side, config_.algorithms.kexes.preferred(),
 		kex_context{
 			config_,
 			*this,
@@ -399,7 +404,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		kex_data_.remote_kexinit = std::vector<std::byte>{payload.begin(), payload.end()};
 
 		if(!kex_) {
-			kex_ = construct_kex(crypto_conf.kex,
+			kex_ = construct_kex(config_.side, crypto_conf.kex,
 				kex_context{
 					config_,
 					*this,

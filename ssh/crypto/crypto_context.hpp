@@ -7,6 +7,7 @@
 #include "compress.hpp"
 #include "mac.hpp"
 #include "public_key.hpp"
+#include "key_exchange.hpp"
 
 #include <functional>
 #include <memory>
@@ -24,6 +25,7 @@ struct crypto_context {
 	ctor<mac_type, mac> construct_mac{};
 	ctor<compress_type, compress> construct_compress{};
 	ctor<key_type, public_key> construct_public_key{};
+	ctor<key_exchange_type, key_exchange> construct_key_exchange{};
 };
 
 crypto_context default_crypto_context();

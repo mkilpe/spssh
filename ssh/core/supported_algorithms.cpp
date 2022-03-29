@@ -1,5 +1,7 @@
 #include "supported_algorithms.hpp"
 
+#include "ssh/common/logger.hpp"
+
 namespace securepath::ssh {
 
 bool supported_algorithms::valid() const {

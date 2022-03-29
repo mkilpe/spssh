@@ -13,4 +13,8 @@ key_type ssh_private_key::type() const {
 	return key_impl_ ? key_impl_->type() : key_type::unknown;
 }
 
+ssh_public_key ssh_private_key::public_key() const {
+	return {};
+}
+
 }

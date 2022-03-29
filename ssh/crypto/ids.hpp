@@ -60,6 +60,11 @@ static_assert(sizeof(key_capabilities)/sizeof(key_capability) == std::size_t(key
 std::string_view to_string(key_type);
 key_type from_string(type_tag<key_type>, std::string_view);
 
+enum class key_exchange_type {
+	unknown = 0,
+	X25519
+};
+
 }
 
 #endif

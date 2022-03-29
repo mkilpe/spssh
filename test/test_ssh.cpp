@@ -69,8 +69,8 @@ TEST_CASE("ssh test", "[unit]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::kex);
-	CHECK(server.state() == ssh_state::kex);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 }
 
 TEST_CASE("ssh test guess", "[unit]") {
@@ -83,8 +83,8 @@ TEST_CASE("ssh test guess", "[unit]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::kex);
-	CHECK(server.state() == ssh_state::kex);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 }
 
 TEST_CASE("ssh failing version exchange", "[unit]") {

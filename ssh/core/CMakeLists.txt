@@ -1,4 +1,4 @@
-file(GLOB SRC *.cpp *.hpp)
+file(GLOB SRC *.cpp kex/*.cpp *.hpp  kex/*.hpp)
 add_library(spssh_core STATIC ${SRC})
 
 set_target_properties(spssh_core PROPERTIES LINKER_LANGUAGE CXX)
