@@ -317,8 +317,8 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 
 	ssh_bf_writer p(info.data_buffer);
 
-	bool ret = p.save(std::uint32_t(1 + info.payload_size + info.padding_size)) // padding_length + payload + padding
-		&& p.save(std::uint8_t(info.padding_size))
+	bool ret = p.write(std::uint32_t(1 + info.payload_size + info.padding_size)) // padding_length + payload + padding
+		&& p.write(std::uint8_t(info.padding_size))
 		&& p.jump_over(info.payload_size) // just jump over the payload bytes as those have been written there already
 		&& p.add_random_range(*random_, info.padding_size);
 

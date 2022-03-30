@@ -47,7 +47,7 @@ public:
 		return out_.size() - pos_;
 	}
 
-	bool save(std::uint32_t v) {
+	bool write(std::uint32_t v) {
 		bool ret = size_left() >= 4;
 		if(ret) {
 			u32ton(v, out_.data()+pos_);
@@ -56,7 +56,7 @@ public:
 		return ret;
 	}
 
-	bool save(std::uint8_t v) {
+	bool write(std::uint8_t v) {
 		bool ret = size_left() >= 1;
 		if(ret) {
 			out_[pos_] = std::byte{v};
@@ -65,14 +65,14 @@ public:
 		return ret;
 	}
 
-	bool save(bool v) {
-		return save(std::uint8_t{v});
+	bool write(bool v) {
+		return write(std::uint8_t{v});
 	}
 
-	bool save(std::string_view v) {
+	bool write(std::string_view v) {
 		bool ret = size_left() >= 4+v.size();
 		if(ret) {
-			save(std::uint32_t(v.size()));
+			write(std::uint32_t(v.size()));
 			std::memcpy(out_.data()+pos_, v.data(), v.size());
 			pos_ += v.size();
 		}
@@ -80,7 +80,7 @@ public:
 	}
 
 	template<std::size_t S>
-	bool save(std::span<std::byte const, S> const& s) {
+	bool write(std::span<std::byte const, S> const& s) {
 		bool ret = size_left() >= s.size();
 		if(ret) {
 			std::memcpy(out_.data()+pos_, s.data(), s.size());
@@ -135,7 +135,7 @@ public:
 		return in_.size() - pos_;
 	}
 
-	bool load(std::uint32_t& v) {
+	bool read(std::uint32_t& v) {
 		bool ret = size_left() >= 4;
 		if(ret) {
 			v = ntou32(in_.data() + pos_);
@@ -144,7 +144,7 @@ public:
 		return ret;
 	}
 
-	bool load(std::uint8_t& v) {
+	bool read(std::uint8_t& v) {
 		bool ret = size_left() >= 1;
 		if(ret) {
 			v = std::to_integer<std::uint8_t>(in_[pos_++]);
@@ -152,7 +152,7 @@ public:
 		return ret;
 	}
 
-	bool load(bool& v) {
+	bool read(bool& v) {
 		bool ret = size_left() >= 1;
 		if(ret) {
 			v = std::to_integer<std::uint8_t>(in_[pos_++]) != 0;
@@ -160,9 +160,9 @@ public:
 		return ret;
 	}
 
-	bool load(std::string_view& v) {
+	bool read(std::string_view& v) {
 		std::uint32_t size;
-		bool ret = load(size) && size_left() >= size;
+		bool ret = read(size) && size_left() >= size;
 		if(ret) {
 			v = std::string_view{reinterpret_cast<char const*>(in_.data())+pos_, size};
 			pos_ += size;
@@ -171,7 +171,7 @@ public:
 	}
 
 	template<std::size_t S>
-	bool load(std::optional<std::span<std::byte const, S>>& s) {
+	bool read(std::optional<std::span<std::byte const, S>>& s) {
 		bool ret = size_left() >= S;
 		if(ret) {
 			s = std::span<std::byte const, S>(in_.data()+pos_, S);

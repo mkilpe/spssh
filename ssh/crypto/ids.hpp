@@ -57,6 +57,8 @@ key_capability constexpr key_capabilities[] {
 
 static_assert(sizeof(key_capabilities)/sizeof(key_capability) == std::size_t(key_type::end_of_list));
 
+std::size_t const ed25519_key_size = 32;
+
 std::string_view to_string(key_type);
 key_type from_string(type_tag<key_type>, std::string_view);
 
@@ -64,6 +66,9 @@ enum class key_exchange_type {
 	unknown = 0,
 	X25519
 };
+
+std::string_view to_string(key_exchange_type);
+key_exchange_type from_string(type_tag<key_exchange_type>, std::string_view);
 
 }
 

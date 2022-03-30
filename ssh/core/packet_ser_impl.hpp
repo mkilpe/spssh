@@ -19,12 +19,12 @@ struct type_base {
 	type_base() = default;
 	type_base(type t) : data(t) {};
 
-	bool load(ssh_bf_reader& r) {
-		return r.load(data);
+	bool read(ssh_bf_reader& r) {
+		return r.read(data);
 	}
 
-	bool save(ssh_bf_writer& w) const {
-		return w.save(data);
+	bool write(ssh_bf_writer& w) const {
+		return w.write(data);
 	}
 
 	type& view() {
@@ -71,13 +71,13 @@ struct name_list {
 		return static_size + data.size();
 	}
 
-	bool load(ssh_bf_reader& r) {
+	bool read(ssh_bf_reader& r) {
 		std::string_view in;
-		return r.load(in) && parse_string_list(in, value);
+		return r.read(in) && parse_string_list(in, value);
 	}
 
-	bool save(ssh_bf_writer& w) const {
-		return !error && w.save(data);
+	bool write(ssh_bf_writer& w) const {
+		return !error && w.write(data);
 	}
 
 	type& view() {
@@ -98,13 +98,13 @@ struct bytes {
 	static constexpr std::size_t static_size = Size;
 	std::size_t size() const { return Size; }
 
-	bool load(ssh_bf_reader& r) {
-		return r.load(data);
+	bool read(ssh_bf_reader& r) {
+		return r.read(data);
 	}
 
-	bool save(ssh_bf_writer& w) const {
+	bool write(ssh_bf_writer& w) const {
 		SPSSH_ASSERT(data, "invalid state");
-		return w.save(data.value());
+		return w.write(data.value());
 	}
 
 	type& view() {
@@ -155,11 +155,11 @@ struct ssh_packet_ser<Type, TypeTags...>::save {
 	bool write(span out) {
 		ssh_bf_writer writer(out);
 
-		writer.save(std::uint8_t(Type));
+		writer.write(std::uint8_t(Type));
 
 		bool ret = std::apply(
 			[&](auto&&... args) {
-				return (( args.save(writer) ) && ...);
+				return (( args.write(writer) ) && ...);
 			}, m_);
 
 		if(ret) {
@@ -200,7 +200,7 @@ struct ssh_packet_ser_load {
 		ssh_bf_reader reader(in_data);
 		std::uint8_t tag{};
 
-		if(reader.load(tag) && tag == Type) {
+		if(reader.read(tag) && tag == Type) {
 			load_data(reader);
 		}
 	}
@@ -225,7 +225,7 @@ private:
 	void load_data(ssh_bf_reader& reader) {
 		result_ = std::apply(
 			[&](auto&&... args) {
-				return (( args.load(reader) ) && ...);
+				return (( args.read(reader) ) && ...);
 			}, m_);
 
 		if(result_) {

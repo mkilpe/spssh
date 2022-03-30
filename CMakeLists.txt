@@ -10,17 +10,11 @@ endif()
 
 include("${sp_main_repository_path}/cmake.main")
 
-if(ANDROID)
-	message("-- Building for ${ANDROID_ABI}")
-endif()
-
-#find_package(Boost 1.75.0 REQUIRED)
 get_filename_component(my_root_directory ${CMAKE_CURRENT_LIST_FILE} DIRECTORY)
-#include_directories(${my_directory}/external/boost)
-include_directories(${my_root_directory}/external/json/include)
+set(CMAKE_MODULE_PATH ${my_root_directory}/cmake)
 
-include_directories(${my_root_directory}/external/libfilezilla/lib)
-link_directories(${my_root_directory}/external/libfilezilla/lib)
+find_package(Nettle REQUIRED)
+find_package(Hogweed REQUIRED)
 
 add_definitions(-DBOOST_JSON_STANDALONE -DSPSSH_USE_NETTLE)
 
