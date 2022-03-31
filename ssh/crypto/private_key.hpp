@@ -17,7 +17,7 @@ public:
 
 	// sign data
 	virtual std::size_t signature_size() const = 0;
-	virtual void sign(const_span in, const_span out) const = 0;
+	virtual void sign(const_span in, span out) const = 0;
 
 	std::vector<std::byte> sign(const_span in) const {
 		std::vector<std::byte> res;

@@ -70,4 +70,18 @@ key_exchange_type from_string(type_tag<key_exchange_type>, std::string_view s) {
 	return unknown;
 }
 
+std::string_view to_string(hash_type t) {
+	using enum hash_type;
+	if(t == sha2_256) return "sha2-256";
+	if(t == sha2_512) return "sha2-512";
+	return "unknown";
+}
+
+hash_type from_string(type_tag<hash_type>, std::string_view s) {
+	using enum hash_type;
+	if(s == "sha2-256") return sha2_256;
+	if(s == "sha2-512") return sha2_512;
+	return unknown;
+}
+
 }

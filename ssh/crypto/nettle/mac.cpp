@@ -6,7 +6,7 @@
 
 namespace securepath::ssh::nettle {
 
-std::unique_ptr<ssh::mac> create_mac(mac_type, crypto_call_context const&) {
+std::unique_ptr<ssh::mac> create_mac(mac_type, const_span const& secret, crypto_call_context const&) {
 	return nullptr;
 }
 

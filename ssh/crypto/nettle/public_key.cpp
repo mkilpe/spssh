@@ -24,11 +24,11 @@ public:
 			return false;
 		}
 
-		return ed25519_sha512_verify(
-			(std::uint8_t const*)pubkey_.data(),
+		return nettle_ed25519_sha512_verify(
+			to_uint8_ptr(pubkey_),
 			msg.size(),
-			(std::uint8_t const*)msg.data(),
-			(std::uint8_t const*)signature.data() ) == 1;
+			to_uint8_ptr(msg),
+			to_uint8_ptr(signature) ) == 1;
 	}
 
 private:

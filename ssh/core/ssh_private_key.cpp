@@ -27,7 +27,7 @@ std::size_t ssh_private_key::signature_size() const {
 	return key_impl_ ? key_impl_->signature_size() : 0;
 }
 
-void ssh_private_key::sign(const_span in, const_span out) const {
+void ssh_private_key::sign(const_span in, span out) const {
 	SPSSH_ASSERT(key_impl_, "invalid private key");
 	key_impl_->sign(in, out);
 }

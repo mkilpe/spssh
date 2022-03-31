@@ -1,0 +1,42 @@
+
+#include "ssh/crypto/crypto_call_context.hpp"
+#include "ssh/crypto/ids.hpp"
+#include "ssh/crypto/hash.hpp"
+#include <memory>
+
+#include <nettle/sha2.h>
+
+namespace securepath::ssh::nettle {
+
+class sha2_256_hash : public hash {
+public:
+	sha2_256_hash()
+	: hash(SHA256_DIGEST_SIZE)
+	{
+		nettle_sha256_init(&ctx_);
+	}
+
+	void process(const_span in) override {
+		nettle_sha256_update(&ctx_, in.size(), to_uint8_ptr(in));
+	}
+
+	void digest(span out) override {
+		nettle_sha256_digest(&ctx_, out.size(), to_uint8_ptr(out));
+	}
+
+private:
+	sha256_ctx ctx_;
+};
+
+
+std::unique_ptr<ssh::hash> create_hash(hash_type t, crypto_call_context const&) {
+	using enum hash_type;
+	if(t == sha2_256) {
+		return std::make_unique<sha2_256_hash>();
+	}
+	return nullptr;
+}
+
+}
+
+

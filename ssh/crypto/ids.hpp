@@ -15,6 +15,11 @@ enum class cipher_type {
 std::string_view to_string(cipher_type);
 cipher_type from_string(type_tag<cipher_type>, std::string_view);
 
+enum class cipher_dir {
+	encrypt,
+	decrypt
+};
+
 enum class mac_type {
 	unknown = 0,
 	aes_256_gcm,
@@ -69,6 +74,15 @@ enum class key_exchange_type {
 
 std::string_view to_string(key_exchange_type);
 key_exchange_type from_string(type_tag<key_exchange_type>, std::string_view);
+
+enum class hash_type {
+	unknown = 0,
+	sha2_256,
+	sha2_512
+};
+
+std::string_view to_string(hash_type);
+hash_type from_string(type_tag<hash_type>, std::string_view);
 
 }
 

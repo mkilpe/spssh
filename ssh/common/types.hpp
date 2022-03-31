@@ -7,6 +7,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace securepath::ssh {
 
@@ -30,6 +31,22 @@ inline std::string_view to_string_view(const_span s) {
 
 inline const_span to_span(std::string_view v) {
 	return const_span((std::byte const*)v.data(), v.size());
+}
+
+inline std::uint8_t const* to_uint8_ptr(std::vector<std::byte> const& v) {
+	return (std::uint8_t const*)v.data();
+}
+
+inline std::uint8_t* to_uint8_ptr(std::vector<std::byte>& v) {
+	return (std::uint8_t*)v.data();
+}
+
+inline std::uint8_t const* to_uint8_ptr(const_span s) {
+	return (std::uint8_t const*)s.data();
+}
+
+inline std::uint8_t* to_uint8_ptr(span s) {
+	return (std::uint8_t*)s.data();
 }
 
 #if !defined(SPSSH_ASSERT) && !defined(NDEBUG)

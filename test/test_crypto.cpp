@@ -11,21 +11,31 @@
 
 namespace securepath::ssh::test {
 
+struct crypto_test_context : crypto_context {
+	crypto_test_context()
+	: crypto_context(default_crypto_context())
+	, rand(construct_random())
+	, call(test_log(), *rand)
+	{
+		REQUIRE(rand);
+	}
+
+	std::unique_ptr<random> rand;
+	crypto_call_context call;
+};
+
 std::string const fprint1 = "SHA256:AJxI+SMrILxnTIinoWVeFhz3BGq9zH+VyOcH6IsJV/0";
 std::string const pubkey1 = "AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBn";
 std::string const privkey1 = "AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME";
 
 TEST_CASE("ed25519 public and private key", "[unit][crypto]") {
-	crypto_context c = default_crypto_context();
-	auto rand = c.construct_random();
-	REQUIRE(rand);
-	crypto_call_context call{test_log(), *rand};
+	crypto_test_context ctx;
 
 	std::vector<std::byte> gen_priv_key(ed25519_key_size);
-	rand->random_bytes(gen_priv_key);
+	ctx.rand->random_bytes(gen_priv_key);
 
 	ed25519_private_key_data data{ed25519_private_key_data::value_type(gen_priv_key.data(), gen_priv_key.size())};
-	auto priv = c.construct_private_key(data, call);
+	auto priv = ctx.construct_private_key(data, ctx.call);
 	REQUIRE(priv);
 
 	std::vector<std::byte> msg(69, std::byte{'A'});
@@ -39,24 +49,18 @@ TEST_CASE("ed25519 public and private key", "[unit][crypto]") {
 }
 
 TEST_CASE("ssh public key", "[unit][crypto]") {
-	crypto_context c = default_crypto_context();
-	auto rand = c.construct_random();
-	REQUIRE(rand);
-	crypto_call_context call{test_log(), *rand};
+	crypto_test_context ctx;
 
-	auto pub = load_base64_ssh_public_key(pubkey1, c, call);
+	auto pub = load_base64_ssh_public_key(pubkey1, ctx, ctx.call);
 	REQUIRE(pub.valid());
 
 	CHECK(pub.type() == key_type::ssh_ed25519);
 }
 
 TEST_CASE("ssh private key", "[unit][crypto]") {
-	crypto_context c = default_crypto_context();
-	auto rand = c.construct_random();
-	REQUIRE(rand);
-	crypto_call_context call{test_log(), *rand};
+	crypto_test_context ctx;
 
-	auto priv = load_raw_base64_ssh_private_key(privkey1, c, call);
+	auto priv = load_raw_base64_ssh_private_key(privkey1, ctx, ctx.call);
 	REQUIRE(priv.valid());
 
 	CHECK(priv.type() == key_type::ssh_ed25519);
@@ -72,11 +76,27 @@ TEST_CASE("ssh private key", "[unit][crypto]") {
 		CHECK(pub.verify(msg, sig));
 	}
 	{
-		auto pub = load_base64_ssh_public_key(pubkey1, c, call);
+		auto pub = load_base64_ssh_public_key(pubkey1, ctx, ctx.call);
 		REQUIRE(pub.valid());
 
 		CHECK(pub.verify(msg, sig));
 	}
+}
+
+TEST_CASE("x25519 key exchange", "[unit][crypto]") {
+	crypto_test_context ctx;
+
+	auto exc1 = ctx.construct_key_exchange(key_exchange_type::X25519, ctx.call);
+	auto exc2 = ctx.construct_key_exchange(key_exchange_type::X25519, ctx.call);
+
+	REQUIRE(exc1);
+	REQUIRE(exc2);
+
+	auto secret1 = exc2->agree(exc1->public_key());
+	auto secret2 = exc1->agree(exc2->public_key());
+
+	CHECK(!secret1.empty());
+	CHECK(secret1 == secret2);
 }
 
 }

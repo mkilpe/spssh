@@ -1,4 +1,5 @@
 
+#include "util.hpp"
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/private_key.hpp"
 #include "ssh/crypto/public_key.hpp"
@@ -22,7 +23,7 @@ public:
 			pubkey_.insert(pubkey_.end(), d.pubkey->begin(), d.pubkey->end());
 		} else {
 			pubkey_.resize(ed25519_key_size);
-			ed25519_sha512_public_key((std::uint8_t*)pubkey_.data(), (std::uint8_t const*)privkey_.data());
+			nettle_ed25519_sha512_public_key(to_uint8_ptr(pubkey_), to_uint8_ptr(privkey_));
 		}
 	}
 
@@ -39,15 +40,15 @@ public:
 		return ED25519_SIGNATURE_SIZE;
 	}
 
-	void sign(const_span in, const_span out) const override {
+	void sign(const_span in, span out) const override {
 		SPSSH_ASSERT(out.size() >= ED25519_SIGNATURE_SIZE, "not enough size for signature");
 
-		ed25519_sha512_sign(
-			(std::uint8_t const*)pubkey_.data(),
-			(std::uint8_t const*)privkey_.data(),
+		nettle_ed25519_sha512_sign(
+			to_uint8_ptr(pubkey_),
+			to_uint8_ptr(privkey_),
 			in.size(),
-			(std::uint8_t const*)in.data(),
-			(std::uint8_t*)out.data());
+			to_uint8_ptr(in),
+			to_uint8_ptr(out) );
 	}
 
 private:

@@ -21,7 +21,7 @@ public:
 	bool valid() const;
 
 	std::size_t signature_size() const;
-	void sign(const_span in, const_span out) const;
+	void sign(const_span in, span out) const;
 	std::vector<std::byte> sign(const_span in) const;
 
 private:
