@@ -42,7 +42,7 @@ static ssh_public_key load_rsa_public_key(ssh_bf_reader& r, crypto_context const
 	call.log.log(logger::debug_trace, "Trying to load ssh rsa public key");
 	std::string_view e, n;
 	if(r.read(e) && r.read(n)) {
-		return ssh_public_key(crypto.construct_public_key(rsa_public_key_data{to_span(e), to_span(n)}, call));
+		return ssh_public_key(crypto.construct_public_key(rsa_public_key_data{trim_umpint(to_span(e)), trim_umpint(to_span(n))}, call));
 	} else {
 		call.log.log(logger::debug_trace, "Failed to read ssh rsa public key");
 	}

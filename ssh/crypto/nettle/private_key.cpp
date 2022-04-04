@@ -78,14 +78,14 @@ public:
 	, n_(d.n.begin(), d.n.end())
 	{
 		nettle_rsa_public_key_init(&public_key_);
-		nettle_mpz_set_str_256_s(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
-		nettle_mpz_set_str_256_s(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
+		nettle_mpz_set_str_256_u(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
+		nettle_mpz_set_str_256_u(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
 
 		nettle_rsa_private_key_init(&key_);
 
-		nettle_mpz_set_str_256_s(key_.d, d.d.size(), to_uint8_ptr(d.d));
-		nettle_mpz_set_str_256_s(key_.p, d.p.size(), to_uint8_ptr(d.p));
-		nettle_mpz_set_str_256_s(key_.q, d.q.size(), to_uint8_ptr(d.q));
+		nettle_mpz_set_str_256_u(key_.d, d.d.size(), to_uint8_ptr(d.d));
+		nettle_mpz_set_str_256_u(key_.p, d.p.size(), to_uint8_ptr(d.p));
+		nettle_mpz_set_str_256_u(key_.q, d.q.size(), to_uint8_ptr(d.q));
 
 		mpz_t p_1, q_1;
 		mpz_init(p_1);
@@ -139,7 +139,7 @@ public:
 
 		bool res = nettle_rsa_sha1_sign_tr(&public_key_, &key_, &call_.rand, extract_rand, &sha1, sig) == 1;
 		if(res) {
-			std::size_t size = nettle_mpz_sizeinbase_256_s(sig);
+			std::size_t size = nettle_mpz_sizeinbase_256_u(sig);
 			SPSSH_ASSERT(out.size() >= size, "not enough size for signature");
 			nettle_mpz_get_str_256(size, to_uint8_ptr(out), sig);
 		}

@@ -67,7 +67,9 @@ static ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context
 	std::string_view n, e, d, iqmp, p, q;
 	std::string_view comment;
 	if(r.read(n) && r.read(e) && r.read(d) && r.read(iqmp) && r.read(p) && r.read(q) && r.read(comment)) {
-		rsa_private_key_data data{to_span(e), to_span(n), to_span(d), to_span(p), to_span(q)};
+		rsa_private_key_data data{
+			trim_umpint(to_span(e)), trim_umpint(to_span(n)), trim_umpint(to_span(d)),
+			trim_umpint(to_span(p)), trim_umpint(to_span(q))};
 		return ssh_private_key(crypto.construct_private_key(data, call), comment);
 	} else {
 		call.log.log(logger::debug_trace, "Failed to read rsa private key");

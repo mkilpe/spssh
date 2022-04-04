@@ -46,8 +46,8 @@ public:
 	rsa_public_key(rsa_public_key_data const& d)
 	{
 		nettle_rsa_public_key_init(&public_key_);
-		nettle_mpz_set_str_256_s(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
-		nettle_mpz_set_str_256_s(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
+		nettle_mpz_set_str_256_u(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
+		nettle_mpz_set_str_256_u(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
 		is_valid_ = nettle_rsa_public_key_prepare(&public_key_) == 1;
 	}
 
@@ -65,7 +65,7 @@ public:
 
 	bool verify(const_span in, const_span signature) const override {
 		mpz_t sig;
-		nettle_mpz_init_set_str_256_s(sig, signature.size(), to_uint8_ptr(signature));
+		nettle_mpz_init_set_str_256_u(sig, signature.size(), to_uint8_ptr(signature));
 
 		sha1_ctx sha1;
 		nettle_sha1_init(&sha1);
