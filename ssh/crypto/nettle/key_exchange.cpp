@@ -13,6 +13,8 @@ public:
 	X25519_key_exchange(crypto_call_context const& c)
 	: context(c)
 	{
+		context.log.log(logger::debug_trace, "constructing X25519_key_exchange");
+
 		priv_.resize(CURVE25519_SIZE);
 		context.rand.random_bytes(priv_);
 		clamp25519(priv_);

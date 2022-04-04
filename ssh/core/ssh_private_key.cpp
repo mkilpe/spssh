@@ -62,12 +62,48 @@ static ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_con
 	return {};
 }
 
+static ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
+	call.log.log(logger::debug_trace, "Trying to load rsa private key");
+	std::string_view n, e, d, iqmp, p, q;
+	std::string_view comment;
+	if(r.read(n) && r.read(e) && r.read(d) && r.read(iqmp) && r.read(p) && r.read(q) && r.read(comment)) {
+		rsa_private_key_data data{to_span(e), to_span(n), to_span(d), to_span(p), to_span(q)};
+		return ssh_private_key(crypto.construct_private_key(data, call), comment);
+	} else {
+		call.log.log(logger::debug_trace, "Failed to read rsa private key");
+	}
+	return {};
+}
+
+static ssh_private_key load_raw_ecdsa_private_key(ssh_bf_reader& r, std::string_view type, crypto_context const& crypto, crypto_call_context const& call) {
+	call.log.log(logger::debug_trace, "Trying to load ecdsa private key");
+	std::string_view curve;
+	std::string_view ecc_point; // public key
+	std::string_view privkey;
+	std::string_view comment;
+	if(r.read(curve) && r.read(ecc_point) && r.read(privkey) && r.read(comment)) {
+		if("ecdsa-sha2-" + std::string(curve) == type) {
+			ecdsa_private_key_data data{curve, to_span(ecc_point), trim_umpint(to_span(privkey))};
+			return ssh_private_key(crypto.construct_private_key(data, call), comment);
+		} else {
+			call.log.log(logger::debug_trace, "Invalid ecdsa private key");
+		}
+	} else {
+		call.log.log(logger::debug_trace, "Failed to read ecdsa private key");
+	}
+	return {};
+}
+
 ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
 	ssh_bf_reader r(data);
 	std::string_view type;
 	if(r.read(type)) {
 		if(type == "ssh-ed25519") {
 			return load_raw_ed25519_private_key(r, crypto, call);
+		} else if(type == "ssh-rsa") {
+			return load_raw_rsa_private_key(r, crypto, call);
+		} else if(type == "ecdsa-sha2-nistp256") {
+			return load_raw_ecdsa_private_key(r, type, crypto, call);
 		}
 	}
 	return {};

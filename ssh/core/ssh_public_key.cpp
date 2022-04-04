@@ -33,7 +33,33 @@ static ssh_public_key load_ed25519_public_key(ssh_bf_reader& r, crypto_context c
 			call.log.log(logger::debug_trace, "ssh ed25519 public key size not correct");
 		}
 	} else {
-		call.log.log(logger::debug_trace, "Failed to read ssh ed25519 public key part");
+		call.log.log(logger::debug_trace, "Failed to read ssh ed25519 public key");
+	}
+	return {};
+}
+
+static ssh_public_key load_rsa_public_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
+	call.log.log(logger::debug_trace, "Trying to load ssh rsa public key");
+	std::string_view e, n;
+	if(r.read(e) && r.read(n)) {
+		return ssh_public_key(crypto.construct_public_key(rsa_public_key_data{to_span(e), to_span(n)}, call));
+	} else {
+		call.log.log(logger::debug_trace, "Failed to read ssh rsa public key");
+	}
+	return {};
+}
+
+static ssh_public_key load_ecdsa_public_key(ssh_bf_reader& r, std::string_view type, crypto_context const& crypto, crypto_call_context const& call) {
+	call.log.log(logger::debug_trace, "Trying to load ssh ecdsa public key");
+	std::string_view curve, ecc_point;
+	if(r.read(curve) && r.read(ecc_point)) {
+		if("ecdsa-sha2-" + std::string(curve) == type) {
+			return ssh_public_key(crypto.construct_public_key(ecdsa_public_key_data{curve, to_span(ecc_point)}, call));
+		} else {
+			call.log.log(logger::debug_trace, "Invalid ecdsa public key");
+		}
+	} else {
+		call.log.log(logger::debug_trace, "Failed to read ssh ecdsa public key");
 	}
 	return {};
 }
@@ -44,6 +70,12 @@ ssh_public_key load_ssh_public_key(const_span data, crypto_context const& crypto
 	if(r.read(type)) {
 		if(type == "ssh-ed25519") {
 			return load_ed25519_public_key(r, crypto, call);
+		} else if(type == "ssh-rsa") {
+			return load_rsa_public_key(r, crypto, call);
+		} else if(type == "ecdsa-sha2-nistp256") {
+			return load_ecdsa_public_key(r, type, crypto, call);
+		} else {
+			call.log.log(logger::debug_trace, "Invalid type: {}", type);
 		}
 	}
 	return {};

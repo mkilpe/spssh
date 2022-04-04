@@ -25,7 +25,7 @@ struct crypto_context {
 	std::function<std::unique_ptr<random>()> construct_random{};
 
 	/// construct cipher from type and secret key
-	ctor<cipher, cipher_type, const_span, cipher_dir> construct_cipher{};
+	ctor<cipher, cipher_type, cipher_dir, const_span, const_span> construct_cipher{};
 	/// construct mac from type and secret key
 	ctor<mac, mac_type, const_span> construct_mac{};
 	/// construct public key from public key data (derived class to give the data which has the key type, the data is copied)

@@ -15,6 +15,7 @@ set(CMAKE_MODULE_PATH ${my_root_directory}/cmake)
 
 find_package(Nettle REQUIRED)
 find_package(Hogweed REQUIRED)
+find_package(Gmp REQUIRED)
 
 add_definitions(-DBOOST_JSON_STANDALONE -DSPSSH_USE_NETTLE)
 

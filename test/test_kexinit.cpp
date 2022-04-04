@@ -137,7 +137,7 @@ test_config const test_configs[] =
 }
 
 TEST_CASE("kexinit agreement", "[unit]") {
-	auto i = GENERATE(range(0, int(sizeof(test_configs)/sizeof(test_config))), 1);
+	auto i = GENERATE(range(0, int(sizeof(test_configs)/sizeof(test_config))));
 
 	INFO("The test conf index is " << i);
 
