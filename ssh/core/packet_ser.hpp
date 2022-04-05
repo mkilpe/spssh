@@ -25,7 +25,7 @@ template<std::uint8_t PacketType, typename... TypeTags>
 class ssh_packet_ser;
 
 template<typename Packet, typename... Args>
-bool serialise_to_vector(std::vector<std::byte>& out, Args&&... args) {
+bool serialise_to_vector(byte_vector& out, Args&&... args) {
 	typename Packet::save packet(std::forward<Args>(args)...);
 	out.resize(packet.size());
 	return packet.write(out);

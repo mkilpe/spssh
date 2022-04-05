@@ -27,12 +27,12 @@ public:
 		return pub_;
 	}
 
-	std::vector<std::byte> agree(const_span remote_public) override {
+	byte_vector agree(const_span remote_public) override {
 		if(remote_public.size() != CURVE25519_SIZE) {
 			return {};
 		}
 
-		std::vector<std::byte> res;
+		byte_vector res;
 		res.resize(CURVE25519_SIZE);
 		nettle_curve25519_mul(
 			to_uint8_ptr(res),
@@ -43,8 +43,8 @@ public:
 	}
 
 	crypto_call_context context;
-	std::vector<std::byte> pub_;
-	std::vector<std::byte> priv_;
+	byte_vector pub_;
+	byte_vector priv_;
 };
 
 std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_type t, crypto_call_context const& c) {

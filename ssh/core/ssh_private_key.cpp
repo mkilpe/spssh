@@ -32,7 +32,7 @@ void ssh_private_key::sign(const_span in, span out) const {
 	key_impl_->sign(in, out);
 }
 
-std::vector<std::byte> ssh_private_key::sign(const_span in) const {
+byte_vector ssh_private_key::sign(const_span in) const {
 	SPSSH_ASSERT(key_impl_, "invalid private key");
 	return key_impl_->sign(in);
 }
@@ -67,9 +67,7 @@ static ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context
 	std::string_view n, e, d, iqmp, p, q;
 	std::string_view comment;
 	if(r.read(n) && r.read(e) && r.read(d) && r.read(iqmp) && r.read(p) && r.read(q) && r.read(comment)) {
-		rsa_private_key_data data{
-			trim_umpint(to_span(e)), trim_umpint(to_span(n)), trim_umpint(to_span(d)),
-			trim_umpint(to_span(p)), trim_umpint(to_span(q))};
+		rsa_private_key_data data{to_umpint(e), to_umpint(n), to_umpint(d),	to_umpint(p), to_umpint(q)};
 		return ssh_private_key(crypto.construct_private_key(data, call), comment);
 	} else {
 		call.log.log(logger::debug_trace, "Failed to read rsa private key");
@@ -85,7 +83,7 @@ static ssh_private_key load_raw_ecdsa_private_key(ssh_bf_reader& r, std::string_
 	std::string_view comment;
 	if(r.read(curve) && r.read(ecc_point) && r.read(privkey) && r.read(comment)) {
 		if("ecdsa-sha2-" + std::string(curve) == type) {
-			ecdsa_private_key_data data{curve, to_span(ecc_point), trim_umpint(to_span(privkey))};
+			ecdsa_private_key_data data{key_type::ecdsa_sha2_nistp256, to_span(ecc_point), to_umpint(privkey)};
 			return ssh_private_key(crypto.construct_private_key(data, call), comment);
 		} else {
 			call.log.log(logger::debug_trace, "Invalid ecdsa private key");

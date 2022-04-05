@@ -5,6 +5,12 @@
 
 namespace securepath::ssh {
 
+struct public_key_data {
+	virtual key_type type() const = 0;
+protected:
+	~public_key_data() = default;
+};
+
 class public_key {
 public:
 	virtual ~public_key() = default;
@@ -13,18 +19,14 @@ public:
 
 	// verify data
 	virtual bool verify(const_span msg, const_span signature) const = 0;
-};
 
-struct public_key_data {
-	virtual key_type type() const = 0;
-protected:
-	~public_key_data() = default;
+	// the data must point to the same type as the public key
+	virtual bool fill_data(public_key_data& data) const = 0;
 };
 
 struct ed25519_public_key_data : public_key_data {
-	using value_type = std::span<std::byte const, ed25519_key_size>;
-
-	ed25519_public_key_data(value_type v)
+	ed25519_public_key_data() = default;
+	ed25519_public_key_data(const_span v)
 	: pubkey(v)
 	{}
 
@@ -32,20 +34,19 @@ struct ed25519_public_key_data : public_key_data {
 		return key_type::ssh_ed25519;
 	}
 
-	value_type pubkey;
+	const_span pubkey;
 };
 
 struct rsa_public_key_data : public_key_data {
-	rsa_public_key_data(const_span e, const_span n)
+	rsa_public_key_data() = default;
+	rsa_public_key_data(const_mpint_span e, const_mpint_span n)
 	: e(e)
 	, n(n)
 	{
 	}
 
-	//Represents multiple precision integers in two's complement format,
-	//stored as a string, 8 bits per byte, MSB first [RFC4251]
-	const_span e;
-	const_span n;
+	const_mpint_span e;
+	const_mpint_span n;
 
 	key_type type() const override {
 		return key_type::ssh_rsa;
@@ -53,23 +54,19 @@ struct rsa_public_key_data : public_key_data {
 };
 
 struct ecdsa_public_key_data : public_key_data {
-	ecdsa_public_key_data(std::string_view curve, const_span ecc_point)
-	: curve(curve)
+	ecdsa_public_key_data(key_type t, const_span ecc_point = {})
+	: ecdsa_type(t)
 	, ecc_point(ecc_point)
 	{
 	}
 
-	// curve name
-	std::string_view curve;
+	key_type ecdsa_type;
 
 	// the public key encoded from an elliptic curve point into an octet string (https://www.secg.org/sec1-v2.pdf)
 	const_span ecc_point;
 
 	key_type type() const override {
-		if(curve == "nistp256") {
-			return key_type::ecdsa_sha2_nistp256;
-		}
-		return key_type::unknown;
+		return ecdsa_type;
 	}
 };
 

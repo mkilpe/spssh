@@ -93,7 +93,7 @@ private: // data
 
 	// kex data
 	bool kexinit_received_{};
-	std::vector<std::byte> kex_cookie_;
+	byte_vector kex_cookie_;
 
 	kex_init_data kex_data_;
 	bool ignore_next_kex_packet_{};

@@ -61,7 +61,7 @@ struct in_packet_info {
 struct stream_in_crypto : public stream_crypto {
 	in_packet_info current_packet;
 	// buffer for calculating tag, should be always integrity_size
-	std::vector<std::byte> tag_buffer;
+	byte_vector tag_buffer;
 };
 
 struct out_packet_record {
@@ -81,7 +81,7 @@ struct out_packet_record {
 
 struct stream_out_crypto : public stream_crypto {
 	// buffer for output data, contains the encrypted ready packet to be send
-	std::vector<std::byte> buffer;
+	byte_vector buffer;
 	// the unhandled portion of buffer, always from the start of the buffer
 	span data;
 };
@@ -125,7 +125,7 @@ private:
 protected:
 	template<typename Packet, typename... Args>
 	friend bool send_packet(ssh_binary_packet&, out_buffer&, Args&&...);
-	friend bool send_payload(ssh_binary_packet& bp, std::vector<std::byte> const& payload, out_buffer& out);
+	friend bool send_payload(ssh_binary_packet& bp, byte_vector const& payload, out_buffer& out);
 
 	ssh_config const& config_;
 	logger& logger_;
@@ -154,7 +154,7 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	return false;
 }
 
-bool send_payload(ssh_binary_packet& bp, std::vector<std::byte> const& payload, out_buffer& out);
+bool send_payload(ssh_binary_packet& bp, byte_vector const& payload, out_buffer& out);
 
 }
 

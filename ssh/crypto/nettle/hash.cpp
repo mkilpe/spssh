@@ -21,6 +21,7 @@ public:
 	}
 
 	void digest(span out) override {
+		SPSSH_ASSERT(out.size() >= SHA256_DIGEST_SIZE, "invalid out buffer size");
 		nettle_sha256_digest(&ctx_, out.size(), to_uint8_ptr(out));
 	}
 

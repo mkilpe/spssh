@@ -25,12 +25,12 @@ static std::uint8_t char_to_value(char c) {
 	return 0xFF; // invalid
 }
 
-std::vector<std::byte> decode_base64(std::string_view s) {
+byte_vector decode_base64(std::string_view s) {
 	if(s.empty()) {
 		return {};
 	}
 
-	std::vector<std::byte> res;
+	byte_vector res;
 	res.reserve((s.size() / 4) * 3); // 4 chars make 24 bits
 
 	// remove padding and just decode without
@@ -72,6 +72,39 @@ std::vector<std::byte> decode_base64(std::string_view s) {
 				}
 
 				res.push_back(std::byte(((n3 & 0x03) << 6) | n4));
+			}
+		}
+	}
+
+	return res;
+}
+
+std::string encode_base64(const_span s, bool pad) {
+	std::string res;
+	res.reserve((s.size()*4)/3);
+	// handle by three at the time
+	for(std::size_t i = 0; i < s.size(); i += 3) {
+		auto left = s.size() - i;
+		res += encoding[(std::to_integer<std::uint8_t>(s[i]) & 0xfc) >> 2];
+
+		if(left == 1) {
+			res += encoding[((std::to_integer<std::uint8_t>(s[i]) & 0x03) << 4)];
+			if(pad) {
+				res += "==";
+			}
+		}
+		else {
+			res += encoding[((std::to_integer<std::uint8_t>(s[i]) & 0x03) << 4)
+							| ((std::to_integer<std::uint8_t>(s[i+1]) & 0xf0) >> 4) ];
+			if(left == 2) {
+				res += encoding[((std::to_integer<std::uint8_t>(s[i+1]) & 0x0f) << 2)];
+				if(pad) {
+					res += '=';
+				}
+			} else {
+				res += encoding[((std::to_integer<std::uint8_t>(s[i+1]) & 0x0f) << 2)
+	  						| ((std::to_integer<std::uint8_t>(s[i+2]) & 0xc0) >> 6) ];
+				res += encoding[(std::to_integer<std::uint8_t>(s[i+2]) & 0x3f)];
 			}
 		}
 	}

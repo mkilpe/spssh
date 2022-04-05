@@ -36,18 +36,29 @@ public:
 			to_uint8_ptr(signature) ) == 1;
 	}
 
+	bool fill_data(public_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<ed25519_public_key_data&>(data);
+			d.pubkey = const_span(pubkey_);
+		}
+		return ret;
+	}
+
 private:
-	std::vector<std::byte> pubkey_;
+	byte_vector pubkey_;
 };
 
 
 class rsa_public_key : public public_key {
 public:
 	rsa_public_key(rsa_public_key_data const& d)
+	: e_(d.e.data.begin(), d.e.data.end())
+	, n_(d.n.data.begin(), d.n.data.end())
 	{
 		nettle_rsa_public_key_init(&public_key_);
-		nettle_mpz_set_str_256_u(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
-		nettle_mpz_set_str_256_u(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
+		nettle_mpz_set_str_256_u(public_key_.e, d.e.data.size(), to_uint8_ptr(d.e.data));
+		nettle_mpz_set_str_256_u(public_key_.n, d.n.data.size(), to_uint8_ptr(d.n.data));
 		is_valid_ = nettle_rsa_public_key_prepare(&public_key_) == 1;
 	}
 
@@ -76,8 +87,20 @@ public:
  		return res;
 	}
 
+	bool fill_data(public_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<rsa_public_key_data&>(data);
+			d.e.data = const_span(e_);
+			d.n.data = const_span(n_);
+		}
+		return ret;
+	}
+
 private:
 	bool is_valid_{};
+	byte_vector e_;
+	byte_vector n_;
 	::rsa_public_key public_key_;
 };
 
@@ -85,7 +108,8 @@ private:
 class ecdsa_public_key : public public_key {
 public:
 	ecdsa_public_key(ecdsa_public_key_data const& d, crypto_call_context const& call)
-	: type_(key_type::ecdsa_sha2_nistp256)
+	: type_(d.ecdsa_type)
+	, pubkey_(d.ecc_point.begin(), d.ecc_point.end())
 	{
 		ecc_point_init(&ecc_point_, nettle_get_secp_256r1());
 		// see the size is correct and it is uncompressed ecc point, otherwise don't bother
@@ -126,9 +150,19 @@ public:
 		return res;
 	}
 
+	bool fill_data(public_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<ecdsa_public_key_data&>(data);
+			d.ecc_point = const_span(pubkey_);
+		}
+		return ret;
+	}
+
 private:
 	bool is_valid_{};
 	key_type type_;
+	byte_vector pubkey_;
 	ecc_point ecc_point_;
 };
 

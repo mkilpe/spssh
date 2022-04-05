@@ -11,8 +11,14 @@
 
 namespace securepath::ssh {
 
+using byte_vector = std::vector<std::byte>;
 using span = std::span<std::byte>;
 using const_span = std::span<std::byte const>;
+
+// Represents multiple precision integers in two's complement format, 8 bits per byte, MSB first.
+struct const_mpint_span {
+	const_span data;
+};
 
 struct ssh_version {
 	std::string ssh;
@@ -33,11 +39,11 @@ inline const_span to_span(std::string_view v) {
 	return const_span((std::byte const*)v.data(), v.size());
 }
 
-inline std::uint8_t const* to_uint8_ptr(std::vector<std::byte> const& v) {
+inline std::uint8_t const* to_uint8_ptr(byte_vector const& v) {
 	return (std::uint8_t const*)v.data();
 }
 
-inline std::uint8_t* to_uint8_ptr(std::vector<std::byte>& v) {
+inline std::uint8_t* to_uint8_ptr(byte_vector& v) {
 	return (std::uint8_t*)v.data();
 }
 

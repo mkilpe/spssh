@@ -22,6 +22,13 @@ public:
 	/// output digest, this will reset the hash state
 	virtual void digest(span out) = 0;
 
+	byte_vector digest() {
+		byte_vector ret;
+		ret.resize(size());
+		digest(ret);
+		return ret;
+	}
+
 private:
 	std::size_t const size_;
 };

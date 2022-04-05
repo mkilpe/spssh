@@ -7,6 +7,8 @@
 
 namespace securepath::ssh {
 
+class binout;
+
 /** \brief SSH Public Key that is used for signature checking
  */
 class ssh_public_key {
@@ -19,6 +21,10 @@ public:
 
 	bool verify(const_span msg, const_span signature) const;
 
+	bool serialise(binout&) const;
+
+	// sha256 fingerprint with base64 encoding
+	std::string fingerprint(crypto_context const& crypto, crypto_call_context const& call) const;
 private:
 	std::unique_ptr<public_key> key_impl_;
 };

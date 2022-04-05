@@ -16,8 +16,8 @@ namespace securepath::ssh::test {
    BASE64("fooba") = "Zm9vYmE="
    BASE64("foobar") = "Zm9vYmFy"*/
 
-static std::vector<std::byte> to_vec(std::string_view s) {
-	return std::vector<std::byte>((std::byte const*)s.data(), (std::byte const*)s.data()+s.size());
+static byte_vector to_vec(std::string_view s) {
+	return byte_vector((std::byte const*)s.data(), (std::byte const*)s.data()+s.size());
 }
 
 TEST_CASE("decode_base64", "[unit]") {
@@ -44,5 +44,18 @@ TEST_CASE("decode_base64", "[unit]") {
 	CHECK(decode_base64("Zm9vYgfdd").empty());
 }
 
+TEST_CASE("encode_base64", "[unit]") {
+	CHECK(encode_base64(to_span("")) == "");
+	CHECK(encode_base64(to_span("f")) == "Zg");
+	CHECK(encode_base64(to_span("f"), true) == "Zg==");
+	CHECK(encode_base64(to_span("fo")) == "Zm8");
+	CHECK(encode_base64(to_span("fo"), true) == "Zm8=");
+	CHECK(encode_base64(to_span("foo")) == "Zm9v");
+	CHECK(encode_base64(to_span("foob")) == "Zm9vYg");
+	CHECK(encode_base64(to_span("foob"), true) == "Zm9vYg==");
+	CHECK(encode_base64(to_span("fooba")) == "Zm9vYmE");
+	CHECK(encode_base64(to_span("fooba"), true) == "Zm9vYmE=");
+	CHECK(encode_base64(to_span("foobar")) == "Zm9vYmFy");
+}
 
 }

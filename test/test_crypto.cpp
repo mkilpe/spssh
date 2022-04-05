@@ -57,14 +57,14 @@ std::size_t const test_key_count = sizeof(test_keys)/sizeof(*test_keys);
 TEST_CASE("ed25519 public and private key", "[unit][crypto]") {
 	crypto_test_context ctx;
 
-	std::vector<std::byte> gen_priv_key(ed25519_key_size);
+	byte_vector gen_priv_key(ed25519_key_size);
 	ctx.rand->random_bytes(gen_priv_key);
 
 	ed25519_private_key_data data{ed25519_private_key_data::value_type(gen_priv_key.data(), gen_priv_key.size())};
 	auto priv = ctx.construct_private_key(data, ctx.call);
 	REQUIRE(priv);
 
-	std::vector<std::byte> msg(69, std::byte{'A'});
+	byte_vector msg(69, std::byte{'A'});
 	auto sig = priv->sign(msg);
 	REQUIRE(!sig.empty());
 
@@ -84,6 +84,7 @@ TEST_CASE("ssh public key", "[unit][crypto]") {
 	REQUIRE(pub.valid());
 
 	CHECK(pub.type() == test_keys[i].type);
+	CHECK(pub.fingerprint(ctx, ctx.call) == test_keys[i].fprint);
 }
 
 TEST_CASE("ssh private key", "[unit][crypto]") {
@@ -97,7 +98,7 @@ TEST_CASE("ssh private key", "[unit][crypto]") {
 
 	CHECK(priv.type() == test_keys[i].type);
 
-	std::vector<std::byte> msg(69, std::byte{'A'});
+	byte_vector msg(69, std::byte{'A'});
 	auto sig = priv.sign(msg);
 	REQUIRE(!sig.empty());
 

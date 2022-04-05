@@ -19,8 +19,8 @@ public:
 	virtual std::size_t signature_size() const = 0;
 	virtual bool sign(const_span in, span out) const = 0;
 
-	std::vector<std::byte> sign(const_span in) const {
-		std::vector<std::byte> res;
+	byte_vector sign(const_span in) const {
+		byte_vector res;
 		res.resize(signature_size());
 		if(sign(in, res)) {
 			return res;
@@ -53,18 +53,16 @@ struct ed25519_private_key_data : private_key_data {
 
 struct rsa_private_key_data : private_key_data {
 
-	rsa_private_key_data(const_span e, const_span n, const_span d, const_span p, const_span q)
+	rsa_private_key_data(const_mpint_span e, const_mpint_span n, const_mpint_span d, const_mpint_span p, const_mpint_span q)
 	: e(e), n(n), d(d), p(p), q(q)
 	{
 	}
 
-	//Represents multiple precision integers in two's complement format,
-	//stored as a string, 8 bits per byte, MSB first [RFC4251]
-	const_span e;
-	const_span n;
-	const_span d;
-	const_span p;
-	const_span q;
+	const_mpint_span e;
+	const_mpint_span n;
+	const_mpint_span d;
+	const_mpint_span p;
+	const_mpint_span q;
 
 	key_type type() const override {
 		return key_type::ssh_rsa;
@@ -74,25 +72,21 @@ struct rsa_private_key_data : private_key_data {
 
 struct ecdsa_private_key_data : private_key_data {
 
-	ecdsa_private_key_data(std::string_view curve, const_span ecc_point, const_span privkey)
-	: curve(curve)
+	ecdsa_private_key_data(key_type t, const_span ecc_point = {}, const_mpint_span privkey = {})
+	: ecdsa_type(t)
 	, ecc_point(ecc_point)
 	, privkey(privkey)
 	{
 	}
 
-	// curve name
-	std::string_view curve;
+	key_type ecdsa_type;
 
 	// the public key encoded from an elliptic curve point into an octet string (https://www.secg.org/sec1-v2.pdf)
 	const_span ecc_point;
-	const_span privkey;
+	const_mpint_span privkey;
 
 	key_type type() const override {
-		if(curve == "nistp256") {
-			return key_type::ecdsa_sha2_nistp256;
-		}
-		return key_type::unknown;
+		return ecdsa_type;
 	}
 };
 

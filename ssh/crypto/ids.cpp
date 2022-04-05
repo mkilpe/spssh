@@ -50,6 +50,12 @@ std::string_view to_string(key_type t) {
 	return "unknown";
 }
 
+std::string_view to_curve_name(key_type t) {
+	using enum key_type;
+	if(t == ecdsa_sha2_nistp256) return "nistp256";
+	return "";
+}
+
 key_type from_string(type_tag<key_type>, std::string_view s) {
 	using enum key_type;
 	if(s == "ssh-rsa") return ssh_rsa;

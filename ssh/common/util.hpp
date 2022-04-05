@@ -16,7 +16,8 @@ inline void copy(const_span source, span dest) {
 	std::memcpy(dest.data(), source.data(), source.size());
 }
 
-std::vector<std::byte> decode_base64(std::string_view);
+byte_vector decode_base64(std::string_view);
+std::string encode_base64(const_span, bool pad = false);
 
 inline void u32ton(std::uint32_t v, std::byte* out) {
 	out[0] = std::byte((v >> 24) & 0xff);
@@ -56,11 +57,16 @@ inline std::uint64_t ntou64(std::byte const* in) {
 }
 
 // as per rfc4251 the unsigned mpint has trailing 0 byte, this removes that if present
-inline const_span trim_umpint(const_span mpint) {
-	if(!mpint.empty() && mpint[0] == std::byte{0x0}) {
-		return mpint.subspan(1);
+inline const_mpint_span to_umpint(const_span mpint) {
+	// remove the trailing zeroes
+	while(!mpint.empty() && mpint[0] == std::byte{0x0}) {
+		mpint = mpint.subspan(1);
 	}
-	return mpint;
+	return const_mpint_span{mpint};
+}
+
+inline const_mpint_span to_umpint(std::string_view mpint) {
+	return to_umpint(to_span(mpint));
 }
 
 }

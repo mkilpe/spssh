@@ -14,7 +14,7 @@ public:
 	virtual const_span public_key() const = 0;
 
 	/// calculate shared secret and return it
-	virtual std::vector<std::byte> agree(const_span remote_public) = 0;
+	virtual byte_vector agree(const_span remote_public) = 0;
 };
 
 }

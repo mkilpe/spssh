@@ -67,6 +67,9 @@ std::size_t const ed25519_key_size = 32;
 std::string_view to_string(key_type);
 key_type from_string(type_tag<key_type>, std::string_view);
 
+// this will give the curve name only for ecdsa types, otherwise empty
+std::string_view to_curve_name(key_type);
+
 enum class key_exchange_type {
 	unknown = 0,
 	X25519

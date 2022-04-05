@@ -401,7 +401,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		}
 
 		// copy the remote kexinit packet for the kex to use for signature
-		kex_data_.remote_kexinit = std::vector<std::byte>{payload.begin(), payload.end()};
+		kex_data_.remote_kexinit = byte_vector{payload.begin(), payload.end()};
 
 		if(!kex_) {
 			kex_ = construct_kex(config_.side, crypto_conf.kex,

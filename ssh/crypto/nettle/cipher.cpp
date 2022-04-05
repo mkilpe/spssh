@@ -56,7 +56,7 @@ public:
 private:
 	cipher_dir dir_;
 	gcm_aes256_ctx ctx_;
-	std::vector<std::byte> key_;
+	byte_vector key_;
 
 	//rfc5647 IV handling
 	std::uint8_t iv_[12];

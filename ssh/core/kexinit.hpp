@@ -24,8 +24,8 @@ kex_type from_string(type_tag<kex_type>, std::string_view);
 struct kex_init_data {
 	ssh_version local_ver;
 	ssh_version remote_ver;
-	std::vector<std::byte> local_kexinit;
-	std::vector<std::byte> remote_kexinit;
+	byte_vector local_kexinit;
+	byte_vector remote_kexinit;
 };
 
 struct crypto_configuration {

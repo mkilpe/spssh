@@ -38,7 +38,7 @@ public:
 	}
 
 	std::unique_ptr<ssh::public_key> public_key() const override {
-		ed25519_public_key_data data{ed25519_public_key_data::value_type(pubkey_.data(), pubkey_.size())};
+		ed25519_public_key_data data{pubkey_};
 		return create_public_key(data, call_);
 	}
 
@@ -60,8 +60,8 @@ public:
 	}
 
 private:
-	std::vector<std::byte> pubkey_;
-	std::vector<std::byte> privkey_;
+	byte_vector pubkey_;
+	byte_vector privkey_;
 	crypto_call_context call_;
 };
 
@@ -74,18 +74,18 @@ class rsa_private_key : public private_key {
 public:
 	rsa_private_key(rsa_private_key_data const& d, crypto_call_context const& call)
 	: call_(call)
-	, e_(d.e.begin(), d.e.end())
-	, n_(d.n.begin(), d.n.end())
+	, e_(d.e.data.begin(), d.e.data.end())
+	, n_(d.n.data.begin(), d.n.data.end())
 	{
 		nettle_rsa_public_key_init(&public_key_);
-		nettle_mpz_set_str_256_u(public_key_.e, d.e.size(), to_uint8_ptr(d.e));
-		nettle_mpz_set_str_256_u(public_key_.n, d.n.size(), to_uint8_ptr(d.n));
+		nettle_mpz_set_str_256_u(public_key_.e, d.e.data.size(), to_uint8_ptr(d.e.data));
+		nettle_mpz_set_str_256_u(public_key_.n, d.n.data.size(), to_uint8_ptr(d.n.data));
 
 		nettle_rsa_private_key_init(&key_);
 
-		nettle_mpz_set_str_256_u(key_.d, d.d.size(), to_uint8_ptr(d.d));
-		nettle_mpz_set_str_256_u(key_.p, d.p.size(), to_uint8_ptr(d.p));
-		nettle_mpz_set_str_256_u(key_.q, d.q.size(), to_uint8_ptr(d.q));
+		nettle_mpz_set_str_256_u(key_.d, d.d.data.size(), to_uint8_ptr(d.d.data));
+		nettle_mpz_set_str_256_u(key_.p, d.p.data.size(), to_uint8_ptr(d.p.data));
+		nettle_mpz_set_str_256_u(key_.q, d.q.data.size(), to_uint8_ptr(d.q.data));
 
 		mpz_t p_1, q_1;
 		mpz_init(p_1);
@@ -119,7 +119,7 @@ public:
 	}
 
 	std::unique_ptr<ssh::public_key> public_key() const override {
-		rsa_public_key_data data{e_, n_};
+		rsa_public_key_data data{to_umpint(e_), to_umpint(n_)};
 		return create_public_key(data, call_);
 	}
 
@@ -152,8 +152,8 @@ private:
 	bool is_valid_{};
 	::rsa_public_key public_key_;
 	::rsa_private_key key_;
-	std::vector<std::byte> e_;
-	std::vector<std::byte> n_;
+	byte_vector e_;
+	byte_vector n_;
 };
 
 
@@ -161,14 +161,14 @@ class ecdsa_private_key : public private_key {
 public:
 	ecdsa_private_key(ecdsa_private_key_data const& d, crypto_call_context const& call)
 	: call_(call)
-	, type_(key_type::ecdsa_sha2_nistp256)
+	, type_(d.ecdsa_type)
 	, ecc_point_(d.ecc_point.begin(), d.ecc_point.end())
 	{
 		nettle_ecc_scalar_init(&key_, nettle_get_secp_256r1());
 
-		if(d.privkey.size() == 32 && d.ecc_point.size() == 65 && d.ecc_point[0] == std::byte{0x04}) {
+		if(d.privkey.data.size() == 32 && d.ecc_point.size() == 65 && d.ecc_point[0] == std::byte{0x04}) {
 			mpz_t z;
-			nettle_mpz_init_set_str_256_u(z, 32, to_uint8_ptr(d.privkey));
+			nettle_mpz_init_set_str_256_u(z, 32, to_uint8_ptr(d.privkey.data));
 			is_valid_ = nettle_ecc_scalar_set(&key_, z) == 1;
 			mpz_clear(z);
 		}
@@ -187,7 +187,7 @@ public:
 	}
 
 	std::unique_ptr<ssh::public_key> public_key() const override {
-		ecdsa_public_key_data data{"nistp256", ecc_point_};
+		ecdsa_public_key_data data{type_, ecc_point_};
 		return create_public_key(data, call_);
 	}
 
@@ -214,7 +214,7 @@ private:
 	bool is_valid_{};
 	key_type type_;
 	ecc_scalar key_;
-	std::vector<std::byte> ecc_point_;
+	byte_vector ecc_point_;
 };
 
 

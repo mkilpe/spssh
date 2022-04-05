@@ -22,7 +22,7 @@ public:
 
 	std::size_t signature_size() const;
 	void sign(const_span in, span out) const;
-	std::vector<std::byte> sign(const_span in) const;
+	byte_vector sign(const_span in) const;
 
 private:
 	std::unique_ptr<private_key> key_impl_;
