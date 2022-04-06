@@ -20,6 +20,9 @@ enum class cipher_dir {
 	decrypt
 };
 
+std::size_t cipher_iv_size(cipher_type);
+std::size_t cipher_key_size(cipher_type);
+
 enum class mac_type {
 	unknown = 0,
 	aes_256_gcm,
@@ -28,6 +31,8 @@ enum class mac_type {
 
 std::string_view to_string(mac_type);
 mac_type from_string(type_tag<mac_type>, std::string_view);
+
+std::size_t mac_key_size(mac_type);
 
 // nothing supported for now
 enum class compress_type {

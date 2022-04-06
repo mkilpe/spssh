@@ -4,9 +4,7 @@
 #include "ssh/core/packet_ser.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/protocol.hpp"
-
-#include <securepath/test_frame/test_suite.hpp>
-#include <securepath/test_frame/test_utils.hpp>
+#include <external/catch/catch.hpp>
 
 namespace securepath::ssh::test {
 

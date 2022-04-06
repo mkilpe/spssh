@@ -1,9 +1,7 @@
 
 #include "log.hpp"
 #include "ssh/common/algo_list.hpp"
-
-#include <securepath/test_frame/test_suite.hpp>
-#include <securepath/test_frame/test_utils.hpp>
+#include <external/catch/catch.hpp>
 
 namespace securepath::ssh::test {
 namespace {

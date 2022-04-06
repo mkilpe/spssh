@@ -16,6 +16,20 @@ cipher_type from_string(type_tag<cipher_type>, std::string_view s) {
 	return unknown;
 }
 
+std::size_t cipher_iv_size(cipher_type t) {
+	using enum cipher_type;
+	if(t == aes_256_gcm) return 12;
+	if(t == aes_256_ctr) return 16;
+	return 0;
+}
+
+std::size_t cipher_key_size(cipher_type t) {
+	using enum cipher_type;
+	if(t == aes_256_gcm) return 32;
+	if(t == aes_256_ctr) return 32;
+	return 0;
+}
+
 std::string_view to_string(mac_type t) {
 	using enum mac_type;
 	if(t == aes_256_gcm) return "AEAD_AES_256_GCM";
@@ -28,6 +42,13 @@ mac_type from_string(type_tag<mac_type>, std::string_view s) {
 	if(s == "AEAD_AES_256_GCM") return aes_256_gcm;
 	if(s == "hmac-sha2-256") return hmac_sha2_256;
 	return unknown;
+}
+
+std::size_t mac_key_size(mac_type t) {
+	using enum mac_type;
+	if(t == aes_256_gcm) return 0;
+	if(t == hmac_sha2_256) return 32;
+	return 0;
 }
 
 std::string_view to_string(compress_type t) {

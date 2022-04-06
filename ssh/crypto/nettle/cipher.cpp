@@ -17,7 +17,6 @@ public:
 	, dir_(dir)
 	, key_(secret.begin(), secret.end())
 	{
-		// todo: better error handling
 		SPSSH_ASSERT(iv.size() == 12, "invalid iv size");
 
 		std::memcpy(iv_, iv.data(), 12);

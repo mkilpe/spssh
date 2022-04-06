@@ -135,4 +135,10 @@ ssh_public_key load_base64_ssh_public_key(std::string_view s, crypto_context con
 	return load_ssh_public_key(decode_base64(s), crypto, call);
 }
 
+byte_vector to_byte_vector(ssh_public_key const& k) {
+	byte_vector v;
+	byte_vector_binout s(v);
+	return k.serialise(s) ? v : byte_vector{};
+}
+
 }

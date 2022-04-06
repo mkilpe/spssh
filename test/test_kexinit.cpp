@@ -1,21 +1,12 @@
+
 #include "log.hpp"
 #include "ssh/core/kexinit.hpp"
 #include "ssh/core/supported_algorithms.hpp"
-
-#include <securepath/test_frame/test_suite.hpp>
-#include <securepath/test_frame/test_utils.hpp>
+#include <external/catch/catch.hpp>
 
 namespace securepath::ssh::test {
 namespace {
 
-/*dh_group14_sha256,
-	curve25519_sha256,
-	ecdh_sha2_nistp256
-
-	ssh_rsa,
-	ssh_ed25519,
-	ecdsa_sha2_nistp256,
-*/
 supported_algorithms const t1
 	{{kex_type::curve25519_sha256}
 	,{key_type::ssh_ed25519}

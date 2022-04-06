@@ -55,6 +55,8 @@ public:
 	using ssh_binary_packet::error;
 	using ssh_binary_packet::error_message;
 
+	void send_ignore(std::size_t size);
+
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
@@ -70,6 +72,7 @@ private: // init & generic packet handling
 	bool handle_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_raw_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_kexinit_packet(const_span payload);
+	bool handle_kex_done();
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();

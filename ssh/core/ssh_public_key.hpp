@@ -32,6 +32,8 @@ private:
 ssh_public_key load_ssh_public_key(const_span data, crypto_context const&, crypto_call_context const&);
 ssh_public_key load_base64_ssh_public_key(std::string_view data, crypto_context const&, crypto_call_context const&);
 
+byte_vector to_byte_vector(ssh_public_key const&);
+
 }
 
 #endif

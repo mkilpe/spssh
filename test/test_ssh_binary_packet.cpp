@@ -1,16 +1,14 @@
 
 #include "log.hpp"
+#include "random.hpp"
 #include "test_buffers.hpp"
-#include "test_random.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/core/packet_ser.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/ssh_binary_packet.hpp"
 #include "ssh/core/ssh_config.hpp"
 #include "ssh/core/protocol.hpp"
-
-#include <securepath/test_frame/test_suite.hpp>
-#include <securepath/test_frame/test_utils.hpp>
+#include <external/catch/catch.hpp>
 
 std::string to_hex(securepath::ssh::const_span span) {
 	char const values[] = "0123456789ABCDEF";

@@ -13,29 +13,40 @@ ssh_binary_packet::ssh_binary_packet(ssh_config const& config, logger& logger)
 {
 }
 
+ssh_config const& ssh_binary_packet::config() const {
+	return config_;
+}
+
 void ssh_binary_packet::set_random(random& r) {
 	random_ = &r;
 }
 
-bool ssh_binary_packet::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
-	logger_.log(logger::debug, "SSH starting to encrypt");
+void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+	s.cipher = std::move(cipher);
+	s.mac = std::move(mac);
 
-	stream_in_.cipher = std::move(cipher);
-	stream_in_.mac = std::move(mac);
-
-	if(stream_in_.cipher->is_aead()) {
-		stream_in_.integrity_size = static_cast<aead_cipher const&>(*stream_in_.cipher).tag_size();
+	if(s.cipher->is_aead()) {
+		s.integrity_size = static_cast<aead_cipher const&>(*s.cipher).tag_size();
 	} else {
-		SPSSH_ASSERT(stream_in_.mac, "Invalid mac");
-		stream_in_.integrity_size = stream_in_.mac->size();
+		SPSSH_ASSERT(s.mac, "Invalid mac");
+		s.integrity_size = s.mac->size();
 	}
 
-	stream_in_.block_size = std::max(minimum_block_size, stream_in_.cipher->block_size());
-	SPSSH_ASSERT(stream_in_.block_size < maximum_padding_size, "too big cipher block size");
+	s.block_size = std::max(minimum_block_size, s.cipher->block_size());
+	SPSSH_ASSERT(s.block_size < maximum_padding_size, "too big cipher block size");
+}
 
+void ssh_binary_packet::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+	logger_.log(logger::debug, "SSH starting to decrypt incoming packets");
+
+	set_crypto(stream_in_, std::move(cipher), std::move(mac));
 	stream_in_.tag_buffer.resize(stream_in_.integrity_size);
+}
 
-	return true;
+void ssh_binary_packet::set_output_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+	logger_.log(logger::debug, "SSH starting to encrypt outgoing packets");
+
+	set_crypto(stream_out_, std::move(cipher), std::move(mac));
 }
 
 bool ssh_binary_packet::try_decode_header(span in_data) {

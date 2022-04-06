@@ -22,6 +22,15 @@ public:
 	ssh::hash& hash;
 };
 
+struct byte_vector_binout : binout {
+	byte_vector_binout(byte_vector& buf);
+
+	bool process(const_span data) override;
+
+public:
+	byte_vector& buf;
+};
+
 }
 
 #endif

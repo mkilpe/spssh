@@ -1,28 +1,12 @@
 
-#include "log.hpp"
+#include "crypto.hpp"
 #include "test_buffers.hpp"
 #include "ssh/crypto/public_key.hpp"
 #include "ssh/crypto/private_key.hpp"
 #include "ssh/core/ssh_public_key.hpp"
 #include "ssh/core/ssh_private_key.hpp"
 
-#include <securepath/test_frame/test_suite.hpp>
-#include <securepath/test_frame/test_utils.hpp>
-
 namespace securepath::ssh::test {
-
-struct crypto_test_context : crypto_context {
-	crypto_test_context()
-	: crypto_context(default_crypto_context())
-	, rand(construct_random())
-	, call(test_log(), *rand)
-	{
-		REQUIRE(rand);
-	}
-
-	std::unique_ptr<random> rand;
-	crypto_call_context call;
-};
 
 // ssh-ed25519
 std::string const ed25519_fprint = "SHA256:AJxI+SMrILxnTIinoWVeFhz3BGq9zH+VyOcH6IsJV/0";

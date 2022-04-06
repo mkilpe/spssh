@@ -6,6 +6,11 @@
 
 namespace securepath::ssh {
 
+struct key_pair {
+	ssh_private_key key;
+	byte_vector ser_pubkey;
+};
+
 /** \brief SSH Version 2 Configuration
  */
 struct ssh_config {
@@ -18,7 +23,7 @@ struct ssh_config {
 	supported_algorithms algorithms;
 
 	// host keys for server, possible authentication keys for client
-	std::vector<ssh_private_key> private_keys;
+	std::vector<key_pair> private_keys;
 
 	// re-key interval in bytes (== 0 means no rekeying)
 	std::uint64_t rekey_inverval{1024ULL*1024*1024*2};
@@ -39,8 +44,11 @@ public:
 	// simple check that we have at least one kexes, cipher and so on (does not check if the algorithms are compatible)
 	bool valid() const;
 
-	// sets the private_keys and fills the host_keys to match it
-	void set_host_keys_for_server(std::vector<ssh_private_key> keys);
+	// sets the private_keys and fills the host_keys to match it, if adding any of the key fails, none is set and false returned
+	bool set_host_keys_for_server(std::vector<ssh_private_key> keys);
+
+	// add single private key to the private_keys (does not change the supported algorithms)
+	bool add_private_key(ssh_private_key);
 };
 
 }

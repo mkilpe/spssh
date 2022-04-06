@@ -19,7 +19,7 @@ public:
 	void random_bytes(span output) override {
 		std::memset(output.data(), 0, output.size());
 	}
-} test_rand;
+} inline test_rand;
 
 
 }
