@@ -132,4 +132,15 @@ bool same_source_or_non_overlapping(const_span s1, const_span s2) {
 		std::less<>()(s2.data()+s2.size(), s1.data());
 }
 
+bool compare_equal(const_span s1, const_span s2) {
+	if(s1.size() != s2.size()) {
+		return false;
+	}
+	std::byte d{0};
+	for(std::size_t i = 0; i != s1.size(); ++i) {
+		d |= s1[i] ^ s2[i];
+	}
+	return d == std::byte{0};
+}
+
 }

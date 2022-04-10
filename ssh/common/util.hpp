@@ -95,6 +95,7 @@ inline const_span safe_subspan(byte_vector const& s, std::size_t offset, std::si
 std::ostream& operator<<(std::ostream&, const_span);
 
 bool same_source_or_non_overlapping(const_span s1, const_span s2);
+bool compare_equal(const_span s1, const_span s2);
 
 }
 

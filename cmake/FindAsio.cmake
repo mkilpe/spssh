@@ -1,12 +1,12 @@
 
-find_path(asio_include NAMES asio.hpp PATHS ${my_directory}/external_libs/asio/include)
+find_path(Asio_INCLUDE_DIR asio.hpp asio/io_context.hpp PATHS ENV ASIO_INCLUDE_DIR)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(asio DEFAULT_MSG asio_include)
+find_package_handle_standard_args(Asio DEFAULT_MSG Asio_INCLUDE_DIR)
 
-if(asio_FOUND)
-	set(asio_LIBRARIES)
-	set(asio_INCLUDE_DIRS ${asio_include})
+if(Asio_FOUND)
+	set(Asio_LIBRARIES)
+	set(Asio_INCLUDE_DIRS ${Asio_INCLUDE_DIR})
 endif()
 
-mark_as_advanced(asio_INCLUDE_DIRS asio_LIBRARIES)
+mark_as_advanced(Asio_INCLUDE_DIRS Asio_LIBRARIES)

@@ -136,9 +136,8 @@ span ssh_binary_packet::decrypt_aead(aead_cipher& cip, const_span data, span out
 	cip.tag(stream_in_.tag_buffer);
 
 	// check the tag matches
-	if(std::memcmp(stream_in_.tag_buffer.data()
-		, data.data() + data.size() - stream_in_.integrity_size
-		, stream_in_.integrity_size) != 0)
+	if(!compare_equal(stream_in_.tag_buffer
+		, safe_subspan(data, data.size() - stream_in_.integrity_size, stream_in_.integrity_size)))
 	{
 		set_error(ssh_mac_error, "verifying tag failed");
 		logger_.log(logger::debug, "SSH decrypt_aead verifying tag failed");
@@ -185,9 +184,8 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	stream_in_.mac->result(stream_in_.tag_buffer);
 
 	// check the tag matches
-	if(std::memcmp(stream_in_.tag_buffer.data()
-		, out.data() + stream_in_.current_packet.packet_size + stream_in_.integrity_size
-		, stream_in_.integrity_size) != 0)
+	if(!compare_equal(stream_in_.tag_buffer
+		, safe_subspan(out, stream_in_.current_packet.packet_size - stream_in_.integrity_size, stream_in_.integrity_size)))
 	{
 		error_ = ssh_mac_error;
 		logger_.log(logger::debug, "SSH decrypt_with_mac verifying mac failed");
