@@ -57,7 +57,7 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 	// check if the  packet length is encrypted or not
 	if(stream_in_.cipher && !stream_in_.cipher->is_aead()) {
 		// decrypt just the first block to get the length
-		auto block_span = in_data.subspan(0, stream_in_.block_size);
+		auto block_span = safe_subspan(in_data, 0, stream_in_.block_size);
 		stream_in_.cipher->process(block_span, block_span);
 	}
 
@@ -71,6 +71,7 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 }
 
 span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
+	SPSSH_ASSERT(stream_in_.current_packet.packet_size != 0, "Invalid packet size");
 	SPSSH_ASSERT(stream_in_.current_packet.packet_size <= in_data.size(), "Invalid data size");
 
 	span payload;
@@ -89,9 +90,9 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 			if(in_data.data() != out_data.data()) {
 				SPSSH_ASSERT(out_data.size() >= size, "invalid out buffer size");
 				std::memcpy(out_data.data(), in_data.data() + packet_header_size, size);
-				payload = out_data.subspan(0, size);
+				payload = safe_subspan(out_data, 0, size);
 			} else {
-				payload = out_data.subspan(packet_header_size, size);
+				payload = safe_subspan(out_data, packet_header_size, size);
 			}
 		} else {
 			// invalid packet
@@ -117,29 +118,41 @@ span ssh_binary_packet::decrypt_aead(aead_cipher& cip, const_span data, span out
 	SPSSH_ASSERT(stream_in_.integrity_size > 0, "invalid integrity size");
 	SPSSH_ASSERT(stream_in_.tag_buffer.size() == stream_in_.integrity_size, "Invalid tag buffer");
 
+	if(data.data() == out.data()) {
+		//if we are doing in place decryption, the in and out for decrypting needs to be same address
+		out = safe_subspan(out, packet_lenght_size);
+	}
+
+	data = safe_subspan(data, 0, stream_in_.current_packet.packet_size);
+
 	// first handle the non-encrypted authenticated data
-	cip.process_auth(data.subspan(0, packet_lenght_size));
-	data = data.subspan(packet_lenght_size);
+	cip.process_auth(safe_subspan(data, 0, packet_lenght_size));
+	data = safe_subspan(data, packet_lenght_size);
 
 	// decrypt the data
-	cip.process(data, out);
+	cip.process(safe_subspan(data, 0, data.size() - stream_in_.integrity_size), out);
 
 	// get the tag
 	cip.tag(stream_in_.tag_buffer);
 
 	// check the tag matches
 	if(std::memcmp(stream_in_.tag_buffer.data()
-		, data.data() + stream_in_.current_packet.packet_size - stream_in_.integrity_size
+		, data.data() + data.size() - stream_in_.integrity_size
 		, stream_in_.integrity_size) != 0)
 	{
-		error_ = ssh_mac_error;
+		set_error(ssh_mac_error, "verifying tag failed");
 		logger_.log(logger::debug, "SSH decrypt_aead verifying tag failed");
 		return span{};
 	}
 
 	std::uint8_t padding = std::to_integer<std::uint8_t>(*out.data());
+	if(packet_header_size + padding + stream_in_.integrity_size > stream_in_.current_packet.packet_size) {
+		set_error(spssh_invalid_packet, "Invalid packet");
+		logger_.log(logger::debug, "SSH decrypt_aead invalid packet");
+		return span{};
+	}
 	stream_in_.current_packet.data_size = stream_in_.current_packet.packet_size - packet_header_size - padding - stream_in_.integrity_size;
-	return span{out.subspan(padding_size, stream_in_.current_packet.data_size)};
+	return safe_subspan(out, padding_size, stream_in_.current_packet.data_size);
 }
 
 span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
@@ -155,10 +168,10 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	if(data.data() != out.data()) {
 		std::memcpy(out.data(), data.data(), stream_in_.block_size);
 	}
-	data = data.subspan(stream_in_.block_size);
+	data = safe_subspan(data, stream_in_.block_size);
 
 	std::size_t decrypt_size = stream_in_.current_packet.packet_size - stream_in_.block_size;
-	stream_in_.cipher->process(data.subspan(0, decrypt_size), out.subspan(stream_in_.block_size, decrypt_size));
+	stream_in_.cipher->process(safe_subspan(data, 0, decrypt_size), safe_subspan(out, stream_in_.block_size, decrypt_size));
 
 	std::byte seq_buf[4];
 	// convert the packet sequence to binary and process for mac
@@ -166,7 +179,7 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 
 	stream_in_.mac->process(span{seq_buf, 4});
 	// process the packet for mac
-	stream_in_.mac->process(out.subspan(0, stream_in_.current_packet.packet_size - stream_in_.integrity_size));
+	stream_in_.mac->process(safe_subspan(out, 0, stream_in_.current_packet.packet_size - stream_in_.integrity_size));
 
 	// get the mac
 	stream_in_.mac->result(stream_in_.tag_buffer);
@@ -182,7 +195,7 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	}
 
 	stream_in_.current_packet.data_size = stream_in_.current_packet.packet_size - packet_header_size - padding - stream_in_.integrity_size;
-	return span{out.subspan(packet_header_size, stream_in_.current_packet.data_size)};
+	return span{safe_subspan(out, packet_header_size, stream_in_.current_packet.data_size)};
 }
 
 ssh_error_code ssh_binary_packet::error() const {
@@ -246,7 +259,6 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 		, padding_size
 		};
 
-
 	// check if we have pending data to write out
 	if(stream_out_.data.empty()) {
 		logger_.log(logger::debug_trace, "SSH trying inplace sending");
@@ -262,10 +274,10 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate data buffer [size={}]", res.size);
 			return std::nullopt;
 		}
-		res.data_buffer = span(stream_out_.buffer).subspan(stream_out_.data.size());
+		res.data_buffer = safe_subspan(stream_out_.buffer, stream_out_.data.size());
 	}
 
-	res.data = res.data_buffer.subspan(packet_header_size, data_size);
+	res.data = safe_subspan(res.data_buffer, packet_header_size, data_size);
 
 	return res;
 }
@@ -281,16 +293,17 @@ std::size_t ssh_binary_packet::minimum_padding(std::size_t header_payload_size) 
 
 void ssh_binary_packet::aead_encrypt(aead_cipher& cip, const_span data, span out) {
 	// authenticate the packet length as we don't encrypt it
-	cip.process_auth(data.subspan(0, packet_lenght_size));
+	cip.process_auth(safe_subspan(data, 0, packet_lenght_size));
 	// if we are not doing things _in place_, copy the packet length to output buffer
 	if(data.data() != out.data()) {
 		std::memcpy(out.data(), data.data(), packet_lenght_size);
 	}
-	data = data.subspan(packet_lenght_size);
+	data = safe_subspan(data, packet_lenght_size);
+	out = safe_subspan(out, packet_lenght_size);
 	// encrypt rest of the data
-	cip.process(data, out.subspan(packet_lenght_size, data.size()));
+	cip.process(data, out);
 	// add authentication tag at the end
-	cip.tag(out.subspan(packet_lenght_size+data.size()));
+	cip.tag(safe_subspan(out, data.size()));
 }
 
 void ssh_binary_packet::encrypt_with_mac(const_span data, span out) {
@@ -302,9 +315,9 @@ void ssh_binary_packet::encrypt_with_mac(const_span data, span out) {
 	// process the packet for mac
 	stream_out_.mac->process(data);
 	// add mac at the end
-	stream_out_.mac->result(out.subspan(data.size()));
+	stream_out_.mac->result(safe_subspan(out, data.size()));
 	// encrypt the packet
-	stream_out_.cipher->process(data, out.subspan(0, data.size()));
+	stream_out_.cipher->process(data, safe_subspan(out, 0, data.size()));
 }
 
 void ssh_binary_packet::encrypt_packet(const_span data, span out) {
@@ -334,7 +347,7 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 		&& p.add_random_range(*random_, info.padding_size);
 
 	if(ret) {
-		encrypt_packet(info.data_buffer, info.data_buffer);
+		encrypt_packet(safe_subspan(info.data_buffer, 0, info.size - stream_out_.integrity_size), info.data_buffer);
 
 		// incremented for every packet and let wrap around
 		++stream_out_.packet_sequence;
@@ -357,13 +370,13 @@ bool ssh_binary_packet::send_pending(out_buffer& out) {
 		if(ask_size) {
 			auto buf = out.get(ask_size);
 			if(!buf.empty()) {
-				copy(stream_out_.data.subspan(0, ask_size), buf);
+				copy(safe_subspan(stream_out_.data, 0, ask_size), buf);
 				out.commit(ask_size);
 
 				if(stream_out_.data.size() > ask_size) {
-					span left = stream_out_.data.subspan(ask_size);
+					span left = safe_subspan(stream_out_.data, ask_size);
 					std::memmove(stream_out_.buffer.data(), left.data(), left.size());
-					stream_out_.data = span(stream_out_.buffer).subspan(0, left.size());
+					stream_out_.data = safe_subspan(stream_out_.buffer, 0, left.size());
 				} else {
 					stream_out_.data = span();
 					shrink_out_buffer();

@@ -45,7 +45,7 @@ public:
 	}
 
 protected:
-	ssh_error_code error_;
+	ssh_error_code error_{ssh_noerror};
 	std::string err_message_;
 };
 

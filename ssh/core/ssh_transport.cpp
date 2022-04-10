@@ -134,7 +134,10 @@ void ssh_transport::handle_binary_packet(in_buffer& in) {
 	if(stream_in_.current_packet.status == in_packet_status::waiting_data) {
 		// see if we have whole packet already
 		if(stream_in_.current_packet.packet_size <= data.size()) {
-			decrypt_packet(data, data);
+			if(decrypt_packet(data, data).empty()) {
+				logger_.log(logger::debug_trace, "setting state to disconnected as decrypting packet failed");
+				set_state(ssh_state::disconnected);
+			}
 		}
 	}
 
@@ -170,8 +173,12 @@ transport_op ssh_transport::process(in_buffer& in) {
 	}
 
 	if(!stream_out_.data.empty()) {
+		logger_.log(logger::debug_trace, "more to write");
 		return transport_op::want_write_more;
-	} else if(state() == ssh_state::disconnected) {
+	}
+
+	if(state() == ssh_state::disconnected) {
+		logger_.log(logger::debug_trace, "disconnected");
 		return transport_op::disconnected;
 	}
 
@@ -181,7 +188,7 @@ transport_op ssh_transport::process(in_buffer& in) {
 bool ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
-	logger_.log(logger::debug, "SSH process_transport_packet [type={}]", type);
+	logger_.log(logger::debug, "SSH process_transport_payload [type={}]", type);
 
 	// first see if it is basic packet, we handle these at all states
 	bool res = handle_basic_packets(type, payload.subspan(1));
@@ -249,7 +256,7 @@ bool ssh_transport::handle_basic_packets(ssh_packet_type type, const_span payloa
 
 template<typename Packet, typename... Args>
 bool ssh_transport::send_packet(Args&&... args) {
-	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", Packet::packet_type);
+	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
 	return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
 }
 
@@ -309,6 +316,29 @@ void ssh_transport::send_kex_guess() {
 	kex_->initiate();
 }
 
+bool ssh_transport::handle_remote_newkeys() {
+	SPSSH_ASSERT(kex_, "invalid state");
+	logger_.log(logger::debug_trace, "SSH kex remote newkeys");
+
+	if(kex_->state() != kex_state::succeeded) {
+		logger_.log(logger::error, "SSH Invalid state");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+	}
+
+	//generate encryption keys
+	auto in_keys = kex_->construct_in_crypto_pair();
+	if(in_keys) {
+		//set receiving encryption
+		set_input_crypto(std::move(in_keys->cipher), std::move(in_keys->mac));
+		set_state(ssh_state::transport);
+	} else {
+		logger_.log(logger::error, "SSH Failed to generate crypto");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+	}
+
+	return true;
+}
+
 bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span payload) {
 	logger_.log(logger::debug_trace, "SSH handle_raw_kex_packet [type={}]", type);
 
@@ -319,7 +349,12 @@ bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span paylo
 			logger_.log(logger::debug_trace, "SSH ignoring kex packet [type={}]", type);
 			return true;
 		}
-		return handle_kex_packet(type, payload);
+
+		if(type == ssh_newkeys) {
+			return handle_remote_newkeys();
+		} else {
+			return handle_kex_packet(type, payload);
+		}
 	} else {
 		// not yet received, so this must be it
 		if(type != ssh_kexinit) {
@@ -332,12 +367,23 @@ bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span paylo
 	}
 }
 
-bool ssh_transport::handle_kex_done() {
+void ssh_transport::handle_kex_done() {
 	logger_.log(logger::debug_trace, "SSH kex succeeded");
 	//generate encryption keys
-	//send new keys packet
-	//set sending encryption
-	return true;
+	auto out_keys = kex_->construct_out_crypto_pair();
+	if(out_keys) {
+		//send new keys packet
+		if(send_packet<ser::newkeys>()) {
+			//set sending encryption
+			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac));
+		} else {
+			logger_.log(logger::error, "SSH Failed to send newkeys packet");
+			set_error_and_disconnect(ssh_key_exchange_failed);
+		}
+	} else {
+		logger_.log(logger::error, "SSH Failed to generate crypto");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+	}
 }
 
 bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
@@ -348,7 +394,10 @@ bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) 
 			set_error_and_disconnect(ssh_key_exchange_failed);
 			return false;
 		}
-		return state == kex_state::succeeded ? handle_kex_done() : true;
+		if(state == kex_state::succeeded) {
+			handle_kex_done();
+		}
+		return true;
 	} else {
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		return false;

@@ -17,7 +17,7 @@ public:
 
 	// fills the given span with random bytes
 	void random_bytes(span output) override {
-		std::memset(output.data(), 0, output.size());
+		std::memset(output.data(), 69, output.size());
 	}
 } inline test_rand;
 

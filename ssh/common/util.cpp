@@ -1,5 +1,7 @@
 
 #include "util.hpp"
+#include <ostream>
+#include <iomanip>
 
 namespace securepath::ssh {
 
@@ -110,6 +112,24 @@ std::string encode_base64(const_span s, bool pad) {
 	}
 
 	return res;
+}
+
+std::ostream&  operator<<(std::ostream& out, const_span s) {
+	bool first = true;
+	for(auto v : s) {
+		if(!first) {
+			out << " ";
+		}
+		out << std::hex << std::setw(2) << std::setfill('0') << int(v);
+		first = false;
+	}
+	return out;
+}
+
+bool same_source_or_non_overlapping(const_span s1, const_span s2) {
+	return s1.data() == s2.data() ||
+		std::less<>()(s1.data()+s1.size(), s2.data()) ||
+		std::less<>()(s2.data()+s2.size(), s1.data());
 }
 
 }

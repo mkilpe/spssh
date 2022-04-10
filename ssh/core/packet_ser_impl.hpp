@@ -174,7 +174,7 @@ struct ssh_packet_ser<Type, TypeTags...>::save {
 		// type tag size + rest of the packet size
 		return byte::static_size + std::apply(
 			[&](auto&&... args) {
-				return (( args.size() ) + ...);
+				return (( args.size() ) + ... + 0);
 			}, m_);
 	}
 

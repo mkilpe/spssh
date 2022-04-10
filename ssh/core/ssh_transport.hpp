@@ -60,6 +60,7 @@ public:
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
+	virtual void handle_kex_done();
 
 protected:
 	using ssh_binary_packet::config_;
@@ -72,7 +73,7 @@ private: // init & generic packet handling
 	bool handle_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_raw_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_kexinit_packet(const_span payload);
-	bool handle_kex_done();
+	bool handle_remote_newkeys();
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();

@@ -56,4 +56,31 @@ TEST_CASE("encode_base64", "[unit]") {
 	CHECK(encode_base64(to_span("foobar")) == "Zm9vYmFy");
 }
 
+static byte_vector to_vec(const_span s) {
+	return byte_vector(s.begin(), s.end());
+}
+
+TEST_CASE("safe_subspan", "[unit]") {
+
+	{
+		auto vec = to_vec("test");
+		span s = vec;
+		CHECK(to_vec(safe_subspan(s, 0)) == to_vec("test"));
+		CHECK(to_vec(safe_subspan(s, 1)) == to_vec("est"));
+		CHECK(safe_subspan(s, 4).empty());
+		CHECK(to_vec(safe_subspan(s, 1, 2)) == to_vec("es"));
+		CHECK(to_vec(safe_subspan(s, 2, 6)) == to_vec("st"));
+	}
+
+	{
+		const_span s = to_span("test");
+		CHECK(to_vec(safe_subspan(s, 0)) == to_vec("test"));
+		CHECK(to_vec(safe_subspan(s, 1)) == to_vec("est"));
+		CHECK(safe_subspan(s, 4).empty());
+		CHECK(to_vec(safe_subspan(s, 1, 2)) == to_vec("es"));
+		CHECK(to_vec(safe_subspan(s, 2, 6)) == to_vec("st"));
+	}
+
+}
+
 }

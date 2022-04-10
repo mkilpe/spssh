@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string_view>
 #include <vector>
+#include <iosfwd>
 
 namespace securepath::ssh {
 
@@ -68,6 +69,32 @@ inline const_mpint_span to_umpint(const_span mpint) {
 inline const_mpint_span to_umpint(std::string_view mpint) {
 	return to_umpint(to_span(mpint));
 }
+
+template<class T> concept Byte = std::is_same_v<std::remove_cv_t<T>, std::byte>;
+
+/// std::span doesn't clamp the count to the size-offset which is what we want
+template<Byte T>
+inline std::span<T> safe_subspan(std::span<T> s, std::size_t offset, std::size_t count = std::dynamic_extent) {
+	if(offset >= s.size()) {
+		return {};
+	}
+	if(count != std::dynamic_extent) {
+		count = std::min(count, s.size()-offset);
+	}
+	return s.subspan(offset, count);
+}
+
+inline span safe_subspan(byte_vector& s, std::size_t offset, std::size_t count = std::dynamic_extent) {
+	return safe_subspan(span(s), offset, count);
+}
+
+inline const_span safe_subspan(byte_vector const& s, std::size_t offset, std::size_t count = std::dynamic_extent) {
+	return safe_subspan(const_span(s), offset, count);
+}
+
+std::ostream& operator<<(std::ostream&, const_span);
+
+bool same_source_or_non_overlapping(const_span s1, const_span s2);
 
 }
 

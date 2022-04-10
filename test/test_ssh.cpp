@@ -44,7 +44,11 @@ bool run(test_client& client, test_server& server) {
 	bool run = true;
 	while(run) {
 		run = client.process(server.out_buf) != transport_op::disconnected;
-		run = server.process(client.out_buf) != transport_op::disconnected || run;
+		if(server.process(client.out_buf) == transport_op::disconnected) {
+			run = false;
+			// give the client change to process once more
+			client.process(server.out_buf);
+		}
 		run = run && (!client.out_buf.empty() || !server.out_buf.empty());
 	}
 	return client.error() == 0 && server.error() == 0;
@@ -58,6 +62,9 @@ static ssh_config test_client_config() {
 	c.algorithms.server_client_ciphers = {cipher_type::aes_256_gcm};
 	c.algorithms.client_server_macs = {mac_type::aes_256_gcm};
 	c.algorithms.server_client_macs = {mac_type::aes_256_gcm};
+
+	//c.random_packet_padding = false;
+
 	return c;
 }
 
@@ -84,6 +91,13 @@ TEST_CASE("ssh test", "[unit]") {
 	test_server server(test_log(), test_server_config());
 	test_client client(test_log(), test_client_config());
 
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	client.send_ignore(10);
+	server.send_ignore(25);
 	CHECK(run(client, server));
 
 	CHECK(client.state() == ssh_state::transport);

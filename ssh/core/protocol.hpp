@@ -87,6 +87,14 @@ using kexinit = ssh_packet_ser
 	uint32
 >;
 
+/*
+	byte         SSH_MSG_NEWKEYS
+*/
+using newkeys = ssh_packet_ser
+<
+	ssh_newkeys
+>;
+
 }
 
 #endif

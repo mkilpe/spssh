@@ -10,10 +10,10 @@
 namespace securepath::ssh::test {
 
 struct crypto_test_context : crypto_context {
-	crypto_test_context()
+	crypto_test_context(logger& log = test_log())
 	: crypto_context(default_crypto_context())
 	, rand(construct_random())
-	, call(test_log(), *rand)
+	, call(log, *rand)
 	{
 		REQUIRE(rand);
 	}

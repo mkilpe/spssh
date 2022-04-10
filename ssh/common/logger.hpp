@@ -47,18 +47,22 @@ public:
 	};
 
 	template<typename... Args>
-	void log(log_type t, std::string_view format, Args&&... args)
+	void log(log_type t, std::string_view fmt, Args&&... args)
 	{
 		if(would_log(t.type)) {
-			//todo: wait gcc to support std::format to enable this
-			//log_line(t, std::format(fmt, std::forward<Args>(args)...), std::move(location));
-			do_log_line(t.type, my_simple_format(format, std::forward<Args>(args)...), std::move(t.location));
+			do_log_line(t.type, format(fmt, std::forward<Args>(args)...), std::move(t.location));
 		}
 	}
 
-	void log_line(type t, std::string&& s, std::source_location&& l) {
+	template<typename... Args>
+	std::string format(std::string_view fmt, Args&&... args) const {
+		//todo: change this to std::format when supported by gcc
+		return my_simple_format(fmt, std::forward<Args>(args)...);
+	}
+
+	void log_line(type t, std::string const& s, std::source_location&& l = std::source_location::current()) {
 		if(would_log(t)) {
-			do_log_line(t, std::move(s), std::move(l));
+			do_log_line(t, s, std::move(l));
 		}
 	}
 
@@ -71,7 +75,7 @@ public:
 	}
 
 protected:
-	virtual void do_log_line(type, std::string&&, std::source_location&&) = 0;
+	virtual void do_log_line(type, std::string const&, std::source_location&&) = 0;
 
 private:
 	type level_{log_all};
@@ -108,7 +112,7 @@ public:
 	using logger::logger;
 
 protected:
-	void do_log_line(type, std::string&&, std::source_location&&) override;
+	void do_log_line(type, std::string const&, std::source_location&&) override;
 };
 
 class session_logger : public logger {
@@ -116,7 +120,7 @@ public:
 	session_logger(logger&, std::string tag);
 
 protected:
-	void do_log_line(type, std::string&&, std::source_location&&) override;
+	void do_log_line(type, std::string const&, std::source_location&&) override;
 private:
 	logger& log_;
 	std::string tag_;

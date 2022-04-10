@@ -1,4 +1,5 @@
 
+#include "crypto.hpp"
 #include "log.hpp"
 #include "random.hpp"
 #include "test_buffers.hpp"
@@ -108,4 +109,38 @@ TEST_CASE("ssh_binary_packet failing", "[unit]") {
 	CHECK(!send_packet<ser::disconnect>(bp_1, out_too_small, 1, "test 1", "test 2"));
 	CHECK(bp_1.error() == spssh_memory_error);
 }
+
+TEST_CASE("ssh_binary_packet crypto", "[unit]") {
+	crypto_test_context ctx;
+	ssh_config config;
+	string_io_buffer buf;
+	std::byte temp_buf[1024] = {};
+
+	byte_vector key(32, std::byte{'A'});
+	std::string_view iv = "0123456789AB";
+
+	ssh_binary_packet bp_1(config, test_log());
+	bp_1.set_random(test_rand);
+	bp_1.set_output_crypto(ctx.construct_cipher(cipher_type::aes_256_gcm, cipher_dir::encrypt, key, to_span(iv), ctx.call), nullptr);
+
+	REQUIRE(send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
+	CHECK(buf.used_size() > 0);
+
+	ssh_binary_packet bp_2(config, test_log());
+	bp_2.set_random(test_rand);
+	bp_2.set_input_crypto(ctx.construct_cipher(cipher_type::aes_256_gcm, cipher_dir::decrypt, key, to_span(iv), ctx.call), nullptr);
+
+	REQUIRE(bp_2.try_decode_header(buf.get()));
+	auto span = bp_2.decrypt_packet(buf.get(), temp_buf);
+	REQUIRE(!span.empty());
+
+	ser::disconnect::load packet(ser::match_type_t, span);
+	REQUIRE(packet);
+
+	auto & [code, desc, ignore] = packet;
+	CHECK(code == 1);
+	CHECK(desc == "test 1");
+	CHECK(ignore == "test 2");
+}
+
 }
