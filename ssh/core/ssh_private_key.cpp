@@ -38,7 +38,7 @@ byte_vector ssh_private_key::sign(const_span in) const {
 }
 
 static ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load ed25519 private key");
+	call.log.log(logger::debug_trace, "Loading ed25519 private key");
 	std::string_view pubkey;
 	std::string_view privkey;
 	std::string_view comment;
@@ -63,7 +63,7 @@ static ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_con
 }
 
 static ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load rsa private key");
+	call.log.log(logger::debug_trace, "Loading rsa private key");
 	std::string_view n, e, d, iqmp, p, q;
 	std::string_view comment;
 	if(r.read(n) && r.read(e) && r.read(d) && r.read(iqmp) && r.read(p) && r.read(q) && r.read(comment)) {
@@ -76,7 +76,7 @@ static ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context
 }
 
 static ssh_private_key load_raw_ecdsa_private_key(ssh_bf_reader& r, std::string_view type, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load ecdsa private key");
+	call.log.log(logger::debug_trace, "Loading ecdsa private key");
 	std::string_view curve;
 	std::string_view ecc_point; // public key
 	std::string_view privkey;

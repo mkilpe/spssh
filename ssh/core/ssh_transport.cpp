@@ -493,7 +493,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	}
 
 	set_error_and_disconnect(ssh_key_exchange_failed);
-	logger_.log(logger::debug, "SSH kexinit failed, no mathing algorithms found");
+	logger_.log(logger::debug, "SSH kexinit failed, no matching algorithms found");
 	return false;
 }
 

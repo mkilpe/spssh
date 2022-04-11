@@ -1,62 +1,14 @@
 #ifndef SSH_TEST_BUFFERS_HEADER
 #define SSH_TEST_BUFFERS_HEADER
 
-#include "ssh/common/buffers.hpp"
+#include "ssh/common/string_buffers.hpp"
 
 #include <cassert>
 
 namespace securepath::ssh::test {
 
-class string_in_buffer : public in_buffer {
-public:
-	string_in_buffer(std::string s) : data(s) {}
-
-	span get() override {
-		return span{reinterpret_cast<std::byte*>(data.data()+consumed), data.size()-consumed};
-	}
-
-	void consume(std::size_t size) override {
-		assert(size <= data.size()-consumed);
-		consumed += size;
-	}
-
-	std::string data;
-	std::size_t consumed{};
-};
-
-
-class string_out_buffer : public out_buffer {
-public:
-	string_out_buffer(std::size_t max_size = -1)
-	: maximum_size(max_size)
-	{}
-
-	span get(std::size_t size) override {
-		if(data.size() - used < size) {
-			if(used+size > maximum_size) {
-				return span();
-			}
-			data.resize(used + size);
-		}
-		return span{reinterpret_cast<std::byte*>(data.data()+used), data.size()-used};
-	}
-
-	span expand(std::size_t new_size, std::size_t) override {
-		return get(new_size);
-	}
-
-	void commit(std::size_t size) override {
-		assert(size <= data.size()-used);
-		used += size;
-	}
-
-	std::size_t max_size() const override { return maximum_size; }
-
-	std::size_t const maximum_size;
-	std::string data;
-	std::size_t used{};
-};
-
+using ssh::string_in_buffer;
+using ssh::string_out_buffer;
 
 class string_io_buffer : public in_buffer, public out_buffer {
 public:

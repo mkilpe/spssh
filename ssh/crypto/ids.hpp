@@ -9,6 +9,7 @@ namespace securepath::ssh {
 enum class cipher_type {
 	unknown = 0,
 	aes_256_gcm,
+	openssh_aes_256_gcm, // same as above but with different name
 	aes_256_ctr
 };
 
@@ -25,6 +26,7 @@ std::size_t cipher_key_size(cipher_type);
 
 enum class mac_type {
 	unknown = 0,
+	implicit,         // this should never be added to supported macs, it is just as place holder for openssh aead
 	aes_256_gcm,
 	hmac_sha2_256
 };

@@ -72,7 +72,7 @@ private:
 
 std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_span const& secret, const_span const& iv, crypto_call_context const& call ) {
 	using enum cipher_type;
-	if(t == aes_256_gcm) {
+	if(t == aes_256_gcm || t == openssh_aes_256_gcm) {
 		if(secret.size() == 32 && iv.size() == 12) {
 			return std::make_unique<aes256_gcm_cipher>(dir, secret, iv, call);
 		} else {

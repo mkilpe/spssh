@@ -114,14 +114,23 @@ bool kexinit_agreement::agree(supported_algorithms const& remote) {
 		return false;
 	}
 
-	// find suitable macs
-	if(!find_suitable(client.client_server_macs, server.client_server_macs, res.out.mac)) {
-		logger_.log(logger::debug, "SSH failed to find common mac algorithm");
-		return false;
+	// openssh uses implicit "mac" rule for its aead ciphers
+	if(res.out.cipher != cipher_type::openssh_aes_256_gcm) {
+		// find suitable macs
+		if(!find_suitable(client.client_server_macs, server.client_server_macs, res.out.mac)) {
+			logger_.log(logger::debug, "SSH failed to find common mac algorithm");
+			return false;
+		}
+	} else {
+		res.out.mac = mac_type::implicit;
 	}
-	if(!find_suitable(client.server_client_macs, server.server_client_macs, res.in.mac)) {
-		logger_.log(logger::debug, "SSH failed to find common mac algorithm");
-		return false;
+	if(res.in.cipher != cipher_type::openssh_aes_256_gcm) {
+		if(!find_suitable(client.server_client_macs, server.server_client_macs, res.in.mac)) {
+			logger_.log(logger::debug, "SSH failed to find common mac algorithm");
+			return false;
+		}
+	} else {
+		res.in.mac = mac_type::implicit;
 	}
 
 	// sanity check for gcm

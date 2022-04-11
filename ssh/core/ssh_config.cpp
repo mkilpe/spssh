@@ -11,9 +11,7 @@ bool ssh_config::valid() const {
 bool ssh_config::set_host_keys_for_server(std::vector<ssh_private_key> keys) {
 	for(auto&& k : keys) {
 		auto type = k.type();
-		if(add_private_key(std::move(k))) {
-			algorithms.host_keys.add_back(k.type());
-		} else {
+		if(!add_private_key(std::move(k))) {
 			private_keys.clear();
 			return false;
 		}

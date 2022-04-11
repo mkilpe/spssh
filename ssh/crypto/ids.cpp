@@ -5,6 +5,7 @@ namespace securepath::ssh {
 std::string_view to_string(cipher_type t) {
 	using enum cipher_type;
 	if(t == aes_256_gcm) return "AEAD_AES_256_GCM";
+	if(t == openssh_aes_256_gcm) return "aes256-gcm@openssh.com";
 	if(t == aes_256_ctr) return "aes256-ctr";
 	return "unknown";
 }
@@ -12,26 +13,28 @@ std::string_view to_string(cipher_type t) {
 cipher_type from_string(type_tag<cipher_type>, std::string_view s) {
 	using enum cipher_type;
 	if(s == "AEAD_AES_256_GCM") return aes_256_gcm;
+	if(s == "aes256-gcm@openssh.com") return openssh_aes_256_gcm;
 	if(s == "aes256-ctr") return aes_256_ctr;
 	return unknown;
 }
 
 std::size_t cipher_iv_size(cipher_type t) {
 	using enum cipher_type;
-	if(t == aes_256_gcm) return 12;
+	if(t == aes_256_gcm || t == openssh_aes_256_gcm) return 12;
 	if(t == aes_256_ctr) return 16;
 	return 0;
 }
 
 std::size_t cipher_key_size(cipher_type t) {
 	using enum cipher_type;
-	if(t == aes_256_gcm) return 32;
+	if(t == aes_256_gcm || t == openssh_aes_256_gcm) return 32;
 	if(t == aes_256_ctr) return 32;
 	return 0;
 }
 
 std::string_view to_string(mac_type t) {
 	using enum mac_type;
+	if(t == implicit) return "<implicit>";
 	if(t == aes_256_gcm) return "AEAD_AES_256_GCM";
 	if(t == hmac_sha2_256) return "hmac-sha2-256";
 	return "unknown";
@@ -39,6 +42,7 @@ std::string_view to_string(mac_type t) {
 
 mac_type from_string(type_tag<mac_type>, std::string_view s) {
 	using enum mac_type;
+	if(s == "<implicit>") return implicit;
 	if(s == "AEAD_AES_256_GCM") return aes_256_gcm;
 	if(s == "hmac-sha2-256") return hmac_sha2_256;
 	return unknown;
