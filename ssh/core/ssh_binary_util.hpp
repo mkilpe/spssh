@@ -137,12 +137,12 @@ public:
 	}
 
 	bool write(std::string_view v) {
-		return write(to_span(v));
+		return write(std::uint32_t(v.size()))
+			&& out_.process(to_span(v));
 	}
 
 	bool write(const_span s) {
-		return write(std::uint32_t(s.size()))
-			&& out_.process(s);
+		return out_.process(s);
 	}
 
 	bool write(const_mpint_span mpint) {

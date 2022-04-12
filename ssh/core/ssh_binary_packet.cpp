@@ -281,6 +281,10 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 }
 
 std::size_t ssh_binary_packet::minimum_padding(std::size_t header_payload_size) const {
+	if(stream_out_.cipher && stream_out_.cipher->is_aead()) {
+		// the encrypted part needs to be modulo block_size, but the length is not encrypted
+		header_payload_size -= packet_lenght_size;
+	}
 	std::size_t res = stream_out_.block_size - (header_payload_size % stream_out_.block_size);
 	if(res < minimum_padding_size) {
 		// at least some padding is required always
@@ -301,7 +305,7 @@ void ssh_binary_packet::aead_encrypt(aead_cipher& cip, const_span data, span out
 	// encrypt rest of the data
 	cip.process(data, out);
 	// add authentication tag at the end
-	cip.tag(safe_subspan(out, data.size()));
+	cip.tag(safe_subspan(out, data.size(), stream_out_.integrity_size));
 }
 
 void ssh_binary_packet::encrypt_with_mac(const_span data, span out) {
@@ -332,7 +336,6 @@ void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 	}
 }
 
-//q: can this fail? currently we have the stream_out_.data left with crap in that case
 bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buffer& out_buf) {
 	logger_.log(logger::debug_trace, "SSH create_out_packet [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
 	SPSSH_ASSERT(random_, "random generator not set");

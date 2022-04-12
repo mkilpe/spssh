@@ -473,7 +473,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 			kex_.reset();
 		}
 
-		// copy the remote kexinit packet for the kex to use for signature
+		// copy the remote kexinit packet for the kex to use for exchange hash
 		kex_data_.remote_kexinit = byte_vector{payload.begin(), payload.end()};
 
 		if(!kex_) {
@@ -494,6 +494,8 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 
 	set_error_and_disconnect(ssh_key_exchange_failed);
 	logger_.log(logger::debug, "SSH kexinit failed, no matching algorithms found");
+	config_.algorithms.dump("local", logger_);
+	remote_algs.dump("remote", logger_);
 	return false;
 }
 

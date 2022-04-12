@@ -31,6 +31,15 @@ public:
 	byte_vector& buf;
 };
 
+struct string_binout : binout {
+	string_binout(std::string& buf);
+
+	bool process(const_span data) override;
+
+public:
+	std::string& buf;
+};
+
 }
 
 #endif

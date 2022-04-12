@@ -20,8 +20,7 @@ public:
 
 	bool valid() const;
 
-	std::size_t signature_size() const;
-	void sign(const_span in, span out) const;
+	// this will return encoded ssh signature
 	byte_vector sign(const_span in) const;
 
 private:

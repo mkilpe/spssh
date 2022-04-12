@@ -17,13 +17,43 @@ bool ssh_public_key::valid() const {
 	return static_cast<bool>(key_impl_);
 }
 
+static byte_vector ecdsa_sig(std::string_view payload) {
+	ssh_bf_reader r(to_span(payload));
+	std::string_view p1, p2;
+	if(!r.read(p1) || !r.read(p2)) {
+		return {};
+	}
+	auto pi1 = to_umpint(p1);
+	auto pi2 = to_umpint(p2);
+	byte_vector sig;
+	sig.insert(sig.end(), pi1.data.begin(), pi1.data.end());
+	sig.insert(sig.end(), pi2.data.begin(), pi2.data.end());
+	return sig;
+}
+
 bool ssh_public_key::verify(const_span msg, const_span signature) const {
-	return key_impl_ ? key_impl_->verify(msg, signature) : false;
+	auto t = type();
+	if(t == key_type::unknown) {
+		return false;
+	}
+
+	ssh_bf_reader r(signature);
+	std::string_view type;
+	std::string_view payload;
+	if(!r.read(type) || type != to_string(t) || !r.read(payload)) {
+		return false;
+	}
+
+	if(t == key_type::ecdsa_sha2_nistp256) {
+		return key_impl_->verify(msg, ecdsa_sig(payload));
+	} else {
+		return key_impl_->verify(msg, to_span(payload));
+	}
 }
 
 static bool ser_ed25519_public_key(ssh_bf_binout_writer& w, public_key const& key) {
 	ed25519_public_key_data data;
-	return key.fill_data(data) && w.write(data.pubkey);
+	return key.fill_data(data) && w.write(to_string_view(data.pubkey));
 }
 
 static bool ser_rsa_public_key(ssh_bf_binout_writer& w, public_key const& key) {
@@ -33,7 +63,7 @@ static bool ser_rsa_public_key(ssh_bf_binout_writer& w, public_key const& key) {
 
 static bool ser_ecdsa_public_key(ssh_bf_binout_writer& w, public_key const& key) {
 	ecdsa_public_key_data data{key_type::ecdsa_sha2_nistp256};
-	return key.fill_data(data) && w.write(to_curve_name(data.ecdsa_type)) && w.write(data.ecc_point);
+	return key.fill_data(data) && w.write(to_curve_name(data.ecdsa_type)) && w.write(to_string_view(data.ecc_point));
 }
 
 bool ssh_public_key::serialise(binout& out) const {

@@ -23,18 +23,39 @@ bool ssh_private_key::valid() const {
 	return static_cast<bool>(key_impl_);
 }
 
-std::size_t ssh_private_key::signature_size() const {
-	return key_impl_ ? key_impl_->signature_size() : 0;
-}
+static std::string to_ecdsa_signature_blob(const_span s) {
+	std::string res;
+	string_binout out(res);
+	ssh_bf_binout_writer w(out);
 
-void ssh_private_key::sign(const_span in, span out) const {
-	SPSSH_ASSERT(key_impl_, "invalid private key");
-	key_impl_->sign(in, out);
+	w.write(const_mpint_span{safe_subspan(s, 0, s.size()/2)});
+	w.write(const_mpint_span{safe_subspan(s, s.size()/2, s.size()/2)});
+
+	return res;
 }
 
 byte_vector ssh_private_key::sign(const_span in) const {
-	SPSSH_ASSERT(key_impl_, "invalid private key");
-	return key_impl_->sign(in);
+	auto t = type();
+	if(t == key_type::unknown) {
+		return {};
+	}
+
+	byte_vector res;
+	byte_vector signature;
+	signature.resize(key_impl_->signature_size());
+
+	if(key_impl_->sign(in, signature)) {
+		byte_vector_binout out(res);
+		ssh_bf_binout_writer w(out);
+
+		w.write(to_string(t));
+		if(t == key_type::ecdsa_sha2_nistp256) {
+			w.write(to_ecdsa_signature_blob(signature));
+		} else {
+			w.write(to_string_view(signature));
+		}
+	}
+	return res;
 }
 
 static ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {

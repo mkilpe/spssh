@@ -96,6 +96,7 @@ std::ostream& operator<<(std::ostream&, const_span);
 
 bool same_source_or_non_overlapping(const_span s1, const_span s2);
 bool compare_equal(const_span s1, const_span s2);
+bool is_zero(const_span s);
 
 }
 

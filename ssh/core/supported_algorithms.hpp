@@ -39,7 +39,7 @@ struct supported_algorithms {
 public:
 	bool valid() const;
 
-	void dump(logger&) const;
+	void dump(std::string_view tag, logger&) const;
 };
 
 }

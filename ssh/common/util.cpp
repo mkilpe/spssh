@@ -143,4 +143,13 @@ bool compare_equal(const_span s1, const_span s2) {
 	return d == std::byte{0};
 }
 
+bool is_zero(const_span s) {
+	// check the secret is not all zeroes (by taking always same time for same length)
+	std::byte combined{0};
+	for(auto& v : s) {
+		combined |= v;
+	}
+	return combined == std::byte{0};
+}
+
 }

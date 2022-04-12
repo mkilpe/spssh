@@ -42,14 +42,11 @@ struct curve25519_sha256_kex_base : public kex {
 	}
 
 	void hash_ident_string(ssh_bf_binout_writer& h, ssh_version const& v) const {
-		h.write("SSH-");
-		h.write(v.ssh);
-		h.write("-");
-		h.write(v.software);
+		std::string vs = "SSH-" + v.ssh + "-" + v.software;
 		if(!v.comment.empty()) {
-			h.write(" ");
-			h.write(v.comment);
+			vs += " " + v.comment;
 		}
+		h.write(vs);
 	}
 
 	/*
@@ -83,12 +80,12 @@ struct curve25519_sha256_kex_base : public kex {
 
 		hash_ident_string(w, side == transport_side::client ? kinit.local_ver : kinit.remote_ver);
 		hash_ident_string(w, side == transport_side::client ? kinit.remote_ver : kinit.local_ver);
-		w.write(side == transport_side::client ? kinit.local_kexinit : kinit.remote_kexinit);
-		w.write(side == transport_side::client ? kinit.remote_kexinit : kinit.local_kexinit);
-		w.write(host_key);
-		w.write(side == transport_side::client ? to_span(remote_eph_key) : x25519_->public_key());
-		w.write(side == transport_side::client ? x25519_->public_key() : to_span(remote_eph_key));
-		w.write(to_umpint(secret));
+		w.write(to_string_view(side == transport_side::client ? kinit.local_kexinit : kinit.remote_kexinit));
+		w.write(to_string_view(side == transport_side::client ? kinit.remote_kexinit : kinit.local_kexinit));
+		w.write(to_string_view(host_key));
+		w.write(side == transport_side::client ? to_string_view(x25519_->public_key()) : remote_eph_key);
+		w.write(side == transport_side::client ? remote_eph_key : to_string_view(x25519_->public_key()));
+		w.write(const_mpint_span{secret});
 
 		return sha256->digest();
 	}
@@ -144,17 +141,21 @@ struct curve25519_sha256_kex_base : public kex {
 	*/
 	byte_vector derive_crypto_material(hash& h, std::size_t size, char type) {
 		//todo: implement session_id that is needed for rekeying
+
+		hash_binout hbout(h);
+		ssh_bf_binout_writer w(hbout);
+
 		byte_vector res;
-		h.process(secret_);
-		h.process(exchange_hash_);
-		h.process(to_span(std::string_view(&type, 1)));
-		h.process(exchange_hash_); // session id
+		w.write(const_mpint_span{secret_});
+		w.write(exchange_hash_);
+		w.write(std::uint8_t(type));
+		w.write(session_id_);
 		res = h.digest();
 
 		while(res.size() < size) {
-			h.process(secret_);
-			h.process(exchange_hash_);
-			h.process(res);
+			w.write(const_mpint_span{secret_});
+			w.write(exchange_hash_);
+			w.write(res);
 			auto d = h.digest();
 			res.insert(res.end(), d.begin(), d.end());
 		}
@@ -166,6 +167,11 @@ struct curve25519_sha256_kex_base : public kex {
 	void set_exchange_hash_and_secret(byte_vector exhash, byte_vector secret) {
 		exchange_hash_ = std::move(exhash);
 		secret_ = std::move(secret);
+
+		// if this is first kex, use the exchange hash as session id
+		if(session_id_.empty()) {
+			session_id_ = exchange_hash_;
+		}
 	}
 
 protected:
@@ -174,6 +180,7 @@ protected:
 	crypto_configuration conf_;
 	std::unique_ptr<key_exchange> x25519_;
 
+	const_span session_id_;
 	byte_vector exchange_hash_;
 	byte_vector secret_;
 };
@@ -208,12 +215,7 @@ struct curve25519_sha256_kex_client : public curve25519_sha256_kex_base {
 
 				auto secret = x25519_->agree(to_span(server_eph_key));
 
-				// check the secret is not all zeroes (by taking always same time)
-				std::byte combined{0};
-				for(auto& v : secret) {
-					combined |= v;
-				}
-				if(combined == std::byte{0}) {
+				if(is_zero(secret)) {
 					set_error(ssh_key_exchange_failed, "Invalid shared secret");
 					return kex_state::error;
 				}
@@ -275,12 +277,7 @@ struct curve25519_sha256_kex_server : public curve25519_sha256_kex_base {
 
 				auto secret = x25519_->agree(to_span(client_key));
 
-				// check the secret is not all zeroes (by taking always same time)
-				std::byte combined{0};
-				for(auto& v : secret) {
-					combined |= v;
-				}
-				if(combined == std::byte{0}) {
+				if(is_zero(secret)) {
 					set_error(ssh_key_exchange_failed, "Invalid shared secret");
 					return kex_state::error;
 				}

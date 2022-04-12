@@ -19,6 +19,7 @@ public:
 	key_type type() const;
 	bool valid() const;
 
+	// signature needs to be ssh encoded signature
 	bool verify(const_span msg, const_span signature) const;
 
 	bool serialise(binout&) const;
