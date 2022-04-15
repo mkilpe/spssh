@@ -164,14 +164,25 @@ struct curve25519_sha256_kex_base : public kex {
 		return res;
 	}
 
-	void set_exchange_hash_and_secret(byte_vector exhash, byte_vector secret) {
+	void set_data(byte_vector exhash, byte_vector secret, byte_vector host_key) {
 		exchange_hash_ = std::move(exhash);
 		secret_ = std::move(secret);
+		server_host_key_ = std::move(host_key);
 
 		// if this is first kex, use the exchange hash as session id
-		if(session_id_.empty()) {
+		if(context_.init_data().session_id.empty()) {
 			session_id_ = exchange_hash_;
+		} else {
+			session_id_ = context_.init_data().session_id;
 		}
+	}
+
+	const_span session_id() const override {
+		return session_id_;
+	}
+
+	ssh_public_key server_host_key() const override {
+		return load_ssh_public_key(server_host_key_, context_.ccontext(), context_.call_context());
 	}
 
 protected:
@@ -183,6 +194,7 @@ protected:
 	const_span session_id_;
 	byte_vector exchange_hash_;
 	byte_vector secret_;
+	byte_vector server_host_key_;
 };
 
 struct curve25519_sha256_kex_client : public curve25519_sha256_kex_base {
@@ -220,13 +232,14 @@ struct curve25519_sha256_kex_client : public curve25519_sha256_kex_base {
 					return kex_state::error;
 				}
 
-				auto hash = calculate_exchange_hash(to_span(host_key), server_eph_key, secret);
+				auto host_key_span = to_span(host_key);
+				auto hash = calculate_exchange_hash(host_key_span, server_eph_key, secret);
 				if(hash.empty()) {
 					set_error(ssh_key_exchange_failed, "Failed to calculate exchange hash");
 					return kex_state::error;
 				}
 
-				ssh_public_key hkey = load_ssh_public_key(to_span(host_key), context_.ccontext(), context_.call_context());
+				ssh_public_key hkey = load_ssh_public_key(host_key_span, context_.ccontext(), context_.call_context());
 				if(!hkey.valid()) {
 					set_error(ssh_key_exchange_failed, "Failed to load server host key");
 					return kex_state::error;
@@ -237,7 +250,7 @@ struct curve25519_sha256_kex_client : public curve25519_sha256_kex_base {
 					return kex_state::error;
 				}
 
-				set_exchange_hash_and_secret(std::move(hash), std::move(secret));
+				set_data(std::move(hash), std::move(secret), byte_vector(host_key_span.begin(), host_key_span.end()));
 				return set_state(kex_state::succeeded);
 			} else {
 				set_error(ssh_key_exchange_failed, "Invalid kex packet");
@@ -323,7 +336,7 @@ struct curve25519_sha256_kex_server : public curve25519_sha256_kex_base {
 			return kex_state::error;
 		}
 
-		set_exchange_hash_and_secret(std::move(hash), std::move(secret));
+		set_data(std::move(hash), std::move(secret), it->ser_pubkey);
 		return set_state(kex_state::succeeded);
 	}
 

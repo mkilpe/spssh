@@ -5,27 +5,7 @@
 #include "protocol.hpp"
 #include "packet_ser_impl.hpp"
 
-#include <ostream>
-
 namespace securepath::ssh {
-
-char const* const state_strings[] =
-	{ "none"
-	, "version_exchange"
-	, "kex"
-	, "transport"
-	, "user_authentication"
-	, "subsystem"
-	, "disconnected"
-	};
-
-std::string_view to_string(ssh_state s) {
-	return state_strings[std::size_t(s)];
-}
-
-std::ostream& operator<<(std::ostream& out, ssh_state state) {
-	return out << to_string(state);
-}
 
 ssh_transport::ssh_transport(ssh_config const& c, logger& l, out_buffer& out, crypto_context cc)
 : ssh_binary_packet(c, l)
@@ -65,7 +45,10 @@ void ssh_transport::set_state(ssh_state s, std::optional<ssh_error_code> err) {
 		set_error(*err);
 	}
 	//t: debug check for state changes
+	ssh_state old = state_;
 	state_ = s;
+
+	on_state_change(old, state_);
 }
 
 void ssh_transport::disconnect(std::uint32_t code, std::string_view message) {
@@ -198,9 +181,22 @@ bool ssh_transport::process_transport_payload(span payload) {
 			// give whole payload as we need to save it for kex
 			res = handle_raw_kex_packet(type, payload);
 		} else {
-			logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
-			send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
-			res = true;
+			if(state() == ssh_state::transport
+				|| state() == ssh_state::user_authentication
+				|| state() == ssh_state::service)
+			{
+				auto tres = handle_transport_packet(type, payload.subspan(1));
+				if(tres == handler_result::unknown) {
+					logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
+					send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
+					res = true;
+				} else {
+					res = tres == handler_result::handled;
+				}
+			} else {
+				logger_.log(logger::debug_trace, "SSH invalid state");
+				set_error_and_disconnect(ssh_protocol_error);
+			}
 		}
 	}
 
@@ -254,12 +250,6 @@ bool ssh_transport::handle_basic_packets(ssh_packet_type type, const_span payloa
 	return ret;
 }
 
-template<typename Packet, typename... Args>
-bool ssh_transport::send_packet(Args&&... args) {
-	logger_.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
-	return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
-}
-
 bool ssh_transport::send_kex_init(bool send_first_packet) {
 	logger_.log(logger::debug_trace, "SSH send_kex_init [send guess={}]", send_first_packet);
 	SPSSH_ASSERT(!kex_, "invalid state");
@@ -311,16 +301,49 @@ void ssh_transport::send_kex_guess() {
 			output_,
 			kex_data_,
 			crypto_,
-			crypto_call_context{logger_, *rand_}});
+			call_context()});
 
 	kex_->initiate();
 }
 
+void ssh_transport::kex_set_done() {
+	if(local_kex_done_ && remote_kex_done_) {
+		// we are done with kex
+		kex_.reset();
+		kexinit_received_ = false;
+		ignore_next_kex_packet_ = false;
+		local_kex_done_ = false;
+		remote_kex_done_ = false;
+		set_state(ssh_state::transport);
+	}
+}
+
+handler_result ssh_transport::handle_kex_done(kex const&) {
+	logger_.log(logger::debug_trace, "SSH kex succeeded");
+	//generate encryption keys
+	auto out_keys = kex_->construct_out_crypto_pair();
+	if(out_keys) {
+		//send new keys packet
+		if(send_packet<ser::newkeys>()) {
+			//set sending encryption
+			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac));
+			local_kex_done_ = true;
+			kex_set_done();
+		} else {
+			logger_.log(logger::error, "SSH Failed to send newkeys packet");
+			set_error_and_disconnect(ssh_key_exchange_failed);
+		}
+	} else {
+		logger_.log(logger::error, "SSH Failed to generate crypto");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+	}
+	return handler_result::handled;
+}
+
 bool ssh_transport::handle_remote_newkeys() {
-	SPSSH_ASSERT(kex_, "invalid state");
 	logger_.log(logger::debug_trace, "SSH kex remote newkeys");
 
-	if(kex_->state() != kex_state::succeeded) {
+	if(!kex_ || kex_->state() != kex_state::succeeded) {
 		logger_.log(logger::error, "SSH Invalid state");
 		set_error_and_disconnect(ssh_key_exchange_failed);
 	}
@@ -330,7 +353,13 @@ bool ssh_transport::handle_remote_newkeys() {
 	if(in_keys) {
 		//set receiving encryption
 		set_input_crypto(std::move(in_keys->cipher), std::move(in_keys->mac));
-		set_state(ssh_state::transport);
+		remote_kex_done_ = true;
+		//remember out session id
+		if(kex_data_.session_id.empty()) {
+			auto s = kex_->session_id();
+			kex_data_.session_id = byte_vector(s.begin(), s.end());
+		}
+		kex_set_done();
 	} else {
 		logger_.log(logger::error, "SSH Failed to generate crypto");
 		set_error_and_disconnect(ssh_key_exchange_failed);
@@ -367,37 +396,22 @@ bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span paylo
 	}
 }
 
-void ssh_transport::handle_kex_done() {
-	logger_.log(logger::debug_trace, "SSH kex succeeded");
-	//generate encryption keys
-	auto out_keys = kex_->construct_out_crypto_pair();
-	if(out_keys) {
-		//send new keys packet
-		if(send_packet<ser::newkeys>()) {
-			//set sending encryption
-			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac));
-		} else {
-			logger_.log(logger::error, "SSH Failed to send newkeys packet");
-			set_error_and_disconnect(ssh_key_exchange_failed);
-		}
-	} else {
-		logger_.log(logger::error, "SSH Failed to generate crypto");
-		set_error_and_disconnect(ssh_key_exchange_failed);
-	}
-}
-
 bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) {
 	if(kex_) {
-		auto state = kex_->handle(type, payload);
-		if(state == kex_state::error) {
-			logger_.log(logger::error, "SSH kex failed");
-			set_error_and_disconnect(ssh_key_exchange_failed);
-			return false;
+		kex_state state = kex_->state();
+		if(state == kex_state::inprogress) {
+			state = kex_->handle(type, payload);
+			if(state == kex_state::error) {
+				logger_.log(logger::error, "SSH kex failed");
+				set_error_and_disconnect(ssh_key_exchange_failed);
+				return false;
+			}
 		}
+		bool handled = true;
 		if(state == kex_state::succeeded) {
-			handle_kex_done();
+			handled = handle_kex_done(*kex_) == handler_result::handled;
 		}
-		return true;
+		return handled;
 	} else {
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		return false;
@@ -483,7 +497,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 					output_,
 					kex_data_,
 					crypto_,
-					crypto_call_context{logger_, *rand_}});
+					call_context()});
 
 			kex_->initiate();
 		}

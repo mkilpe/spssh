@@ -4,6 +4,7 @@
 #include "packet_types.hpp"
 #include "ssh_config.hpp"
 #include "ssh_binary_packet.hpp"
+#include "ssh_state.hpp"
 
 #include "ssh/common/logger.hpp"
 #include "ssh/crypto/crypto_context.hpp"
@@ -15,21 +16,10 @@ namespace securepath::ssh {
 class in_buffer;
 class out_buffer;
 
-enum class ssh_state {
-	none,
-	version_exchange,
-	kex,
-	transport,
-	user_authentication,
-	subsystem,
-	disconnected,
-};
-std::string_view to_string(ssh_state);
-std::ostream& operator<<(std::ostream&, ssh_state);
-
 enum class transport_op {
 	want_read_more,
 	want_write_more,
+	pending_user_action, // we are waiting for some action that is async (e.g. asking user about host key)
 	disconnected
 };
 
@@ -57,16 +47,22 @@ public:
 
 	void send_ignore(std::size_t size);
 
+	crypto_context const& crypto() const { return crypto_; }
+	crypto_call_context call_context() const { return crypto_call_context{logger_, *rand_}; }
+
+	void set_error_and_disconnect(ssh_error_code);
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
-	virtual void handle_kex_done();
+	virtual handler_result handle_kex_done(kex const&);
+	virtual handler_result handle_transport_packet(ssh_packet_type, const_span payload) = 0;
+	virtual void on_state_change(ssh_state, ssh_state) {}
 
 protected:
 	using ssh_binary_packet::config_;
+	using ssh_binary_packet::logger_;
 
 private: // init & generic packet handling
-	void set_error_and_disconnect(ssh_error_code);
 
 	void handle_version_exchange(in_buffer& in);
 	void handle_binary_packet(in_buffer& in);
@@ -74,6 +70,7 @@ private: // init & generic packet handling
 	bool handle_raw_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_kexinit_packet(const_span payload);
 	bool handle_remote_newkeys();
+	void kex_set_done();
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();
@@ -81,9 +78,12 @@ private: // init & generic packet handling
 private: // input
 	bool process_transport_payload(span payload);
 
-private: // output
+protected: // output
 	template<typename Packet, typename... Args>
-	bool send_packet(Args&&... args);
+	bool send_packet(Args&&... args) {
+		logger_.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
+		return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
+	}
 
 private: // data
 	crypto_context crypto_;
@@ -101,7 +101,10 @@ private: // data
 
 	kex_init_data kex_data_;
 	bool ignore_next_kex_packet_{};
+	bool local_kex_done_{};
+	bool remote_kex_done_{};
 	std::unique_ptr<kex> kex_;
+
 };
 
 }

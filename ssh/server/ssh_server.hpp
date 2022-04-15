@@ -12,7 +12,9 @@ class ssh_server : public ssh_transport {
 public:
 	ssh_server(ssh_config const&, logger& log, out_buffer&, crypto_context = default_crypto_context());
 
-private:
+protected:
+	handler_result handle_transport_packet(ssh_packet_type, const_span payload) override;
+	handler_result handle_service_request(const_span payload);
 };
 
 }

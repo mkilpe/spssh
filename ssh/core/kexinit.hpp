@@ -26,6 +26,9 @@ struct kex_init_data {
 	ssh_version remote_ver;
 	byte_vector local_kexinit;
 	byte_vector remote_kexinit;
+
+	// this is empty for first kex in which case exchange hash is used directly
+	byte_vector session_id;
 };
 
 struct crypto_configuration {

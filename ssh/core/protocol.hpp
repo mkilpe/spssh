@@ -95,6 +95,29 @@ using newkeys = ssh_packet_ser
 	ssh_newkeys
 >;
 
+/*
+	byte      SSH_MSG_SERVICE_REQUEST
+	string    service name
+*/
+using service_request = ssh_packet_ser
+<
+	ssh_service_request,
+	string
+>;
+
+inline std::string_view user_auth_service_name{"ssh-userauth"};
+inline std::string_view connection_server_name{"ssh-connection"};
+
+/*
+	byte      SSH_MSG_SERVICE_ACCEPT
+	string    service name
+*/
+using service_accept = ssh_packet_ser
+<
+	ssh_service_accept,
+	string
+>;
+
 }
 
 #endif

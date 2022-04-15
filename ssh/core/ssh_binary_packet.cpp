@@ -267,7 +267,7 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 	// remember if we are in-place allocated, so that we know to commit after sending
 	res.inplace = !res.data_buffer.empty();
 
-	if(res.data_buffer.empty()) {
+	if(!res.inplace) {
 		if(!resize_out_buffer(res.size)) {
 			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate data buffer [size={}]", res.size);
 			return std::nullopt;

@@ -1,6 +1,8 @@
 
-* implement cryptographic random (for example nettle does not have one)
+* check re-kexing works
 * implement more kexes
-* invetigate 2fa with ssh (RFC 4256 ?)
+* check only correct packets allowed while in kex and other states
 * implement counter mode + hmac to make sure the packet encryption/decryption works
+* investigate 2fa with ssh (RFC 4256)
+* implement cryptographic random (for example nettle does not have one)
 * investigate post-quantum crypto algorithms

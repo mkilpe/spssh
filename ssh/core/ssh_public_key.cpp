@@ -102,7 +102,7 @@ std::string ssh_public_key::fingerprint(crypto_context const& crypto, crypto_cal
 }
 
 static ssh_public_key load_ed25519_public_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load ssh ed25519 public key");
+	call.log.log(logger::debug_trace, "Loading ssh ed25519 public key");
 	std::string_view pubkey;
 	if(r.read(pubkey)) {
 		if(pubkey.size() == ed25519_key_size) {
@@ -118,7 +118,7 @@ static ssh_public_key load_ed25519_public_key(ssh_bf_reader& r, crypto_context c
 }
 
 static ssh_public_key load_rsa_public_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load ssh rsa public key");
+	call.log.log(logger::debug_trace, "Loading ssh rsa public key");
 	std::string_view e, n;
 	if(r.read(e) && r.read(n)) {
 		return ssh_public_key(crypto.construct_public_key(rsa_public_key_data{to_umpint(e), to_umpint(n)}, call));
@@ -129,7 +129,7 @@ static ssh_public_key load_rsa_public_key(ssh_bf_reader& r, crypto_context const
 }
 
 static ssh_public_key load_ecdsa_public_key(ssh_bf_reader& r, std::string_view type, crypto_context const& crypto, crypto_call_context const& call) {
-	call.log.log(logger::debug_trace, "Trying to load ssh ecdsa public key");
+	call.log.log(logger::debug_trace, "Loading ssh ecdsa public key");
 	std::string_view curve, ecc_point;
 	if(r.read(curve) && r.read(ecc_point)) {
 		if("ecdsa-sha2-" + std::string(curve) == type) {

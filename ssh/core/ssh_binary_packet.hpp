@@ -80,7 +80,7 @@ struct out_packet_record {
 };
 
 struct stream_out_crypto : public stream_crypto {
-	// buffer for output data, contains the encrypted ready packet to be send
+	// buffer for output data, contains the encrypted ready packet(s) to be send
 	byte_vector buffer;
 	// the unhandled portion of buffer, always from the start of the buffer
 	span data;

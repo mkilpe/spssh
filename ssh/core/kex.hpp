@@ -35,6 +35,8 @@ public:
 
 	virtual std::optional<crypto_pair> construct_in_crypto_pair() = 0;
 	virtual std::optional<crypto_pair> construct_out_crypto_pair() = 0;
+	virtual const_span session_id() const = 0;
+	virtual ssh_public_key server_host_key() const = 0;
 
 	ssh_error_code error() const {
 		return error_;
