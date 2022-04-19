@@ -105,9 +105,6 @@ using service_request = ssh_packet_ser
 	string
 >;
 
-inline std::string_view user_auth_service_name{"ssh-userauth"};
-inline std::string_view connection_server_name{"ssh-connection"};
-
 /*
 	byte      SSH_MSG_SERVICE_ACCEPT
 	string    service name

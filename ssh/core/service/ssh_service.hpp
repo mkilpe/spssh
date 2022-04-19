@@ -1,5 +1,5 @@
-#ifndef SPSSH_CORE_SERVICE_HEADER_HEADER
-#define SPSSH_CORE_SERVICE_HEADER_HEADER
+#ifndef SPSSH_CORE_SERVICE_HEADER
+#define SPSSH_CORE_SERVICE_HEADER
 
 #include "ssh/core/errors.hpp"
 #include "ssh/core/packet_ser.hpp"
@@ -7,16 +7,6 @@
 #include "ssh/core/ssh_state.hpp"
 
 namespace securepath::ssh {
-
-class service_context {
-public:
-
-	//way to send packages
-	//session id
-	//crypto context
-	//crypto call context (include log)
-
-};
 
 enum class service_state {
 	none,
@@ -39,6 +29,11 @@ public:
 
 	std::string error_message() const {
 		return err_message_;
+	}
+
+	void set_error(ssh_error_code err, std::string msg) {
+		error_ = err;
+		err_message_ = std::move(msg);
 	}
 
 protected:

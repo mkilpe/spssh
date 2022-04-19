@@ -157,7 +157,7 @@ bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
 	return false;
 }
 
-bool send_payload(ssh_binary_packet& bp, byte_vector const& payload, out_buffer& out);
+bool send_payload(ssh_binary_packet& bp, const_span payload, out_buffer& out);
 
 }
 

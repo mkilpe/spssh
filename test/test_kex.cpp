@@ -112,6 +112,8 @@ TEST_CASE("curve25519 sha256 kex", "[unit][crypto][kex]") {
 	CHECK(k.s_kex->state() == kex_state::succeeded);
 	CHECK(k.c_kex->error() == ssh_noerror);
 	CHECK(k.s_kex->error() == ssh_noerror);
+
+	//todo: test creating keys and encrypt with them
 }
 
 TEST_CASE("curve25519 sha256 kex different version", "[unit][crypto][kex]") {

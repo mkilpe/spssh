@@ -4,8 +4,8 @@
 
 namespace securepath::ssh {
 
-ssh_config test_client_config() {
-	ssh_config c;
+client_config test_client_config() {
+	client_config c;
 	c.side = transport_side::client;
 	c.my_version.software = "spssh_test_client";
 	c.algorithms.host_keys = {key_type::ssh_ed25519};
@@ -16,6 +16,9 @@ ssh_config test_client_config() {
 	c.algorithms.server_client_macs = {mac_type::aes_256_gcm};
 
 	c.random_packet_padding = false;
+
+	c.username = "test";
+	c.password = "volatile";
 
 	return c;
 }

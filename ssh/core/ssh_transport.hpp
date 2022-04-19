@@ -49,8 +49,11 @@ public:
 
 	crypto_context const& crypto() const { return crypto_; }
 	crypto_call_context call_context() const { return crypto_call_context{logger_, *rand_}; }
+	const_span session_id() const;
+	logger& log() const { return logger_; }
 
-	void set_error_and_disconnect(ssh_error_code);
+	void set_error_and_disconnect(ssh_error_code, std::string_view message = {});
+	using ssh_binary_packet::config;
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
@@ -78,11 +81,15 @@ private: // init & generic packet handling
 private: // input
 	bool process_transport_payload(span payload);
 
-protected: // output
+public: // output
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
 		logger_.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
 		return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
+	}
+
+	bool send_payload(const_span data) {
+		return ssh::send_payload(*this, data, output_);
 	}
 
 private: // data
@@ -104,7 +111,6 @@ private: // data
 	bool local_kex_done_{};
 	bool remote_kex_done_{};
 	std::unique_ptr<kex> kex_;
-
 };
 
 }

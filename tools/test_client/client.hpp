@@ -5,7 +5,7 @@
 
 namespace securepath::ssh {
 
-ssh_config test_client_config();
+client_config test_client_config();
 
 class ssh_test_client : public ssh_client {
 public:

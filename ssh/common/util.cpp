@@ -152,4 +152,17 @@ bool is_zero(const_span s) {
 	return combined == std::byte{0};
 }
 
+std::string to_string(std::vector<std::string_view> const& names) {
+	std::string res;
+	bool first = true;
+	for(auto&& v : names) {
+		if(!first) {
+			res += ",";
+		}
+		first = false;
+		res += v;
+	}
+	return res;
+}
+
 }

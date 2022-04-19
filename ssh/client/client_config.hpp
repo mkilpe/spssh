@@ -2,6 +2,7 @@
 #define SP_SHH_CLIENT_CLIENT_CONFIG_HEADER
 
 #include "ssh/core/ssh_config.hpp"
+#include "ssh/core/service/names.hpp"
 
 namespace securepath::ssh {
 
@@ -13,7 +14,7 @@ struct client_config : ssh_config {
 	std::string password;
 
 	/// service that we authenticate for
-	std::string service = connection_server_name;
+	std::string service{connection_service_name};
 };
 
 }

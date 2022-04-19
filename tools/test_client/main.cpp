@@ -111,12 +111,13 @@ private:
 		io_context_.stop();
 	}
 
+private:
 	asio::io_context& io_context_;
 	tcp::socket socket_;
 	asio::steady_timer timer_;
 
 	stdout_logger log_;
-	ssh_config config_ = test_client_config();
+	client_config config_ = test_client_config();
 
 	string_in_buffer in_buf_;
 	string_out_buffer out_buf_;

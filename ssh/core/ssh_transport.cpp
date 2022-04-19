@@ -71,11 +71,11 @@ void ssh_transport::send_ignore(std::size_t size) {
 	}
 }
 
-void ssh_transport::set_error_and_disconnect(ssh_error_code code) {
+void ssh_transport::set_error_and_disconnect(ssh_error_code code, std::string_view message) {
 	logger_.log(logger::debug_trace, "SSH setting error [error={}]", code);
 	SPSSH_ASSERT(error_ == ssh_noerror, "already error set");
 	error_ = code;
-	disconnect(code);
+	disconnect(code, message);
 }
 
 void ssh_transport::handle_version_exchange(in_buffer& in) {
@@ -171,7 +171,7 @@ transport_op ssh_transport::process(in_buffer& in) {
 bool ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
-	logger_.log(logger::debug, "SSH process_transport_payload [type={}]", type);
+	logger_.log(logger::debug, "SSH process_transport_payload [state={}, type={}]", to_string(state()), type);
 
 	// first see if it is basic packet, we handle these at all states
 	bool res = handle_basic_packets(type, payload.subspan(1));
@@ -280,7 +280,7 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 		);
 
 	if(ret) {
-		ret = send_payload(*this, kex_data_.local_kexinit, output_);
+		ret = send_payload(kex_data_.local_kexinit);
 	}
 
 	if(ret) {
@@ -428,7 +428,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		return false;
 	}
 
-	auto & [
+	auto& [
 		kex_cookie,
 		kexes,
 		host_keys,
@@ -511,6 +511,10 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	config_.algorithms.dump("local", logger_);
 	remote_algs.dump("remote", logger_);
 	return false;
+}
+
+const_span ssh_transport::session_id() const {
+	return kex_data_.session_id;
 }
 
 }

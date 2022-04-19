@@ -30,7 +30,8 @@ enum ssh_error_code : std::uint32_t {
 	spssh_invalid_setup                = 0xFFFF0001,
 	spssh_memory_error                 = 0xFFFF0002,
 	spssh_invalid_packet               = 0xFFFF0003,
-	spssh_crypto_error                 = 0xFFFF0004
+	spssh_crypto_error                 = 0xFFFF0004,
+	spssh_invalid_data                 = 0xFFFF0005
 };
 
 }

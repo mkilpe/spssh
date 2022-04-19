@@ -10,7 +10,7 @@ namespace securepath::ssh::test {
 namespace {
 struct test_context {
 	test_context(logger& l, std::string tag, ssh_config c = {}, bool is_client = true)
-	: log(l, tag), config(std::move(c))
+	: slog(l, tag), config(std::move(c))
 	{
 		// make sure we have correct side set
 		if(is_client) {
@@ -20,21 +20,21 @@ struct test_context {
 		}
 	}
 
-	session_logger log;
-	ssh_config config;
+	session_logger slog;
+	client_config config;
 	string_io_buffer out_buf;
 };
 
 struct test_client : test_context, ssh_client {
 	test_client(logger& l, ssh_config c = {})
-	: test_context(l, "[client] ", std::move(c), true), ssh_client(test_context::config, log, out_buf)
+	: test_context(l, "[client] ", std::move(c), true), ssh_client(test_context::config, slog, out_buf)
 	{
 	}
 };
 
 struct test_server : test_context, ssh_server {
 	test_server(logger& l, ssh_config c = {})
-	: test_context(l, "[server] ", std::move(c), false), ssh_server(test_context::config, log, out_buf)
+	: test_context(l, "[server] ", std::move(c), false), ssh_server(test_context::config, slog, out_buf)
 	{
 	}
 };

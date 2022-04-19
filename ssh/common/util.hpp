@@ -98,6 +98,8 @@ bool same_source_or_non_overlapping(const_span s1, const_span s2);
 bool compare_equal(const_span s1, const_span s2);
 bool is_zero(const_span s);
 
+std::string to_string(std::vector<std::string_view> const&);
+
 }
 
 #endif
