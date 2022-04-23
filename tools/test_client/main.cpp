@@ -1,11 +1,13 @@
 
 #include "client.hpp"
 #include "ssh/common/string_buffers.hpp"
+#include "tools/common/command_parser.hpp"
 
 #include <coroutine>
 #include <asio.hpp>
 #include <asio/experimental/as_tuple.hpp>
 
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <tuple>
@@ -20,11 +22,12 @@ using namespace std::literals;
 class ssh_client_session : public std::enable_shared_from_this<ssh_client_session>
 {
 public:
-	ssh_client_session(asio::io_context& io_context)
+	ssh_client_session(asio::io_context& io_context, logger& log, client_config const& config)
 	: io_context_(io_context)
 	, socket_(io_context_)
 	, timer_(io_context_)
-	, client_(config_, log_, out_buf_)
+	, log_(log)
+	, client_(config, log_, out_buf_)
 	{
 		timer_.expires_at(std::chrono::steady_clock::time_point::max());
 	}
@@ -116,8 +119,7 @@ private:
 	tcp::socket socket_;
 	asio::steady_timer timer_;
 
-	stdout_logger log_;
-	client_config config_ = test_client_config();
+	logger& log_;
 
 	string_in_buffer in_buf_;
 	string_out_buffer out_buf_;
@@ -125,33 +127,97 @@ private:
 	ssh_test_client client_;
 };
 
+static byte_vector read_file(std::string const& file) {
+	byte_vector b;
+	std::ifstream f(file, std::ios_base::binary);
+	if(f) {
+		f.seekg(0, std::ios_base::end);
+		auto size = f.tellg();
+		f.seekg(0, std::ios_base::beg);
+		b.resize(size);
+		f.read((char*)b.data(), size);
+	}
+	return b;
+}
+
+struct test_client_commands : client_config, securepath::command_parser {
+	bool help{};
+	std::string host;
+	std::uint16_t port{22};
+	std::string key_file;
+
+	test_client_commands() {
+		add(help, "help", "", "show help");
+		add(host, "host", "h", "host to connect");
+		add(port, "port", "p", "port to connect");
+		add(key_file, "key", "", "private key file to authenticate user");
+		add(username, "user", "u", "username to connect");
+		add(password, "password", "", "password");
+	}
+
+	void create_config(crypto_context const& crypto, crypto_call_context const& call) {
+
+		side = transport_side::client;
+		my_version.software = "spssh_test_client";
+
+		algorithms.host_keys = {key_type::ssh_ed25519};
+		algorithms.kexes = {kex_type::curve25519_sha256};
+		algorithms.client_server_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
+		algorithms.server_client_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
+		algorithms.client_server_macs = {mac_type::aes_256_gcm};
+		algorithms.server_client_macs = {mac_type::aes_256_gcm};
+
+		random_packet_padding = false;
+
+		if(!key_file.empty()) {
+			auto pkey = load_ssh_private_key(read_file(key_file), crypto, call);
+			if(!pkey.valid()) {
+				throw std::runtime_error("could not load private key");
+			}
+			add_private_key(std::move(pkey));
+		}
+
+		add_private_key(load_raw_base64_ssh_private_key("AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME", crypto, call));
+	}
+
+};
 }
 }
 
 int main(int argc, char* argv[]) {
 	try {
-		if(argc != 3) {
-			std::cout << argv[0] << " <host> <port>\n";
+		using namespace securepath::ssh;
+		test_client_commands p;
+		p.parse(argc, argv);
+		if(p.help) {
+			std::cout << "spssh test client\n";
+			test_client_commands().print_help(std::cout);
 			return 0;
 		}
 
-		using namespace securepath::ssh;
+		stdout_logger log;
+
+		auto crypto = default_crypto_context();
+		auto rand = crypto.construct_random();
+		crypto_call_context call(log, *rand);
+
+		p.create_config(crypto, call);
 
 		asio::io_context io_context;
 
 		asio::signal_set signals(io_context, SIGINT, SIGTERM);
 		signals.async_wait([&](auto, auto){ io_context.stop(); });
 
-		auto result = tcp::resolver(io_context).resolve(argv[1], "ssh");
+		auto result = tcp::resolver(io_context).resolve(p.host, "ssh");
 		if(result.begin() == result.end()) {
 			std::cerr << "Failed to resolve address\n";
 			return 1;
 		}
 
 		auto endpoint = result.begin()->endpoint();
-		endpoint.port(atoi(argv[2]));
+		endpoint.port(p.port);
 
-		auto client = std::make_shared<ssh_client_session>(io_context);
+		auto client = std::make_shared<ssh_client_session>(io_context, log, p);
 		asio::co_spawn(io_context, client->connect(endpoint), asio::detached);
 
 		io_context.run();

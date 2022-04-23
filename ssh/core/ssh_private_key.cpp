@@ -115,8 +115,7 @@ static ssh_private_key load_raw_ecdsa_private_key(ssh_bf_reader& r, std::string_
 	return {};
 }
 
-ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
-	ssh_bf_reader r(data);
+static ssh_private_key load_raw_ssh_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
 	std::string_view type;
 	if(r.read(type)) {
 		if(type == "ssh-ed25519") {
@@ -130,8 +129,111 @@ ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const& 
 	return {};
 }
 
+ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
+	ssh_bf_reader r(data);
+	return load_raw_ssh_private_key(r, crypto, call);
+}
+
 ssh_private_key load_raw_base64_ssh_private_key(std::string_view s, crypto_context const& crypto, crypto_call_context const& call) {
 	return load_raw_ssh_private_key(decode_base64(s), crypto, call);
+}
+
+// the magic string in beginning of openssh format (including the null char)
+char const magic[] = "openssh-key-v1";
+
+static ssh_private_key load_raw_openssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
+	ssh_private_key key;
+	ssh_bf_reader r(data);
+
+	std::optional<std::span<std::byte const, sizeof(magic)>> m;
+	if(!r.read(m) || std::memcmp(m->data(), magic, sizeof(magic)) != 0) {
+		call.log.log(logger::error, "Failed to find openssh magic string");
+		return key;
+	}
+
+	std::string_view cipher;
+	if(!r.read(cipher) || cipher != "none") {
+		call.log.log(logger::error, "Not supporting encrypted private key files");
+		return key;
+	}
+
+	std::string_view kdf;
+	if(!r.read(kdf) || kdf != "none") {
+		call.log.log(logger::error, "Not supporting encrypted private key files");
+		return key;
+	}
+
+	std::string_view kdf_options;
+	if(!r.read(kdf_options) || kdf_options != "") {
+		call.log.log(logger::error, "Not supporting encrypted private key files");
+		return key;
+	}
+
+	std::uint32_t pk_count = 0;
+	if(!r.read(pk_count)) {
+		call.log.log(logger::error, "Invalid private key (could not read public key count)");
+		return key;
+	}
+
+	// read out the public keys and ignore, we want only the private key
+	for(std::uint32_t i = 0; i != pk_count; ++i) {
+		std::string_view pk;
+		if(!r.read(pk)) {
+			call.log.log(logger::error, "Invalid private key (failed reading public key)");
+			return key;
+		}
+	}
+
+	std::string_view priv_keys;
+	if(!r.read(priv_keys)) {
+		call.log.log(logger::error, "Invalid private key (failed to read private key parts)");
+		return key;
+	}
+
+	ssh_bf_reader priv_r(to_span(priv_keys));
+
+	// these are the check integers that can be used to check if the key was decrypted successfully
+	std::uint32_t n1 = 0, n2 = 0;
+	if(!priv_r.read(n1) || !priv_r.read(n2) || n1 != n2) {
+		call.log.log(logger::error, "Invalid private key (failed to read check integers or they don't match)");
+		return key;
+	}
+
+	return load_raw_ssh_private_key(priv_r, crypto, call);
+}
+
+static ssh_private_key load_base64_openssh_private_key(std::string_view encoded_data, crypto_context const& crypto, crypto_call_context const& call) {
+	ssh_private_key key;
+	auto data = decode_base64(encoded_data);
+	if(!data.empty()) {
+		key = load_raw_openssh_private_key(data, crypto, call);
+	}
+	return key;
+}
+
+std::string_view const openssh_start = "-----BEGIN OPENSSH PRIVATE KEY-----";
+std::string_view const openssh_end   = "-----END OPENSSH PRIVATE KEY-----";
+
+ssh_private_key load_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
+	ssh_private_key key;
+	auto view = to_string_view(data);
+	if(view.starts_with(openssh_start)) {
+
+		// get the base64 encoded string
+		std::string encoded_data;
+		view = view.substr(openssh_start.size());
+		for(std::string_view::size_type p = view.find_first_of("\n\r")
+			; p != std::string_view::npos && !view.starts_with(openssh_end)
+			; p = view.find_first_of("\n\r"))
+		{
+			if(p) {
+				encoded_data += view.substr(0, p);
+			}
+			view = view.substr(p+1);
+		}
+		key = load_base64_openssh_private_key(encoded_data, crypto, call);
+	}
+	return key;
 }
 
 }

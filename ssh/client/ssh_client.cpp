@@ -94,7 +94,9 @@ void ssh_client::start_user_auth() {
 	service_ = construct_service(user_auth_service_name);
 	if(!service_) {
 		set_error_and_disconnect(ssh_service_not_available);
-		logger_.log(logger::error, "Failed to construct required server");
+		logger_.log(logger::error, "Failed to construct required service");
+	} else if(service_->error() != ssh_noerror) {
+		set_error_and_disconnect(service_->error(), service_->error_message());
 	}
 }
 

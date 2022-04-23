@@ -1,7 +1,8 @@
 
+#include "server.hpp"
+
 #include "ssh/common/string_buffers.hpp"
 #include "ssh/core/ssh_private_key.hpp"
-#include "ssh/server/ssh_server.hpp"
 
 #include <coroutine>
 #include <asio.hpp>
@@ -133,7 +134,7 @@ private:
 	string_out_buffer out_buf_;
 
 	logger& log_;
-	ssh_server server_;
+	ssh_test_server server_;
 };
 
 asio::awaitable<void> listen(tcp::acceptor& acceptor)

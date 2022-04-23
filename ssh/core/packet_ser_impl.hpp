@@ -196,20 +196,20 @@ struct ssh_packet_ser_load {
 
 	/// expect the type tag to be in front of the given span
 	ssh_packet_ser_load(match_type_tag, const_span in_data)
+	: reader_(in_data)
 	{
-		ssh_bf_reader reader(in_data);
 		std::uint8_t tag{};
 
-		if(reader.read(tag) && tag == Type) {
-			load_data(reader);
+		if(reader_.read(tag) && tag == Type) {
+			load_data();
 		}
 	}
 
 	/// expect the type already matched, so there should not be the type tag in in_data any more
 	ssh_packet_ser_load(const_span in_data)
+	: reader_(in_data)
 	{
-		ssh_bf_reader reader(in_data);
-		load_data(reader);
+		load_data();
 	}
 
 	explicit operator bool() const {
@@ -221,20 +221,30 @@ struct ssh_packet_ser_load {
 		return std::get<Index>(m_).view();
 	}
 
+	// this can be used to extract optional data at the end of the packet
+	ssh_bf_reader& reader() {
+		return reader_;
+	}
+
+	std::size_t size() const {
+		return size_;
+	}
+
 private:
-	void load_data(ssh_bf_reader& reader) {
+	void load_data() {
 		result_ = std::apply(
 			[&](auto&&... args) {
-				return (( args.read(reader) ) && ...);
+				return (( args.read(reader_) ) && ...);
 			}, m_);
 
 		if(result_) {
-			size_ = reader.used_size();
+			size_ = reader_.used_size();
 		}
 	}
 
 private:
 	members m_;
+	ssh_bf_reader reader_;
 	bool result_{};
 	std::size_t size_{};
 };

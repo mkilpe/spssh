@@ -32,7 +32,8 @@ private:
 ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const&, crypto_call_context const&);
 ssh_private_key load_raw_base64_ssh_private_key(std::string_view data, crypto_context const&, crypto_call_context const&);
 
-//todo: add function to load real formats like openssh private key
+// try to load one of the supported formats (e.g. openssh private key format)
+ssh_private_key load_ssh_private_key(const_span data, crypto_context const&, crypto_call_context const&);
 
 }
 

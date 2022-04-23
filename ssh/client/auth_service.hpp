@@ -30,7 +30,7 @@ public:
 	handler_result process(ssh_packet_type, const_span payload) override;
 
 public:
-	/// use no authentication
+	/// use no authentication (or query supported auth methods)
 	void no_authentication(std::string username, std::string service);
 
 	/// authenticate with password
@@ -52,6 +52,8 @@ private:
 	void handle_banner(const_span payload);
 	void handle_success();
 	void handle_failure(const_span payload);
+	void handle_pk_auth_ok(const_span payload);
+	void handle_change_password(const_span payload);
 
 protected:
 	ssh_transport& transport_;

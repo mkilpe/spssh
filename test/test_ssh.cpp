@@ -37,6 +37,10 @@ struct test_server : test_context, ssh_server {
 	: test_context(l, "[server] ", std::move(c), false), ssh_server(test_context::config, slog, out_buf)
 	{
 	}
+
+	std::unique_ptr<ssh_service> construct_service(std::string_view name) override {
+		return nullptr;
+	}
 };
 }
 

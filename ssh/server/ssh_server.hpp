@@ -2,6 +2,7 @@
 #define SP_SHH_SERVER_HEADER
 
 #include "ssh/core/ssh_transport.hpp"
+#include "ssh/core/service/ssh_service.hpp"
 
 namespace securepath::ssh {
 
@@ -13,8 +14,15 @@ public:
 	ssh_server(ssh_config const&, logger& log, out_buffer&, crypto_context = default_crypto_context());
 
 protected:
+	virtual std::unique_ptr<ssh_service> construct_service(std::string_view name) = 0;
 	handler_result handle_transport_packet(ssh_packet_type, const_span payload) override;
-	handler_result handle_service_request(const_span payload);
+
+protected:
+	void start_user_auth();
+	void handle_service_request(const_span payload);
+
+protected:
+	std::unique_ptr<ssh_service> service_;
 };
 
 }

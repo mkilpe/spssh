@@ -33,54 +33,65 @@ void client_auth_service::handle_banner(const_span payload) {
 }
 
 void client_auth_service::handle_success() {
-	if(auths_.empty()) {
-		log_.log(logger::error, "Received auth success in bad state");
-		transport_.set_error_and_disconnect(ssh_protocol_error);
-	} else {
-		state_ = service_state::done;
-		auto auth = std::move(auths_.front());
-		auths_.pop_front();
-		on_success(auth.username, auth.service);
-	}
+	state_ = service_state::done;
+	auto auth = std::move(auths_.front());
+	auths_.pop_front();
+	on_success(auth.username, auth.service);
 }
 
 void client_auth_service::handle_failure(const_span payload) {
-	if(auths_.empty()) {
-		log_.log(logger::error, "Received auth failure in bad state");
-		transport_.set_error_and_disconnect(ssh_protocol_error);
-	} else {
-		ser::userauth_failure::load packet(payload);
-		if(packet) {
-			auto auth = std::move(auths_.front());
-			auths_.pop_front();
+	ser::userauth_failure::load packet(payload);
+	if(packet) {
+		auto auth = std::move(auths_.front());
+		auths_.pop_front();
 
-			auto& [auths, partial_success] = packet;
-			// see if the single auth was actually successful but more is required
-			if(partial_success) {
-				on_auth_success(std::move(auth), auths);
-			} else {
-				on_auth_fail(std::move(auth), auths);
-			}
-
+		auto& [auths, partial_success] = packet;
+		// see if the single auth was actually successful but more is required
+		if(partial_success) {
+			on_auth_success(std::move(auth), auths);
 		} else {
-			log_.log(logger::error, "Invalid auth failure packet from server");
-			transport_.set_error_and_disconnect(ssh_protocol_error);
+			on_auth_fail(std::move(auth), auths);
 		}
+
+	} else {
+		log_.log(logger::error, "Invalid auth failure packet from server");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
 	}
+}
+
+void client_auth_service::handle_pk_auth_ok(const_span payload) {
+	log_.log(logger::debug, "public key auth ok from server");
+}
+
+void client_auth_service::handle_change_password(const_span payload) {
+	log_.log(logger::debug, "Server requires password change -- not implemented");
 }
 
 handler_result client_auth_service::process(ssh_packet_type t, const_span payload) {
 	log_.log(logger::debug_trace, "client_auth_service::process [type={}]", int(t));
 	if(t == ssh_userauth_banner) {
 		handle_banner(payload);
-	} else if(t == ssh_userauth_success) {
-		handle_success();
-	} else if(t == ssh_userauth_failure) {
-		handle_failure(payload);
 	} else {
-		state_ = service_state::error;
-		set_error(spssh_invalid_packet, "invalid packet");
-		return handler_result::unknown;
+		if(auths_.empty()) {
+			log_.log(logger::error, "Received auth failure in bad state");
+			transport_.set_error_and_disconnect(ssh_protocol_error);
+			return handler_result::handled;
+		}
+
+		auth_type cur = auths_.front().type;
+		if(t == ssh_userauth_success) {
+			handle_success();
+		} else if(t == ssh_userauth_failure) {
+			handle_failure(payload);
+		} else if(cur == auth_type::public_key && t == ssh_packet_type(ssh_auth_pk_ok)) {
+			handle_pk_auth_ok(payload);
+		} else if(cur == auth_type::password && t == ssh_packet_type(ssh_auth_password_changereq)) {
+			handle_change_password(payload);
+		} else {
+			state_ = service_state::error;
+			set_error(spssh_invalid_packet, "invalid packet");
+			return handler_result::unknown;
+		}
 	}
 
 	return handler_result::handled;

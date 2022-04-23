@@ -100,6 +100,48 @@ TEST_CASE("ssh private key", "[unit][crypto]") {
 	}
 }
 
+struct {
+	key_type type;
+	std::string fprint;
+	std::string privkey;
+} const openssh_test_keys[] =
+	{
+		{key_type::ssh_ed25519, ed25519_fprint,
+R"**(-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACCsm7xAxvk6dsfdVI3gwBcJnjn4rYoVvHyjeK8zH9gwZwAAAJhCwi2OQsIt
+jgAAAAtzc2gtZWQyNTUxOQAAACCsm7xAxvk6dsfdVI3gwBcJnjn4rYoVvHyjeK8zH9gwZw
+AAAEBHnvTL6Kbrc9tOBdRLWOdcj7CxZtdJKSTsNbTFVcmU9qybvEDG+Tp2x91UjeDAFwme
+OfitihW8fKN4rzMf2DBnAAAAEW1pa2FlbEBtaWthZWwtZGV2AQIDBA==
+-----END OPENSSH PRIVATE KEY-----
+)**"}
+	};
+
+std::size_t const openssh_test_key_count = sizeof(openssh_test_keys)/sizeof(*openssh_test_keys);
+
+TEST_CASE("load openssh private key", "[unit][crypto]") {
+	auto i = GENERATE(range(0ul, openssh_test_key_count));
+	CAPTURE(i);
+
+	crypto_test_context ctx;
+
+	auto priv = load_ssh_private_key(to_span(openssh_test_keys[i].privkey), ctx, ctx.call);
+	REQUIRE(priv.valid());
+
+	CHECK(priv.type() == openssh_test_keys[i].type);
+
+	byte_vector msg(69, std::byte{'A'});
+	auto sig = priv.sign(msg);
+	REQUIRE(!sig.empty());
+
+	{
+		auto pub = priv.public_key();
+		REQUIRE(pub.valid());
+		CHECK(pub.fingerprint(ctx, ctx.call) == openssh_test_keys[i].fprint);
+		CHECK(pub.verify(msg, sig));
+	}
+}
+
 key_exchange_type const test_key_exchanges[] =
 	{
 		key_exchange_type::X25519
