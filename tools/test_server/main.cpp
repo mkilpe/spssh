@@ -3,6 +3,8 @@
 
 #include "ssh/common/string_buffers.hpp"
 #include "ssh/core/ssh_private_key.hpp"
+#include "tools/common/command_parser.hpp"
+#include "tools/common/util.hpp"
 
 #include <coroutine>
 #include <asio.hpp>
@@ -19,38 +21,10 @@ namespace {
 using tcp = asio::ip::tcp;
 using namespace std::literals;
 
-static ssh_config server_config(crypto_context& crypto, crypto_call_context call) {
-	ssh_config c;
-	c.side = transport_side::server;
-	c.my_version.software = "spssh-test-server";
-	c.algorithms.kexes = {kex_type::curve25519_sha256};
-	c.algorithms.client_server_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
-	c.algorithms.server_client_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
-	c.algorithms.client_server_macs = {mac_type::aes_256_gcm};
-	c.algorithms.server_client_macs = {mac_type::aes_256_gcm};
-
-	c.random_packet_padding = false;
-
-	auto key = load_raw_base64_ssh_private_key(
-		"AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME",
-		crypto, call);
-
-	if(!key.valid()) {
-		throw std::runtime_error("failed to load private key");
-	}
-
-	std::vector<ssh_private_key> keys;
-	keys.push_back(std::move(key));
-	c.set_host_keys_for_server(std::move(keys));
-
-	return c;
-}
-
-
 class ssh_session : public std::enable_shared_from_this<ssh_session>
 {
 public:
-	ssh_session(tcp::socket socket, ssh_config const& config, logger& log, crypto_context& context)
+	ssh_session(tcp::socket socket, server_config const& config, logger& log, crypto_context& context)
 	: socket_(std::move(socket))
 	, timer_(socket_.get_executor())
 	, log_(log)
@@ -137,14 +111,8 @@ private:
 	ssh_test_server server_;
 };
 
-asio::awaitable<void> listen(tcp::acceptor& acceptor)
+asio::awaitable<void> listen(tcp::acceptor& acceptor, server_config const& config, logger& log, crypto_context& crypto)
 {
-	stdout_logger log;
-	crypto_context crypto(default_crypto_context());
-
-	auto rand = crypto.construct_random();
-	ssh_config config = server_config(crypto, crypto_call_context(log, *rand));
-
 	log.log(logger::info, "Ready to accept connections");
 
 	for (;;) {
@@ -160,29 +128,93 @@ asio::awaitable<void> listen(tcp::acceptor& acceptor)
 	}
 }
 
+
+struct test_server_commands : server_config, securepath::command_parser {
+	bool help{};
+	std::string bind_address;
+	std::uint16_t port{22};
+	std::string key_file;
+
+	test_server_commands() {
+		add(help, "help", "", "show help");
+		add(bind_address, "bind", "b", "bind address");
+		add(port, "port", "p", "port to listen");
+		add(key_file, "key", "", "ssh host private key");
+	}
+
+	void create_config(crypto_context const& crypto, crypto_call_context const& call) {
+
+		side = transport_side::server;
+		my_version.software = "spssh_test_server";
+
+		algorithms.host_keys = {key_type::ssh_ed25519};
+		algorithms.kexes = {kex_type::curve25519_sha256};
+		algorithms.client_server_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
+		algorithms.server_client_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
+		algorithms.client_server_macs = {mac_type::aes_256_gcm};
+		algorithms.server_client_macs = {mac_type::aes_256_gcm};
+
+		random_packet_padding = false;
+
+		//if(key_file.empty()) {
+		//	throw std::runtime_error("Host key required");
+		//}
+
+		auto key = load_raw_base64_ssh_private_key(
+			"AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME",
+			crypto, call);
+
+		add_private_key(std::move(key));
+		/*
+		auto pkey = load_ssh_private_key(read_file(key_file), crypto, call);
+		if(!pkey.valid()) {
+			throw std::runtime_error("could not load private key");
+		}
+		add_private_key(std::move(pkey));
+		*/
+
+	}
+
+};
+
 }
 }
 
 int main(int argc, char* argv[]) {
 	try {
 		using namespace securepath::ssh;
+		test_server_commands p;
+		p.parse(argc, argv);
+		if(p.help) {
+			std::cout << "spssh test server\n";
+			test_server_commands().print_help(std::cout);
+			return 0;
+		}
+
+		stdout_logger log;
+
+		auto crypto = default_crypto_context();
+		auto rand = crypto.construct_random();
+		crypto_call_context call(log, *rand);
+
+		p.create_config(crypto, call);
 
 		asio::io_context io_context;
 
 		asio::signal_set signals(io_context, SIGINT, SIGTERM);
 		signals.async_wait([&](auto, auto){ io_context.stop(); });
 
-		auto result = tcp::resolver(io_context).resolve("", "ssh", tcp::resolver::passive);
+		auto result = tcp::resolver(io_context).resolve(p.bind_address, "ssh", tcp::resolver::passive);
 		if(result.begin() == result.end()) {
 			std::cerr << "Failed to resolve address\n";
 			return 1;
 		}
 
 		auto endpoint = result.begin()->endpoint();
-		endpoint.port(22022);
+		endpoint.port(p.port);
 
 		tcp::acceptor acceptor(io_context, endpoint);
-		asio::co_spawn(io_context, securepath::ssh::listen(acceptor), asio::detached);
+		asio::co_spawn(io_context, securepath::ssh::listen(acceptor, p, log, crypto), asio::detached);
 
 		io_context.run();
 	} catch(std::exception const& e) {

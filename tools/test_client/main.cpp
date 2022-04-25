@@ -2,6 +2,7 @@
 #include "client.hpp"
 #include "ssh/common/string_buffers.hpp"
 #include "tools/common/command_parser.hpp"
+#include "tools/common/util.hpp"
 
 #include <coroutine>
 #include <asio.hpp>
@@ -127,18 +128,6 @@ private:
 	ssh_test_client client_;
 };
 
-static byte_vector read_file(std::string const& file) {
-	byte_vector b;
-	std::ifstream f(file, std::ios_base::binary);
-	if(f) {
-		f.seekg(0, std::ios_base::end);
-		auto size = f.tellg();
-		f.seekg(0, std::ios_base::beg);
-		b.resize(size);
-		f.read((char*)b.data(), size);
-	}
-	return b;
-}
 
 struct test_client_commands : client_config, securepath::command_parser {
 	bool help{};
@@ -177,7 +166,7 @@ struct test_client_commands : client_config, securepath::command_parser {
 			add_private_key(std::move(pkey));
 		}
 
-		add_private_key(load_raw_base64_ssh_private_key("AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME", crypto, call));
+		//add_private_key(load_raw_base64_ssh_private_key("AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME", crypto, call));
 	}
 
 };
