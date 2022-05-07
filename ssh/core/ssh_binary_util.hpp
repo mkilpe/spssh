@@ -18,9 +18,10 @@ public:
 	{
 	}
 
-	ssh_bf_writer(byte_vector& out)
+	ssh_bf_writer(byte_vector& out, std::size_t pos = 0)
 	: buffer_(&out)
 	, out_(out)
+	, pos_(pos)
 	{
 	}
 

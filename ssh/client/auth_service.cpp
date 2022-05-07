@@ -129,6 +129,13 @@ void client_auth_service::authenticate(std::string username, std::string service
 	auto ser_pubkey = to_byte_vector(pk);
 
 	byte_vector pk_req;
+
+	// put the session in front to calculate the signature
+	ssh_bf_writer w(pk_req);
+	w.write(to_string_view(transport_.session_id()));
+	std::size_t packet_start = w.used_size();
+
+	// then add the packet data
 	bool ret = ser::serialise_to_vector<ser::userauth_pk_request>(
 		pk_req,
 		username,
@@ -141,17 +148,13 @@ void client_auth_service::authenticate(std::string username, std::string service
 	if(ret) {
 		auto sig = key.sign(pk_req);
 
-		std::size_t pk_req_size = pk_req.size();
-		// resize so we can fit the signature at the end
-		pk_req.resize(pk_req_size + 4 + sig.size());
-
 		// write the signature at the end of the pk_req
-		ssh_bf_writer w(span{pk_req.data()+pk_req_size, pk_req.data()+pk_req.size()});
-		ret = w.write(to_string_view(sig));
+		ssh_bf_writer sig_w(pk_req, pk_req.size());
+		ret = sig_w.write(to_string_view(sig));
 	}
 
 	if(ret) {
-		if(transport_.send_payload(pk_req)) {
+		if(transport_.send_payload(safe_subspan(pk_req, packet_start))) {
 			auths_.emplace_back(auth_type::public_key, std::move(username), std::move(service));
 		}
 	} else {

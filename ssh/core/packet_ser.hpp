@@ -27,8 +27,9 @@ class ssh_packet_ser;
 template<typename Packet, typename... Args>
 bool serialise_to_vector(byte_vector& out, Args&&... args) {
 	typename Packet::save packet(std::forward<Args>(args)...);
-	out.resize(packet.size());
-	return packet.write(out);
+	auto old_size = out.size();
+	out.resize(old_size + packet.size());
+	return packet.write(span{&out[old_size], packet.size()});
 }
 
 }
