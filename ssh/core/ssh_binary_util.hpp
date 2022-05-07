@@ -82,14 +82,18 @@ public:
 		return ret;
 	}
 
-	template<std::size_t S>
-	bool write(std::span<std::byte const, S> const& s) {
+	bool write(const_span s) {
 		bool ret = adjust_size(s.size());
 		if(ret) {
 			std::memcpy(out_.data()+pos_, s.data(), s.size());
 			pos_ += s.size();
 		}
 		return ret;
+	}
+
+	template<std::size_t S>
+	bool write(std::span<std::byte const, S> const& s) {
+		return write(const_span(s));
 	}
 
 	bool add_random_range(random& gen, std::size_t size) {

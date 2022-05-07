@@ -21,6 +21,11 @@ public:
 
 	virtual std::string_view name() const = 0;
 	virtual service_state state() const = 0;
+
+	// called after constructing the service (this function can send packets specific to the service)
+	virtual bool init() = 0;
+
+	// process a packet from network
 	virtual handler_result process(ssh_packet_type, const_span payload) = 0;
 
 	ssh_error_code error() const {

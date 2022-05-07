@@ -27,6 +27,7 @@ public:
 
 	std::string_view name() const override;
 	service_state state() const override;
+	bool init() override;
 	handler_result process(ssh_packet_type, const_span payload) override;
 
 public:

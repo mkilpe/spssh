@@ -32,10 +32,10 @@ void ssh_server::handle_service_request(const_span payload) {
 handler_result ssh_server::handle_transport_packet(ssh_packet_type type, const_span payload) {
 	if(type == ssh_service_request) {
 		handle_service_request(payload);
-	} else {
-		return handler_result::unknown;
+	} else if(service_) {
+		return service_->process(type, payload);
 	}
-	return handler_result::handled;
+	return handler_result::unknown;
 }
 
 void ssh_server::start_user_auth() {
@@ -48,6 +48,9 @@ void ssh_server::start_user_auth() {
 	} else {
 		set_state(ssh_state::user_authentication);
 		send_packet<ser::service_accept>(user_auth_service_name);
+
+		// initialise the service after sending the service accept in case it sends service specific packets
+		service_->init();
 	}
 }
 

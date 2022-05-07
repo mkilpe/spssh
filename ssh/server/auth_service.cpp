@@ -35,9 +35,6 @@ server_auth_service::server_auth_service(ssh_transport& transport, auth_config c
 , log_(transport_.log())
 , tries_left(c.num_of_tries)
 {
-	if(!c.banner.empty()) {
-		transport_.send_packet<ser::userauth_banner>(c.banner, "");
-	}
 }
 
 std::string_view server_auth_service::name() const {
@@ -46,6 +43,14 @@ std::string_view server_auth_service::name() const {
 
 service_state server_auth_service::state() const {
 	return state_;
+}
+
+bool server_auth_service::init() {
+	if(!auth_config_.banner.empty()) {
+		log_.log(logger::info, "sending banner '{}'", auth_config_.banner);
+		transport_.send_packet<ser::userauth_banner>(auth_config_.banner, "");
+	}
+	return true;
 }
 
 bool server_auth_service::update_current(std::string_view user, std::string_view service) {
@@ -93,11 +98,13 @@ void server_auth_service::handle_auth_success(auth_type succ) {
 		state_ = service_state::done;
 		auth_succeeded(current_);
 	} else {
+		log_.log(logger::info, "Partial authentication success [method={}]", to_string(succ));
 		transport_.send_packet<ser::userauth_failure>(current_.viable_method_list(), true);
 	}
 }
 
-void server_auth_service::handle_auth_failure() {
+void server_auth_service::handle_auth_failure(auth_type succ) {
+	log_.log(logger::info, "Failed authentication [method={}]", to_string(succ));
 	transport_.send_packet<ser::userauth_failure>(current_.viable_method_list(), false);
 	--tries_left;
 	if(tries_left == 0) {
@@ -108,7 +115,7 @@ void server_auth_service::handle_auth_failure() {
 
 handler_result server_auth_service::handle_password_request(const_span payload) {
 	if((current_.viable_methods() & auth_type::password) == 0) {
-		handle_auth_failure();
+		handle_auth_failure(auth_type::password);
 		return handler_result::handled;
 	}
 
@@ -134,7 +141,7 @@ handler_result server_auth_service::handle_password_request(const_span payload) 
 	if(res == auth_state::succeeded) {
 		handle_auth_success(auth_type::password);
 	} else {
-		handle_auth_failure();
+		handle_auth_failure(auth_type::password);
 	}
 
 	return handler_result::handled;
@@ -153,7 +160,18 @@ handler_result server_auth_service::handle_pk_query(ssh_public_key const& key, s
 	return handler_result::handled;
 }
 
-handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, const_span msg, const_span sig) {
+handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, const_span p_msg, const_span sig) {
+	auto sid = transport_.session_id();
+
+	// construct the data that is signed
+	byte_vector msg;
+	msg.reserve(4+sid.size() + 1 + p_msg.size());
+
+	ssh_bf_writer w(msg);
+	w.write(to_string_view(sid));
+	w.write(ssh_userauth_request);
+	w.write(p_msg);
+
 	if(key.verify(msg, sig)) {
 		auto res = verify_public_key(current_, key);
 		if(res == auth_state::pending) {
@@ -162,17 +180,19 @@ handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, co
 		if(res == auth_state::succeeded) {
 			handle_auth_success(auth_type::public_key);
 		} else {
-			handle_auth_failure();
+			log_.log(logger::error, "Public key not allowed");
+			handle_auth_failure(auth_type::public_key);
 		}
 	} else {
-		handle_auth_failure();
+		log_.log(logger::error, "Verifying signature failed");
+		handle_auth_failure(auth_type::public_key);
 	}
 	return handler_result::handled;
 }
 
 handler_result server_auth_service::handle_pk_request(const_span payload) {
 	if((current_.viable_methods() & auth_type::public_key) == 0) {
-		handle_auth_failure();
+		handle_auth_failure(auth_type::public_key);
 		return handler_result::handled;
 	}
 
@@ -186,7 +206,7 @@ handler_result server_auth_service::handle_pk_request(const_span payload) {
 	auto key = load_ssh_public_key(to_span(pk), transport_.crypto(), transport_.call_context());
 	if(!key.valid() || to_string(key.type()) != pk_alg) {
 		log_.log(logger::debug, "invalid or unsupported public_key");
-		handle_auth_failure();
+		handle_auth_failure(auth_type::public_key);
 		return handler_result::handled;
 	}
 
@@ -204,7 +224,7 @@ handler_result server_auth_service::handle_pk_request(const_span payload) {
 }
 
 handler_result server_auth_service::handle_hostbased_request(const_span payload) {
-	handle_auth_failure();
+	handle_auth_failure(auth_type::hostbased);
 	return handler_result::handled;
 }
 
@@ -214,7 +234,7 @@ handler_result server_auth_service::handle_interactive_request(const_span payloa
 		SSH_MSG_USERAUTH_INFO_RESPONSE. Receiving any other request meanwhile will reset this
 		state
 	*/
-	handle_auth_failure();
+	handle_auth_failure(auth_type::interactive);
 	return handler_result::handled;
 }
 
@@ -235,7 +255,7 @@ handler_result server_auth_service::process(ssh_packet_type type, const_span pay
 				} else if(method == "keyboard-interactive") {
 					return handle_interactive_request(payload);
 				} else {
-					handle_auth_failure();
+					handle_auth_failure(auth_type::none);
 				}
 			} else {
 				transport_.set_error_and_disconnect(spssh_invalid_data, "bad username or service");

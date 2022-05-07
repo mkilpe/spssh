@@ -156,6 +156,8 @@ struct test_server_commands : server_config, securepath::command_parser {
 
 		random_packet_padding = false;
 
+		auth.banner = "Welcome to SPSSH test server";
+
 		//if(key_file.empty()) {
 		//	throw std::runtime_error("Host key required");
 		//}

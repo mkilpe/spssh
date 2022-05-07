@@ -21,6 +21,10 @@ service_state client_auth_service::state() const {
 	return state_;
 }
 
+bool client_auth_service::init() {
+	return true;
+}
+
 void client_auth_service::handle_banner(const_span payload) {
 	ser::userauth_banner::load packet(payload);
 	if(packet) {

@@ -63,6 +63,7 @@ public:
 
 	std::string_view name() const override;
 	service_state state() const override;
+	bool init() override;
 	handler_result process(ssh_packet_type, const_span payload) override;
 
 protected:
@@ -79,7 +80,7 @@ protected:
 	bool update_current(std::string_view user, std::string_view service);
 	void handle_none_request();
 	void handle_auth_success(auth_type succ);
-	void handle_auth_failure();
+	void handle_auth_failure(auth_type fail);
 	handler_result handle_password_request(const_span payload);
 	handler_result handle_pk_query(ssh_public_key const& key, std::string_view pk_blob);
 	handler_result handle_pk_auth(ssh_public_key const& key, const_span msg, const_span sig);
