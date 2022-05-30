@@ -22,7 +22,7 @@ public:
 	virtual std::string_view name() const = 0;
 	virtual service_state state() const = 0;
 
-	// called after constructing the service (this function can send packets specific to the service)
+	// called after constructing the service, returns true on success (this function can send packets specific to the service)
 	virtual bool init() = 0;
 
 	// process a packet from network
@@ -44,6 +44,17 @@ public:
 protected:
 	ssh_error_code error_{ssh_noerror};
 	std::string err_message_;
+};
+
+struct auth_info {
+	std::string service;
+	std::string user;
+};
+
+class auth_service : public ssh_service {
+public:
+	// service and user that was authenticated
+	virtual auth_info info_authenticated() const = 0;
 };
 
 }

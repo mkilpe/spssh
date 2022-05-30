@@ -11,7 +11,8 @@ public:
 	ssh_test_server(server_config const&, logger& log, out_buffer&, crypto_context&);
 
 protected:
-	std::unique_ptr<ssh_service> construct_service(std::string_view name) override;
+	std::unique_ptr<auth_service> construct_auth() override;
+	std::unique_ptr<ssh_service> construct_service(auth_info const&) override;
 
 protected:
 	server_config const& config_;

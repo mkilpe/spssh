@@ -20,6 +20,15 @@ struct test_context {
 	string_io_buffer out_buf;
 };
 
+struct dummy_service : ssh_service {
+	std::string_view name() const override { return "dummy-service"; }
+	service_state state() const override { return service_state::inprogress; }
+	bool init() override { return true; }
+	handler_result process(ssh_packet_type, const_span) override {
+		return handler_result::handled;
+	}
+};
+
 struct test_client : test_context, client_config, ssh_client {
 	test_client(logger& l, client_config c = {})
 	: test_context(l, "[client] ")
@@ -32,7 +41,14 @@ struct test_client : test_context, client_config, ssh_client {
 	void set_test_auth() {
 		username = "test";
 		password = "some";
-		service = "test-service";
+		service = "dummy-service";
+	}
+
+	std::unique_ptr<ssh_service> construct_service(auth_info const& info) override {
+		if(info.service == "dummy-service") {
+			return std::make_unique<dummy_service>();
+		}
+		return nullptr;
 	}
 };
 
@@ -45,18 +61,22 @@ struct test_server : test_context, server_config, ssh_server {
 		side = transport_side::server;
 	}
 
-	std::unique_ptr<ssh_service> construct_service(std::string_view name) override {
-		if(name == user_auth_service_name) {
-			return std::make_unique<server_test_auth_service>(*this, auth, std::move(auth_data));
-		}
+	std::unique_ptr<auth_service> construct_auth() override {
+		return std::make_unique<server_test_auth_service>(*this, auth, std::move(auth_data));
+	}
 
+	std::unique_ptr<ssh_service> construct_service(auth_info const& info) override {
+		if(info.service == "dummy-service") {
+			return std::make_unique<dummy_service>();
+		}
 		return nullptr;
 	}
 
 	void set_test_auth() {
 		//void add_pk(std::string const& user, std::string fp)
-		auth_data.add_pk("test", "some");
 		//void add_password(std::string const& user, std::string password);
+		auth_data.add_password("test", "some");
+		auth.service_auth["dummy-service"] = req_auth{};
 	}
 
 	test_auth_data auth_data;
@@ -114,17 +134,20 @@ TEST_CASE("ssh test", "[unit]") {
 	test_server server(test_log(), test_server_config());
 	test_client client(test_log(), test_client_config());
 
+	server.set_test_auth();
+	client.set_test_auth();
+
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::transport);
-	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
 
 	client.send_ignore(10);
 	server.send_ignore(25);
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::transport);
-	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
 }
 
 TEST_CASE("ssh test guess", "[unit]") {
@@ -135,10 +158,13 @@ TEST_CASE("ssh test guess", "[unit]") {
 	test_server server(test_log(), std::move(s));
 	test_client client(test_log(), std::move(c));
 
+	server.set_test_auth();
+	client.set_test_auth();
+
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::transport);
-	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
 }
 
 TEST_CASE("ssh failing version exchange", "[unit]") {
@@ -156,9 +182,42 @@ TEST_CASE("ssh failing version exchange", "[unit]") {
 }
 
 
-TEST_CASE("ssh failing auth", "[unit]") {
+TEST_CASE("ssh no kex", "[unit]") {
 	test_server server(test_log());
 	test_client client(test_log());
+
+	CHECK(!run(client, server));
+
+	CHECK(client.state() == ssh_state::disconnected);
+	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(client.error() == ssh_error_code::ssh_key_exchange_failed);
+	CHECK(server.error() == ssh_error_code::ssh_key_exchange_failed);
+}
+
+TEST_CASE("ssh failing auth (bad service)", "[unit]") {
+	test_server server(test_log(), test_server_config());
+	test_client client(test_log(), test_client_config());
+
+	client.set_test_auth();
+
+	CHECK(!run(client, server));
+
+	CHECK(client.state() == ssh_state::disconnected);
+	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(client.error() == ssh_error_code::ssh_service_not_available);
+	CHECK(server.error() == ssh_error_code::ssh_service_not_available);
+}
+
+
+TEST_CASE("ssh failing auth (no method)", "[unit]") {
+	test_server server(test_log(), test_server_config());
+	test_client client(test_log(), test_client_config());
+
+	client.set_test_auth();
+	server.auth.service_auth["dummy-service"] = req_auth{};
+	server.auth.num_of_tries = 1;
 
 	CHECK(!run(client, server));
 
@@ -168,5 +227,6 @@ TEST_CASE("ssh failing auth", "[unit]") {
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 }
+
 
 }

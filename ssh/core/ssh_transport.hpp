@@ -35,7 +35,7 @@ public:
 	/// This is the main driving function, reads from in_buffer and writes to out_buffer
 	transport_op process(in_buffer&);
 
-	void disconnect(std::uint32_t, std::string_view message = {});
+	void disconnect(std::uint32_t = ssh_noerror, std::string_view message = {});
 
 	ssh_state state() const;
 	void set_state(ssh_state, std::optional<ssh_error_code> = std::nullopt);

@@ -53,6 +53,10 @@ bool server_auth_service::init() {
 	return true;
 }
 
+auth_info server_auth_service::info_authenticated() const {
+	return state_ == service_state::done ? auth_info{current_.service, current_.username} : auth_info{};
+}
+
 bool server_auth_service::update_current(std::string_view user, std::string_view service) {
 	if(user.empty() || service.empty()) {
 		return false;
@@ -104,9 +108,9 @@ void server_auth_service::handle_auth_success(auth_type succ) {
 }
 
 void server_auth_service::handle_auth_failure(auth_type succ) {
-	log_.log(logger::info, "Failed authentication [method={}]", to_string(succ));
-	transport_.send_packet<ser::userauth_failure>(current_.viable_method_list(), false);
 	--tries_left;
+	log_.log(logger::info, "Failed authentication [method={}, tries_left={}]", to_string(succ), tries_left);
+	transport_.send_packet<ser::userauth_failure>(current_.viable_method_list(), false);
 	if(tries_left == 0) {
 		state_ = service_state::error;
 		set_error(ssh_no_more_auth_methods_available, "Too many tries to authenticate");
@@ -258,7 +262,7 @@ handler_result server_auth_service::process(ssh_packet_type type, const_span pay
 					handle_auth_failure(auth_type::none);
 				}
 			} else {
-				transport_.set_error_and_disconnect(spssh_invalid_data, "bad username or service");
+				transport_.set_error_and_disconnect(ssh_service_not_available, "bad service");
 			}
 		}
 		return handler_result::handled;

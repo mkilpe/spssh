@@ -57,7 +57,7 @@ public:
  * require one or more methods for successful authentication
  *
 */
-class server_auth_service : public ssh_service {
+class server_auth_service : public auth_service {
 public:
 	server_auth_service(ssh_transport& transport, auth_config const&);
 
@@ -65,6 +65,7 @@ public:
 	service_state state() const override;
 	bool init() override;
 	handler_result process(ssh_packet_type, const_span payload) override;
+	auth_info info_authenticated() const override;
 
 protected:
 	// called to verify password, in case previous call returned pending state, this will be called again on next processing round

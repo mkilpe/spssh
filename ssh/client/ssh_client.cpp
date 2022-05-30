@@ -53,18 +53,45 @@ handler_result ssh_client::handle_service_accept(const_span payload) {
 	return handler_result::unknown;
 }
 
-handler_result ssh_client::handle_user_auth(ssh_packet_type type, const_span payload) {
-	SPSSH_ASSERT(service_, "auth service not set");
-	auto res = service_->process(type, payload);
-	if(service_->error() != ssh_noerror) {
+void ssh_client::start_service(auth_info const& info) {
+	service_ = construct_service(info);
+	if(!service_) {
+		set_error_and_disconnect(ssh_service_not_available);
+		logger_.log(logger::error, "Failed to construct required service");
+	} else if(service_->error() != ssh_noerror) {
 		set_error_and_disconnect(service_->error(), service_->error_message());
+	} else {
+		set_state(ssh_state::service);
+
+		if(!service_->init()) {
+			logger_.log(logger::error, "Failed to initialise required service");
+			set_error_and_disconnect(ssh_service_not_available);
+		}
 	}
-	return res;
 }
 
-
-handler_result ssh_client::handle_service_packet(ssh_packet_type type, const_span payload) {
-	return handler_result::handled;
+handler_result ssh_client::process_service(ssh_packet_type type, const_span payload) {
+	SPSSH_ASSERT(service_, "no service set");
+	auto res = service_->process(type, payload);
+	if(res == handler_result::handled) {
+		// see if the service is done
+		auto s_state = service_->state();
+		if(s_state == service_state::done) {
+			if(state() == ssh_state::user_authentication) {
+				auth_service& auth = static_cast<auth_service&>(*service_);
+				//get the service we authenticated for and start it
+				start_service(auth.info_authenticated());
+			} else {
+				//service done? what now, lets just disconnect
+				logger_.log(logger::info, "Service '{}' completed, disconnecting...", service_->name());
+				disconnect();
+			}
+		} else if(s_state == service_state::error) {
+			logger_.log(logger::info, "Service error, disconnecting...");
+			set_error_and_disconnect(service_->error(), service_->error_message());
+		}
+	}
+	return res;
 }
 
 handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_span payload) {
@@ -76,14 +103,14 @@ handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_s
 			logger_.log(logger::error, "SSH Received packet in wrong state [type={}]", int(type));
 			return handler_result::handled;
 		}
-		return handle_user_auth(type, payload);
+		return process_service(type, payload);
 	} else if(type >= 80) {
 		if(state() != ssh_state::service) {
 			set_error_and_disconnect(ssh_protocol_error);
 			logger_.log(logger::error, "SSH Received packet in wrong state [type={}]", int(type));
 			return handler_result::handled;
 		}
-		return handle_service_packet(type, payload);
+		return process_service(type, payload);
 	}
 
 	return handler_result::unknown;
@@ -91,21 +118,25 @@ handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_s
 
 void ssh_client::start_user_auth() {
 	set_state(ssh_state::user_authentication);
-	service_ = construct_service(user_auth_service_name);
+	service_ = construct_auth();
 	if(!service_) {
 		set_error_and_disconnect(ssh_service_not_available);
 		logger_.log(logger::error, "Failed to construct required service");
 	} else if(service_->error() != ssh_noerror) {
 		set_error_and_disconnect(service_->error(), service_->error_message());
 	} else {
-		service_->init();
+		if(!service_->init()) {
+			logger_.log(logger::error, "Failed to initialise required service");
+			set_error_and_disconnect(ssh_service_not_available);
+		}
 	}
 }
 
-std::unique_ptr<ssh_service> ssh_client::construct_service(std::string_view name) {
-	if(name == user_auth_service_name) {
-		return std::make_unique<default_client_auth>(*this, config_);
-	}
+std::unique_ptr<auth_service> ssh_client::construct_auth() {
+	return std::make_unique<default_client_auth>(*this, config_);
+}
+
+std::unique_ptr<ssh_service> ssh_client::construct_service(auth_info const&) {
 	return nullptr;
 }
 

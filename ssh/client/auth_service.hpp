@@ -20,7 +20,7 @@ class logger;
 class ssh_transport;
 class ssh_private_key;
 
-class client_auth_service : public ssh_service {
+class client_auth_service : public auth_service {
 public:
 
 	client_auth_service(ssh_transport& transport);
@@ -29,6 +29,7 @@ public:
 	service_state state() const override;
 	bool init() override;
 	handler_result process(ssh_packet_type, const_span payload) override;
+	auth_info info_authenticated() const override;
 
 public:
 	/// use no authentication (or query supported auth methods)
@@ -61,6 +62,7 @@ protected:
 	logger& log_;
 	service_state state_{service_state::inprogress};
 	std::list<auth_try> auths_;
+	std::optional<auth_try> authenticated_;
 };
 
 /// Simple implementation to use pre-set password and private keys in the config to authenticate user

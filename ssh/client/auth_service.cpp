@@ -25,6 +25,10 @@ bool client_auth_service::init() {
 	return true;
 }
 
+auth_info client_auth_service::info_authenticated() const {
+	return authenticated_ ? auth_info{authenticated_->service, authenticated_->username} : auth_info{};
+}
+
 void client_auth_service::handle_banner(const_span payload) {
 	ser::userauth_banner::load packet(payload);
 	if(packet) {
@@ -38,9 +42,9 @@ void client_auth_service::handle_banner(const_span payload) {
 
 void client_auth_service::handle_success() {
 	state_ = service_state::done;
-	auto auth = std::move(auths_.front());
+	authenticated_ = std::move(auths_.front());
 	auths_.pop_front();
-	on_success(auth.username, auth.service);
+	on_success(authenticated_->username, authenticated_->service);
 }
 
 void client_auth_service::handle_failure(const_span payload) {
