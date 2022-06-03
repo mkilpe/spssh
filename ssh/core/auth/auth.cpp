@@ -20,4 +20,12 @@ auth_bits operator&(auth_bits l, auth_type r) {
 	return l & auth_bits(r);
 }
 
+auth_bits operator|(auth_bits l, auth_type r) {
+	return l | auth_bits(r);
+}
+
+auth_bits operator|(auth_type l, auth_bits r) {
+	return auth_bits(l) | r;
+}
+
 }

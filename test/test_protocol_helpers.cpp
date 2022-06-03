@@ -18,7 +18,6 @@ TEST_CASE("protocol helpers send_version_string", "[unit]") {
 	}
 }
 
-
 TEST_CASE("protocol helpers parse_ssh_version", "[unit]") {
 	{
 		string_in_buffer in{"SSH-2.0-testv1.0\r\n"};
@@ -55,6 +54,27 @@ TEST_CASE("protocol helpers parse_ssh_version", "[unit]") {
 	{
 		string_in_buffer in{"pla pla pla\r\nsome\r\nSSH othersdfj\r\nSSH-2.0-testv1.0\r\n"};
 		ssh_version v;
+		CHECK(parse_ssh_version(in, true, v) == version_parse_result::ok);
+		CHECK(v.ssh == "2.0");
+		CHECK(v.software == "testv1.0");
+		CHECK(v.comment == "");
+	}
+	{
+		string_in_buffer in{"pla pla pla\r\nsome\r\nSSH othersdfj\r\n"};
+		ssh_version v;
+		CHECK(parse_ssh_version(in, true, v) == version_parse_result::more_data);
+		CHECK(in.data.empty());
+		in.data += "SSH-2.0-testv1.0\r\n";
+		CHECK(parse_ssh_version(in, true, v) == version_parse_result::ok);
+		CHECK(v.ssh == "2.0");
+		CHECK(v.software == "testv1.0");
+		CHECK(v.comment == "");
+	}
+	{
+		string_in_buffer in{"pla pla pla\r\nsome\r\nSSH othersdfj\r\nSSH-2.0-testv1.0"};
+		ssh_version v;
+		CHECK(parse_ssh_version(in, true, v) == version_parse_result::more_data);
+		in.data += "\r\n";
 		CHECK(parse_ssh_version(in, true, v) == version_parse_result::ok);
 		CHECK(v.ssh == "2.0");
 		CHECK(v.software == "testv1.0");

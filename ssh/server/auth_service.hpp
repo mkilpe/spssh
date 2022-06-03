@@ -16,6 +16,13 @@ enum class auth_state {
 	succeeded
 };
 
+enum class auth_interactive_state {
+	failed,
+	pending,
+	more,
+	succeeded
+};
+
 struct req_auth {
 	// bit mask of required authentication methods, (password|publickey) requires that user authenticates with both.
 	auth_bits required{};
@@ -74,9 +81,20 @@ protected:
 	// called to verify public key, in case previous call returned pending state, this will be called again on next processing round
 	virtual auth_state verify_public_key(auth_context const&, ssh_public_key const&) = 0;
 
+	// called to verify host-based authentication
+	virtual auth_state verify_host(auth_context const&, ssh_public_key const&, std::string_view fqdn, std::string_view host_user) = 0;
+
+	// called when interactive method is requested, the returned auth_state reflects if the method is available
+	virtual auth_state start_interactive(auth_context const&, std::vector<std::string_view> const& submethods, interactive_request& request) = 0;
+
+	// called when response received to interactive request
+	virtual auth_interactive_state verify_interactive(auth_context const&, std::vector<std::string_view> const& responses) = 0;
+
 	// this is called then user authentication succeeded and the service is hence done
 	virtual void auth_succeeded(auth_context const&) = 0;
 
+	// send interactive_request; this can be called from verify_interactive if more information is needed from client
+	void send_interactive_request(interactive_request const& req);
 protected:
 	bool update_current(std::string_view user, std::string_view service);
 	void handle_none_request();
@@ -88,7 +106,8 @@ protected:
 	handler_result handle_pk_request(const_span payload);
 	handler_result handle_hostbased_request(const_span payload);
 	handler_result handle_interactive_request(const_span payload);
-
+	handler_result handle_interactive_response(const_span payload);
+	bool verify_user_auth_signature(ssh_public_key const& key, const_span p_msg, const_span sig) const;
 private:
 	ssh_transport& transport_;
 	auth_config const& auth_config_;
@@ -98,6 +117,7 @@ private:
 
 	std::size_t tries_left{};
 	auth_context current_;
+	bool interactive_in_progress_{};
 };
 
 }

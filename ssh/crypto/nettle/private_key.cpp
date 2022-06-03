@@ -17,7 +17,7 @@
 
 namespace securepath::ssh::nettle {
 
-std::unique_ptr<ssh::public_key> create_public_key(public_key_data const&, crypto_call_context const&);
+std::shared_ptr<ssh::public_key> create_public_key(public_key_data const&, crypto_call_context const&);
 
 class ed25519_private_key : public private_key {
 public:
@@ -37,7 +37,7 @@ public:
 		return key_type::ssh_ed25519;
 	}
 
-	std::unique_ptr<ssh::public_key> public_key() const override {
+	std::shared_ptr<ssh::public_key> public_key() const override {
 		ed25519_public_key_data data{pubkey_};
 		return create_public_key(data, call_);
 	}
@@ -118,7 +118,7 @@ public:
 		return key_type::ssh_rsa;
 	}
 
-	std::unique_ptr<ssh::public_key> public_key() const override {
+	std::shared_ptr<ssh::public_key> public_key() const override {
 		rsa_public_key_data data{to_umpint(e_), to_umpint(n_)};
 		return create_public_key(data, call_);
 	}
@@ -186,7 +186,7 @@ public:
 		return type_;
 	}
 
-	std::unique_ptr<ssh::public_key> public_key() const override {
+	std::shared_ptr<ssh::public_key> public_key() const override {
 		ecdsa_public_key_data data{type_, ecc_point_};
 		return create_public_key(data, call_);
 	}
@@ -218,16 +218,16 @@ private:
 };
 
 
-std::unique_ptr<ssh::private_key> create_private_key(private_key_data const& d, crypto_call_context const& call) {
+std::shared_ptr<ssh::private_key> create_private_key(private_key_data const& d, crypto_call_context const& call) {
 	if(d.type() == key_type::ssh_ed25519) {
-		return std::make_unique<ed25519_private_key>(static_cast<ed25519_private_key_data const&>(d), call);
+		return std::make_shared<ed25519_private_key>(static_cast<ed25519_private_key_data const&>(d), call);
 	} else if(d.type() == key_type::ssh_rsa) {
-		auto key = std::make_unique<rsa_private_key>(static_cast<rsa_private_key_data const&>(d), call);
+		auto key = std::make_shared<rsa_private_key>(static_cast<rsa_private_key_data const&>(d), call);
 		if(key->valid()) {
 			return key;
 		}
 	} else if(d.type() == key_type::ecdsa_sha2_nistp256) {
-		auto key = std::make_unique<ecdsa_private_key>(static_cast<ecdsa_private_key_data const&>(d), call);
+		auto key = std::make_shared<ecdsa_private_key>(static_cast<ecdsa_private_key_data const&>(d), call);
 		if(key->valid()) {
 			return key;
 		}

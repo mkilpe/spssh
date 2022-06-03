@@ -13,7 +13,7 @@ namespace securepath::ssh {
 class ssh_private_key {
 public:
 	ssh_private_key() = default;
-	ssh_private_key(std::unique_ptr<private_key>, std::string_view comment = "");
+	ssh_private_key(std::shared_ptr<private_key>, std::string_view comment = "");
 
 	key_type type() const;
 	ssh_public_key public_key() const;
@@ -24,7 +24,7 @@ public:
 	byte_vector sign(const_span in) const;
 
 private:
-	std::unique_ptr<private_key> key_impl_;
+	std::shared_ptr<private_key> key_impl_;
 	std::string comment_;
 };
 

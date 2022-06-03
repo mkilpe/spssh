@@ -62,6 +62,30 @@ using userauth_pk_ok = ssh_packet_ser
 >;
 
 /*
+	byte      SSH_MSG_USERAUTH_REQUEST
+	string    user name in ISO-10646 UTF-8 encoding [RFC3629]
+	string    service name in US-ASCII
+	string    "hostbased"
+	string    public key algorithm name
+	string    public key blob
+	string    client host name expressed as the FQDN in US-ASCII
+	string    user name on the client host in ISO-10646 UTF-8 encoding [RFC3629]
+	string    signature, not added to the type here to make the signed data
+*/
+using userauth_hostbased_request = ssh_packet_ser
+<
+	ssh_userauth_request,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string,
+	string
+>;
+
+
+/*
 	byte         SSH_MSG_USERAUTH_FAILURE
 	name-list    authentications that can continue
  	boolean      partial success
@@ -125,6 +149,60 @@ using userauth_password_changereq = ssh_packet_ser
 	ssh_auth_password_changereq,
 	string,
 	string
+>;
+
+/*
+	byte      SSH_MSG_USERAUTH_REQUEST
+	string    user name (ISO-10646 UTF-8, as defined in [RFC-3629])
+	string    service name (US-ASCII)
+	string    "keyboard-interactive" (US-ASCII)
+	string    language tag (as defined in [RFC-3066])
+	string    submethods (ISO-10646 UTF-8)
+*/
+using userauth_interactive_request = ssh_packet_ser
+<
+	ssh_userauth_request,
+	string,
+	string,
+	string,
+	string,
+	name_list
+>;
+
+/*
+	byte      SSH_MSG_USERAUTH_INFO_REQUEST
+	string    name (ISO-10646 UTF-8)
+	string    instruction (ISO-10646 UTF-8)
+	string    language tag (as defined in [RFC-3066])
+	int       num-prompts
+	string    prompt[1] (ISO-10646 UTF-8)
+	boolean   echo[1]
+	...
+	string    prompt[num-prompts] (ISO-10646 UTF-8)
+	boolean   echo[num-prompts]
+*/
+// the prompts are read in separately
+using userauth_info_request = ssh_packet_ser
+<
+	ssh_userauth_info_request,
+	string,
+	string,
+	string,
+	uint32
+>;
+
+/*
+	byte      SSH_MSG_USERAUTH_INFO_RESPONSE
+	int       num-responses
+	string    response[1] (ISO-10646 UTF-8)
+	...
+	string    response[num-responses] (ISO-10646 UTF-8)
+*/
+// the responses are read in separately
+using userauth_info_response = ssh_packet_ser
+<
+	ssh_userauth_info_response,
+	uint32
 >;
 
 }

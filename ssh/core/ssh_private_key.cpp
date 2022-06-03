@@ -5,7 +5,7 @@
 
 namespace securepath::ssh {
 
-ssh_private_key::ssh_private_key(std::unique_ptr<private_key> i, std::string_view comment)
+ssh_private_key::ssh_private_key(std::shared_ptr<private_key> i, std::string_view comment)
 : key_impl_(std::move(i))
 , comment_(comment)
 {

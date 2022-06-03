@@ -14,7 +14,7 @@ class binout;
 class ssh_public_key {
 public:
 	ssh_public_key() = default;
-	ssh_public_key(std::unique_ptr<public_key>);
+	ssh_public_key(std::shared_ptr<public_key>);
 
 	key_type type() const;
 	bool valid() const;
@@ -27,7 +27,7 @@ public:
 	// sha256 fingerprint with base64 encoding
 	std::string fingerprint(crypto_context const& crypto, crypto_call_context const& call) const;
 private:
-	std::unique_ptr<public_key> key_impl_;
+	std::shared_ptr<public_key> key_impl_;
 };
 
 ssh_public_key load_ssh_public_key(const_span data, crypto_context const&, crypto_call_context const&);

@@ -1,7 +1,6 @@
 
-* implement loading openssh private keys
 * implement interactive auth (RFC 4256)
-* check re-kexing works
+* check re-kexing works (automated test)
 * implement more kexes
 * implement hostbased auth
 * implement creating private keys and saving them
@@ -9,3 +8,8 @@
 * implement counter mode + hmac to make sure the packet encryption/decryption works
 * implement cryptographic random (for example nettle does not have one)
 * investigate post-quantum crypto algorithms
+
+
+not implemented yet:
+* possible certificates associated to public key when authenticating
+* delayed replay for authentication to stop certain attacks

@@ -107,7 +107,7 @@ void ssh_transport::handle_version_exchange(in_buffer& in) {
 	}
 }
 
-void ssh_transport::handle_binary_packet(in_buffer& in) {
+handler_result ssh_transport::handle_binary_packet(in_buffer& in) {
 	auto data = in.get();
 
 	if(stream_in_.current_packet.status == in_packet_status::waiting_header) {
@@ -124,13 +124,16 @@ void ssh_transport::handle_binary_packet(in_buffer& in) {
 		}
 	}
 
+	handler_result res = handler_result::handled;
 	if(stream_in_.current_packet.status == in_packet_status::data_ready) {
-		if(process_transport_payload(stream_in_.current_packet.payload)) {
+		res = process_transport_payload(stream_in_.current_packet.payload);
+		if(res == handler_result::handled) {
 			logger_.log(logger::debug_trace, "SSH packet handled successfully");
 			in.consume(stream_in_.current_packet.packet_size);
 			stream_in_.current_packet.clear();
 		}
 	}
+	return res;
 }
 
 transport_op ssh_transport::process(in_buffer& in) {
@@ -152,7 +155,10 @@ transport_op ssh_transport::process(in_buffer& in) {
 			}
 		}
 	} else {
-		handle_binary_packet(in);
+		if(handle_binary_packet(in) == handler_result::pending && state() != ssh_state::disconnected) {
+			logger_.log(logger::debug_trace, "action pending");
+			return transport_op::pending_action;
+		}
 	}
 
 	if(!stream_out_.data.empty()) {
@@ -168,7 +174,7 @@ transport_op ssh_transport::process(in_buffer& in) {
 	return transport_op::want_read_more;
 }
 
-bool ssh_transport::process_transport_payload(span payload) {
+handler_result ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug, "SSH process_transport_payload [state={}, type={}]", to_string(state()), type);
@@ -176,31 +182,33 @@ bool ssh_transport::process_transport_payload(span payload) {
 	// first see if it is basic packet, we handle these at all states
 	bool res = handle_basic_packets(type, payload.subspan(1));
 
+	handler_result result = handler_result::handled;
 	if(!res) {
 		if(state() == ssh_state::kex) {
 			// give whole payload as we need to save it for kex
-			res = handle_raw_kex_packet(type, payload);
+			if(!handle_raw_kex_packet(type, payload)) {
+				//error, return that the packet was unknown
+				result = handler_result::unknown;
+			}
 		} else {
 			if(state() == ssh_state::transport
 				|| state() == ssh_state::user_authentication
 				|| state() == ssh_state::service)
 			{
-				auto tres = handle_transport_packet(type, payload.subspan(1));
-				if(tres == handler_result::unknown) {
+				result = handle_transport_packet(type, payload.subspan(1));
+				if(result == handler_result::unknown) {
 					logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
 					send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
-					res = true;
-				} else {
-					res = tres == handler_result::handled;
 				}
 			} else {
 				logger_.log(logger::debug_trace, "SSH invalid state");
 				set_error_and_disconnect(ssh_protocol_error);
+				result = handler_result::unknown;
 			}
 		}
 	}
 
-	return res;
+	return result;
 }
 
 bool ssh_transport::handle_basic_packets(ssh_packet_type type, const_span payload) {

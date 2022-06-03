@@ -13,7 +13,7 @@ public:
 	virtual ~private_key() = default;
 
 	virtual key_type type() const = 0;
-	virtual std::unique_ptr<ssh::public_key> public_key() const = 0;
+	virtual std::shared_ptr<ssh::public_key> public_key() const = 0;
 
 	// sign data
 	virtual std::size_t signature_size() const = 0;

@@ -4,7 +4,7 @@
 
 namespace securepath::ssh {
 
-ssh_public_key::ssh_public_key(std::unique_ptr<public_key> pkey)
+ssh_public_key::ssh_public_key(std::shared_ptr<public_key> pkey)
 : key_impl_(std::move(pkey))
 {
 }

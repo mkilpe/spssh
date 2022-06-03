@@ -18,6 +18,9 @@ namespace securepath::ssh {
 template<typename Impl, typename... ExtraParams>
 using ctor = std::function<std::unique_ptr<Impl> (ExtraParams const&..., crypto_call_context const&)>;
 
+template<typename Impl, typename... ExtraParams>
+using ctor_shared = std::function<std::shared_ptr<Impl> (ExtraParams const&..., crypto_call_context const&)>;
+
 /// Context that is used to construct all crypto objects
 struct crypto_context {
 
@@ -29,9 +32,9 @@ struct crypto_context {
 	/// construct mac from type and secret key
 	ctor<mac, mac_type, const_span> construct_mac{};
 	/// construct public key from public key data (derived class to give the data which has the key type, the data is copied)
-	ctor<public_key, public_key_data> construct_public_key{};
+	ctor_shared<public_key, public_key_data> construct_public_key{};
 	/// construct private key from private key data (derived class to give the data which has the key type, the data is copied)
-	ctor<private_key, private_key_data> construct_private_key{};
+	ctor_shared<private_key, private_key_data> construct_private_key{};
 	/// construct cryptographic key exchange/agreement algorithm
 	ctor<key_exchange, key_exchange_type> construct_key_exchange{};
 	/// construct hash algorithm

@@ -65,16 +65,19 @@ version_parse_result parse_ssh_version(in_buffer& in, bool allow_non_version_lin
 	version_parse_result result = version_parse_result::more_data;
 	const_span buf = in.get();
 	if(!buf.empty()) {
+		std::size_t consume = 0;
 		std::string_view str{reinterpret_cast<char const*>(buf.data()), buf.size()};
 		if(allow_non_version_lines) {
 			// ignore non "SSH-" starting lines
 			while(!str.starts_with("SSH-")) {
 				auto p = str.find("\r\n");
 				if(p == std::string_view::npos) {
+					// consume so we don't needlessly do the work again or grow buffer
+					in.consume(consume);
 					return version_parse_result::more_data;
 				}
 				str = str.substr(p+2);
-				in.consume(p+2);
+				consume += p+2;
 			}
 		}
 		if(!str.starts_with("SSH-")) {
@@ -91,7 +94,8 @@ version_parse_result parse_ssh_version(in_buffer& in, bool allow_non_version_lin
 
 		result = parse_ssh_version_substrings(str.substr(4, p-4), version);
 		if(result == version_parse_result::ok) {
-			in.consume(p+2);
+			consume += p+2;
+			in.consume(consume);
 		}
 	}
 	return result;

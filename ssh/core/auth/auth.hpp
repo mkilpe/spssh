@@ -2,6 +2,7 @@
 #define SP_SHH_AUTH_HEADER
 
 #include <string_view>
+#include <vector>
 
 namespace securepath::ssh {
 
@@ -20,7 +21,23 @@ using auth_bits = std::uint16_t;
 auth_bits operator|(auth_type l, auth_type r);
 auth_bits operator&(auth_bits l, auth_type r);
 
+auth_bits operator|(auth_bits l, auth_type r);
+auth_bits operator|(auth_type l, auth_bits r);
+
 std::string_view to_string(auth_type);
+
+struct interactive_prompt {
+	bool echo{};
+	std::string_view text;
+};
+
+using interactive_prompts = std::vector<interactive_prompt>;
+
+struct interactive_request {
+	std::string_view name;
+	std::string_view instruction;
+	interactive_prompts prompts;
+};
 
 }
 

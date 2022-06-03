@@ -19,7 +19,7 @@ class out_buffer;
 enum class transport_op {
 	want_read_more,
 	want_write_more,
-	pending_user_action, // we are waiting for some action that is async (e.g. asking user about host key)
+	pending_action, // we are waiting for some action that is async (e.g. asking user about host key)
 	disconnected
 };
 
@@ -68,7 +68,7 @@ protected:
 private: // init & generic packet handling
 
 	void handle_version_exchange(in_buffer& in);
-	void handle_binary_packet(in_buffer& in);
+	handler_result handle_binary_packet(in_buffer& in);
 	bool handle_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_raw_kex_packet(ssh_packet_type type, const_span payload);
 	bool handle_kexinit_packet(const_span payload);
@@ -79,7 +79,7 @@ private: // init & generic packet handling
 	void send_kex_guess();
 
 private: // input
-	bool process_transport_payload(span payload);
+	handler_result process_transport_payload(span payload);
 
 public: // output
 	template<typename Packet, typename... Args>

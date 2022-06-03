@@ -63,6 +63,10 @@ bool server_auth_service::update_current(std::string_view user, std::string_view
 	}
 
 	if(user != current_.username || service != current_.service) {
+		if(!current_.username.empty()) {
+			log_.log(logger::info, "username or service from client doesn't match previous one, resetting state [username={}, service={}]", user, service);
+		}
+
 		//username or service doesn't match, reset the current auth state
 		auto it = auth_config_.service_auth.find(service);
 		if(it == auth_config_.service_auth.end()) {
@@ -164,7 +168,7 @@ handler_result server_auth_service::handle_pk_query(ssh_public_key const& key, s
 	return handler_result::handled;
 }
 
-handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, const_span p_msg, const_span sig) {
+bool server_auth_service::verify_user_auth_signature(ssh_public_key const& key, const_span p_msg, const_span sig) const {
 	auto sid = transport_.session_id();
 
 	// construct the data that is signed
@@ -176,7 +180,11 @@ handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, co
 	w.write(ssh_userauth_request);
 	w.write(p_msg);
 
-	if(key.verify(msg, sig)) {
+	return key.verify(msg, sig);
+}
+
+handler_result server_auth_service::handle_pk_auth(ssh_public_key const& key, const_span p_msg, const_span sig) {
+	if(verify_user_auth_signature(key, p_msg, sig)) {
 		auto res = verify_public_key(current_, key);
 		if(res == auth_state::pending) {
 			return handler_result::pending;
@@ -228,22 +236,153 @@ handler_result server_auth_service::handle_pk_request(const_span payload) {
 }
 
 handler_result server_auth_service::handle_hostbased_request(const_span payload) {
-	handle_auth_failure(auth_type::hostbased);
+	if((current_.viable_methods() & auth_type::hostbased) == 0) {
+		handle_auth_failure(auth_type::hostbased);
+		return handler_result::handled;
+	}
+
+	ser::userauth_hostbased_request::load packet(payload);
+	if(!packet) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid userauth hostbased request");
+		return handler_result::handled;
+	}
+
+	auto& [user, service, method, pk_alg, pk, fqdn, host_user] = packet;
+
+	// read the signature at the end of the packet
+	std::string_view sig;
+	if(!packet.reader().read(sig)) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid userauth hostbased request");
+		return handler_result::handled;
+	}
+
+	auto key = load_ssh_public_key(to_span(pk), transport_.crypto(), transport_.call_context());
+	if(!key.valid() || to_string(key.type()) != pk_alg) {
+		log_.log(logger::debug, "invalid or unsupported public_key");
+		handle_auth_failure(auth_type::hostbased);
+		return handler_result::handled;
+	}
+
+	if(verify_user_auth_signature(key, safe_subspan(payload, 0, packet.size()), to_span(sig))) {
+		auto res = verify_host(current_, key, fqdn, host_user);
+		if(res == auth_state::pending) {
+			return handler_result::pending;
+		}
+		if(res == auth_state::succeeded) {
+			handle_auth_success(auth_type::hostbased);
+		} else {
+			log_.log(logger::error, "Host not allowed");
+			handle_auth_failure(auth_type::hostbased);
+		}
+	} else {
+		log_.log(logger::error, "Verifying signature failed");
+		handle_auth_failure(auth_type::hostbased);
+	}
 	return handler_result::handled;
 }
 
+void server_auth_service::send_interactive_request(interactive_request const& req) {
+	byte_vector request;
+
+	bool ret = ser::serialise_to_vector<ser::userauth_info_request>(request, req.name, req.instruction, "", req.prompts.size());
+
+	if(ret) {
+		// add the requests
+		ssh_bf_writer req_w(request, request.size());
+		for(auto&& v : req.prompts) {
+			if(!req_w.write(v.text) || !req_w.write(v.echo)) {
+				transport_.set_error_and_disconnect(spssh_invalid_data);
+				return;
+			}
+		}
+		interactive_in_progress_ = transport_.send_payload(request);
+	} else {
+		transport_.set_error_and_disconnect(spssh_invalid_data);
+	}
+}
+
 handler_result server_auth_service::handle_interactive_request(const_span payload) {
-	/*
-		implementing this requires a state, ie. SSH_MSG_USERAUTH_INFO_REQUEST sent and waiting
-		SSH_MSG_USERAUTH_INFO_RESPONSE. Receiving any other request meanwhile will reset this
-		state
-	*/
-	handle_auth_failure(auth_type::interactive);
+	if((current_.viable_methods() & auth_type::interactive) == 0) {
+		handle_auth_failure(auth_type::interactive);
+		return handler_result::handled;
+	}
+
+	ser::userauth_interactive_request::load packet(payload);
+	if(!packet) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid userauth interactive request");
+		return handler_result::handled;
+	}
+
+	auto& [user, service, method, lang, submethods] = packet;
+
+	interactive_request req;
+	auto state = start_interactive(current_, submethods, req);
+	if(state == auth_state::succeeded) {
+		send_interactive_request(req);
+	} else if(state == auth_state::pending) {
+		return handler_result::pending;
+	} else {
+		handle_auth_failure(auth_type::interactive);
+	}
+	return handler_result::handled;
+}
+
+handler_result server_auth_service::handle_interactive_response(const_span payload) {
+	if(!interactive_in_progress_) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid state");
+		return handler_result::handled;
+	}
+
+	if((current_.viable_methods() & auth_type::interactive) == 0) {
+		handle_auth_failure(auth_type::interactive);
+		return handler_result::handled;
+	}
+
+	ser::userauth_info_response::load packet(payload);
+	if(!packet) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid userauth info response");
+		return handler_result::handled;
+	}
+
+	auto& [response_count] = packet;
+
+	std::vector<std::string_view> responses;
+	responses.reserve(response_count);
+
+	// read the responses
+	for(std::uint32_t i = 0; i != response_count; ++i) {
+		std::string_view res;
+		if(!packet.reader().read(res)) {
+			transport_.set_error_and_disconnect(ssh_protocol_error, "Invalid interactive response packet from client");
+			return handler_result::handled;
+		}
+
+		responses.push_back(res);
+	}
+
+	auto vres = verify_interactive(current_, responses);
+
+	if(vres == auth_interactive_state::succeeded) {
+		handle_auth_success(auth_type::interactive);
+		interactive_in_progress_ = false;
+	} else if(vres == auth_interactive_state::pending) {
+		return handler_result::pending;
+	} else if(vres == auth_interactive_state::more) {
+		log_.log(logger::debug_trace, "interactive auth: more info requested");
+		// there is more info requested (expect send_interactive_request was called in verify_interactive)
+	} else {
+		handle_auth_failure(auth_type::interactive);
+		interactive_in_progress_ = false;
+	}
+
 	return handler_result::handled;
 }
 
 handler_result server_auth_service::process(ssh_packet_type type, const_span payload) {
 	if(type == ssh_userauth_request) {
+		// reset possible interactive session we have
+		interactive_in_progress_ = false;
+
 		ser::userauth_request::load packet(payload);
 		if(packet) {
 			auto& [user, service, method] = packet;
@@ -266,6 +405,9 @@ handler_result server_auth_service::process(ssh_packet_type type, const_span pay
 			}
 		}
 		return handler_result::handled;
+	} else if(type == ssh_userauth_info_response) {
+		// response to interactive info request
+		return handle_interactive_response(payload);
 	}
 
 	state_ = service_state::error;
