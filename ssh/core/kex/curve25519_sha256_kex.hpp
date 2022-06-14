@@ -140,8 +140,6 @@ struct curve25519_sha256_kex_base : public kex {
 		key = K1 || K2 || K3 || ...
 	*/
 	byte_vector derive_crypto_material(hash& h, std::size_t size, char type) {
-		//todo: implement session_id that is needed for rekeying
-
 		hash_binout hbout(h);
 		ssh_bf_binout_writer w(hbout);
 

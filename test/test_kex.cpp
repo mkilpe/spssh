@@ -1,8 +1,10 @@
 
+#include "configs.hpp"
 #include "crypto.hpp"
 #include "random.hpp"
 #include "test_buffers.hpp"
 
+#include "ssh/common/util.hpp"
 #include "ssh/core/kex.hpp"
 #include "ssh/core/kex/ecdh.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
@@ -39,38 +41,6 @@ struct test_context {
 	kex_init_data init_data;
 	kex_context kex_c{bp, out_buf, init_data, ctx, ctx.call};
 };
-}
-
-
-static ssh_config test_client_config() {
-	ssh_config c;
-	c.side = transport_side::client;
-	c.algorithms.host_keys = {key_type::ssh_ed25519};
-	c.algorithms.kexes = {kex_type::curve25519_sha256};
-	c.algorithms.client_server_ciphers = {cipher_type::aes_256_gcm};
-	c.algorithms.server_client_ciphers = {cipher_type::aes_256_gcm};
-	c.algorithms.client_server_macs = {mac_type::aes_256_gcm};
-	c.algorithms.server_client_macs = {mac_type::aes_256_gcm};
-	return c;
-}
-
-static ssh_config test_server_config() {
-	ssh_config c;
-	c.side = transport_side::server;
-	c.algorithms.host_keys = {key_type::ssh_ed25519};
-	c.algorithms.kexes = {kex_type::curve25519_sha256};
-	c.algorithms.client_server_ciphers = {cipher_type::aes_256_gcm};
-	c.algorithms.server_client_ciphers = {cipher_type::aes_256_gcm};
-	c.algorithms.client_server_macs = {mac_type::aes_256_gcm};
-	c.algorithms.server_client_macs = {mac_type::aes_256_gcm};
-
-	crypto_test_context crypto;
-
-	std::vector<ssh_private_key> keys;
-	keys.push_back(crypto.test_ed25519_private_key());
-	c.set_host_keys_for_server(std::move(keys));
-
-	return c;
 }
 
 crypto_configuration const test_conf = {
@@ -113,7 +83,14 @@ TEST_CASE("curve25519 sha256 kex", "[unit][crypto][kex]") {
 	CHECK(k.c_kex->error() == ssh_noerror);
 	CHECK(k.s_kex->error() == ssh_noerror);
 
-	//todo: test creating keys and encrypt with them
+	CHECK(!is_zero(k.c_kex->session_id()));
+	CHECK(compare_equal(k.c_kex->session_id(), k.s_kex->session_id()));
+
+	CHECK(to_byte_vector(k.s_kex->server_host_key()) == to_byte_vector(k.c_kex->server_host_key()));
+	CHECK(k.c_kex->server_host_key().valid());
+	//CHECK(test_crypto_pairs(k.c_kex->));
+	//virtual std::optional<crypto_pair> construct_in_crypto_pair() = 0;
+	//virtual std::optional<crypto_pair> construct_out_crypto_pair() = 0;
 }
 
 TEST_CASE("curve25519 sha256 kex different version", "[unit][crypto][kex]") {
