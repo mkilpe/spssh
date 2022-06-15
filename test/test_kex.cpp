@@ -73,6 +73,57 @@ struct client_server_kex {
 	std::unique_ptr<kex> s_kex;
 };
 
+void test_mac(mac& in, mac& out){
+	byte_vector msg(64, std::byte{'A'});
+	out.process(msg);
+	in.process(msg);
+	byte_vector r1(out.size());
+	byte_vector r2(in.size());
+	out.result(r1);
+	in.result(r2);
+	REQUIRE(r1 == r2);
+}
+
+void test_cipher(cipher& out, cipher& in) {
+	byte_vector msg(out.block_size()*8, std::byte{'A'});
+	byte_vector r1(msg.size());
+	byte_vector r2(msg.size());
+	out.process(msg, r1);
+	in.process(r1, r2);
+	REQUIRE(msg == r2);
+}
+
+void test_crypto_pairs(kex& k1, kex& k2) {
+	std::optional<crypto_pair> k1_in = k1.construct_in_crypto_pair();
+	std::optional<crypto_pair> k1_out = k1.construct_out_crypto_pair();
+	std::optional<crypto_pair> k2_in = k2.construct_in_crypto_pair();
+	std::optional<crypto_pair> k2_out = k2.construct_out_crypto_pair();
+
+	REQUIRE(k1_in);
+	REQUIRE(k1_out);
+	REQUIRE(k2_in);
+	REQUIRE(k2_out);
+	REQUIRE(k1_in->cipher->block_size() == k2_out->cipher->block_size());
+	REQUIRE(k2_in->cipher->block_size() == k1_out->cipher->block_size());
+	REQUIRE(k1_in->cipher->is_aead() == k1_out->cipher->is_aead());
+	REQUIRE(k2_in->cipher->is_aead() == k2_out->cipher->is_aead());
+
+	test_cipher(*k1_out->cipher, *k2_in->cipher);
+	test_cipher(*k2_out->cipher, *k1_in->cipher);
+	if(k1_in->cipher->is_aead()) {
+		REQUIRE(!k1_in->mac);
+		REQUIRE(!k2_out->mac);
+	} else {
+		test_mac(*k2_out->mac, *k1_in->mac);
+	}
+	if(k2_in->cipher->is_aead()) {
+		REQUIRE(!k2_in->mac);
+		REQUIRE(!k1_out->mac);
+	} else {
+		test_mac(*k1_out->mac, *k2_in->mac);
+	}
+}
+
 TEST_CASE("curve25519 sha256 kex", "[unit][crypto][kex]") {
 	client_server_kex k;
 
@@ -88,9 +139,7 @@ TEST_CASE("curve25519 sha256 kex", "[unit][crypto][kex]") {
 
 	CHECK(to_byte_vector(k.s_kex->server_host_key()) == to_byte_vector(k.c_kex->server_host_key()));
 	CHECK(k.c_kex->server_host_key().valid());
-	//CHECK(test_crypto_pairs(k.c_kex->));
-	//virtual std::optional<crypto_pair> construct_in_crypto_pair() = 0;
-	//virtual std::optional<crypto_pair> construct_out_crypto_pair() = 0;
+	test_crypto_pairs(*k.c_kex, *k.s_kex);
 }
 
 TEST_CASE("curve25519 sha256 kex different version", "[unit][crypto][kex]") {
