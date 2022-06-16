@@ -142,37 +142,36 @@ ssh_private_key load_raw_base64_ssh_private_key(std::string_view s, crypto_conte
 char const magic[] = "openssh-key-v1";
 
 static ssh_private_key load_raw_openssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
-	ssh_private_key key;
 	ssh_bf_reader r(data);
 
 	std::optional<std::span<std::byte const, sizeof(magic)>> m;
 	if(!r.read(m) || std::memcmp(m->data(), magic, sizeof(magic)) != 0) {
 		call.log.log(logger::error, "Failed to find openssh magic string");
-		return key;
+		return {};
 	}
 
 	std::string_view cipher;
 	if(!r.read(cipher) || cipher != "none") {
 		call.log.log(logger::error, "Not supporting encrypted private key files");
-		return key;
+		return {};
 	}
 
 	std::string_view kdf;
 	if(!r.read(kdf) || kdf != "none") {
 		call.log.log(logger::error, "Not supporting encrypted private key files");
-		return key;
+		return {};
 	}
 
 	std::string_view kdf_options;
 	if(!r.read(kdf_options) || kdf_options != "") {
 		call.log.log(logger::error, "Not supporting encrypted private key files");
-		return key;
+		return {};
 	}
 
 	std::uint32_t pk_count = 0;
 	if(!r.read(pk_count)) {
 		call.log.log(logger::error, "Invalid private key (could not read public key count)");
-		return key;
+		return {};
 	}
 
 	// read out the public keys and ignore, we want only the private key
@@ -180,14 +179,14 @@ static ssh_private_key load_raw_openssh_private_key(const_span data, crypto_cont
 		std::string_view pk;
 		if(!r.read(pk)) {
 			call.log.log(logger::error, "Invalid private key (failed reading public key)");
-			return key;
+			return {};
 		}
 	}
 
 	std::string_view priv_keys;
 	if(!r.read(priv_keys)) {
 		call.log.log(logger::error, "Invalid private key (failed to read private key parts)");
-		return key;
+		return {};
 	}
 
 	ssh_bf_reader priv_r(to_span(priv_keys));
@@ -196,7 +195,7 @@ static ssh_private_key load_raw_openssh_private_key(const_span data, crypto_cont
 	std::uint32_t n1 = 0, n2 = 0;
 	if(!priv_r.read(n1) || !priv_r.read(n2) || n1 != n2) {
 		call.log.log(logger::error, "Invalid private key (failed to read check integers or they don't match)");
-		return key;
+		return {};
 	}
 
 	return load_raw_ssh_private_key(priv_r, crypto, call);

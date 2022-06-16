@@ -23,6 +23,10 @@ public:
 		curve25519_mul_g(to_uint8_ptr(pub_), to_uint8_ptr(priv_));
 	}
 
+	key_exchange_type type() const override {
+		return key_exchange_type::X25519;
+	}
+
 	const_span public_key() const override {
 		return pub_;
 	}
@@ -47,11 +51,52 @@ public:
 	byte_vector priv_;
 };
 
-std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_type t, crypto_call_context const& c) {
-	if(t == key_exchange_type::X25519) {
+std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_data const& d, crypto_call_context const& c) {
+	if(d.type() == key_exchange_type::X25519) {
 		return std::make_unique<X25519_key_exchange>(c);
 	}
 	return nullptr;
 }
 
 }
+
+/*
+DH:
+
+p is a large safe prime
+g is a generator for a subgroup of GF(p)
+q is the order of the subgroup
+
+Client:
+
+mpz_set(i, q);
+mpz_sub_ui(i, i, 2);
+nettle_mpz_random(x, NULL, rnd_func, i);
+mpz_add_ui(x, x, 2);
+
+mpz_powm(e, g, x, p);
+
+send e to server
+
+
+Server:
+
+mpz_set(i, q);
+mpz_sub_ui(i, i, 1);
+nettle_mpz_random(y, NULL, rnd_func, i);
+mpz_add_ui(y, y, 1);
+
+mpz_powm(f, g, y, p);
+
+receive e from client
+
+mpz_powm(k, e, y, p);
+
+
+check:
+1 < e < p-1
+1 < f < p-1
+
+
+should we use key generation from here: NIST SP 800-56Ar3 5.6.1.1.3
+*/

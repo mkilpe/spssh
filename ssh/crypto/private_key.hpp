@@ -90,6 +90,12 @@ struct ecdsa_private_key_data : private_key_data {
 	}
 };
 
+struct private_key_info {
+	key_type type{};
+	// type specific size of the private key (bits for RSA, could be bytes for something else)
+	// this might be ignored if there is only single size for the type (for example ed25519)
+	std::size_t size{};
+};
 
 }
 

@@ -11,7 +11,7 @@ namespace securepath::ssh {
 struct curve25519_sha256_kex_base : public kex {
 	curve25519_sha256_kex_base(kex_context kex_c)
 	: context_(kex_c)
-	, x25519_(context_.ccontext().construct_key_exchange(key_exchange_type::X25519, context_.call_context()))
+	, x25519_(context_.ccontext().construct_key_exchange(x25519_key_exchange_data{}, context_.call_context()))
 	{
 	}
 

@@ -142,22 +142,11 @@ TEST_CASE("load openssh private key", "[unit][crypto]") {
 	}
 }
 
-key_exchange_type const test_key_exchanges[] =
-	{
-		key_exchange_type::X25519
-	};
-
-std::size_t test_key_exchange_count = sizeof(test_key_exchanges)/sizeof(*test_key_exchanges);
-
 TEST_CASE("x25519 key exchange", "[unit][crypto]") {
-	auto i = GENERATE(range(0ul, test_key_exchange_count));
-
-	CAPTURE(i);
-
 	crypto_test_context ctx;
 
-	auto exc1 = ctx.construct_key_exchange(test_key_exchanges[i], ctx.call);
-	auto exc2 = ctx.construct_key_exchange(test_key_exchanges[i], ctx.call);
+	auto exc1 = ctx.construct_key_exchange(x25519_key_exchange_data{}, ctx.call);
+	auto exc2 = ctx.construct_key_exchange(x25519_key_exchange_data{}, ctx.call);
 
 	REQUIRE(exc1);
 	REQUIRE(exc2);
@@ -167,6 +156,54 @@ TEST_CASE("x25519 key exchange", "[unit][crypto]") {
 
 	CHECK(!secret1.empty());
 	CHECK(secret1 == secret2);
+}
+
+TEST_CASE("ed25519 generate key", "[unit][crypto]") {
+	crypto_test_context ctx;
+
+	auto priv = ctx.generate_private_key(private_key_info{key_type::ssh_ed25519}, ctx.call);
+	REQUIRE(priv);
+
+	byte_vector msg(69, std::byte{'A'});
+	auto sig = priv->sign(msg);
+	REQUIRE(!sig.empty());
+
+	auto pub = priv->public_key();
+	REQUIRE(pub);
+
+	CHECK(pub->verify(msg, sig));
+}
+
+TEST_CASE("ecdsa generate key", "[unit][crypto]") {
+	crypto_test_context ctx;
+
+	auto priv = ctx.generate_private_key(private_key_info{key_type::ecdsa_sha2_nistp256}, ctx.call);
+	REQUIRE(priv);
+
+	byte_vector msg(69, std::byte{'A'});
+	auto sig = priv->sign(msg);
+	REQUIRE(!sig.empty());
+
+	auto pub = priv->public_key();
+	REQUIRE(pub);
+
+	CHECK(pub->verify(msg, sig));
+}
+
+TEST_CASE("rsa generate key", "[unit][crypto]") {
+	crypto_test_context ctx;
+
+	auto priv = ctx.generate_private_key(private_key_info{key_type::ssh_rsa, 2048}, ctx.call);
+	REQUIRE(priv);
+
+	byte_vector msg(69, std::byte{'A'});
+	auto sig = priv->sign(msg);
+	REQUIRE(!sig.empty());
+
+	auto pub = priv->public_key();
+	REQUIRE(pub);
+
+	CHECK(pub->verify(msg, sig));
 }
 
 }

@@ -33,6 +33,15 @@ public:
 		}
 	}
 
+	ed25519_private_key(private_key_info const&, crypto_call_context call)
+	: call_(call)
+	{
+		privkey_.resize(ed25519_key_size);
+		pubkey_.resize(ed25519_key_size);
+		call.rand.random_bytes(privkey_);
+		nettle_ed25519_sha512_public_key(to_uint8_ptr(pubkey_), to_uint8_ptr(privkey_));
+	}
+
 	key_type type() const override {
 		return key_type::ssh_ed25519;
 	}
@@ -65,7 +74,7 @@ private:
 	crypto_call_context call_;
 };
 
-void extract_rand(void *ctx, size_t length, uint8_t *dst) {
+static void extract_rand(void *ctx, size_t length, uint8_t *dst) {
 	random& r = *(random*)ctx;
 	r.random_bytes(span((std::byte*)dst, length));
 }
@@ -103,6 +112,22 @@ public:
 
 		mpz_clear(p_1);
 		mpz_clear(q_1);
+	}
+
+	rsa_private_key(private_key_info const& info, crypto_call_context const& call)
+	: call_(call)
+	{
+		nettle_rsa_public_key_init(&public_key_);
+		nettle_rsa_private_key_init(&key_);
+		// we use fixed 65537 as e
+		mpz_set_ui(public_key_.e, 65537);
+		is_valid_ = nettle_rsa_generate_keypair(&public_key_, &key_, &call_.rand, extract_rand, nullptr, nullptr, info.size, 0) == 1;
+		if(is_valid_) {
+			e_.resize(nettle_mpz_sizeinbase_256_u(public_key_.e));
+			n_.resize(nettle_mpz_sizeinbase_256_u(public_key_.n));
+			nettle_mpz_get_str_256(e_.size(), to_uint8_ptr(e_), public_key_.e);
+			nettle_mpz_get_str_256(n_.size(), to_uint8_ptr(n_), public_key_.n);
+		}
 	}
 
 	~rsa_private_key() {
@@ -174,6 +199,34 @@ public:
 		}
 	}
 
+	ecdsa_private_key(private_key_info const& info, crypto_call_context const& call)
+	: call_(call)
+	, type_(info.type)
+	, is_valid_(true)
+	{
+		ecc_point pub;
+		nettle_ecc_scalar_init(&key_, nettle_get_secp_256r1());
+		nettle_ecc_point_init(&pub, nettle_get_secp_256r1());
+
+		ecdsa_generate_keypair(&pub, &key_, &call_.rand, extract_rand);
+
+		ecc_point_.resize(65);
+		ecc_point_[0] = std::byte{0x04};
+
+		mpz_t x, y;
+		mpz_init(x);
+		mpz_init(y);
+
+		nettle_ecc_point_get(&pub, x, y);
+		nettle_mpz_get_str_256(32, to_uint8_ptr(ecc_point_)+1, x);
+		nettle_mpz_get_str_256(32, to_uint8_ptr(ecc_point_)+33, y);
+
+		mpz_clear(y);
+		mpz_clear(x);
+
+		ecc_point_clear(&pub);
+	}
+
 	~ecdsa_private_key() {
 		nettle_ecc_scalar_clear(&key_);
 	}
@@ -228,6 +281,23 @@ std::shared_ptr<ssh::private_key> create_private_key(private_key_data const& d, 
 		}
 	} else if(d.type() == key_type::ecdsa_sha2_nistp256) {
 		auto key = std::make_shared<ecdsa_private_key>(static_cast<ecdsa_private_key_data const&>(d), call);
+		if(key->valid()) {
+			return key;
+		}
+	}
+	return nullptr;
+}
+
+std::shared_ptr<ssh::private_key> generate_private_key(private_key_info const& info, crypto_call_context const& call) {
+	if(info.type == key_type::ssh_ed25519) {
+		return std::make_shared<ed25519_private_key>(info, call);
+	} else if(info.type == key_type::ssh_rsa) {
+		auto key = std::make_shared<rsa_private_key>(info, call);
+		if(key->valid()) {
+			return key;
+		}
+	} else if(info.type == key_type::ecdsa_sha2_nistp256) {
+		auto key = std::make_shared<ecdsa_private_key>(info, call);
 		if(key->valid()) {
 			return key;
 		}

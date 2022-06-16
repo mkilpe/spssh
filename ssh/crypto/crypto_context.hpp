@@ -36,9 +36,11 @@ struct crypto_context {
 	/// construct private key from private key data (derived class to give the data which has the key type, the data is copied)
 	ctor_shared<private_key, private_key_data> construct_private_key{};
 	/// construct cryptographic key exchange/agreement algorithm
-	ctor<key_exchange, key_exchange_type> construct_key_exchange{};
+	ctor<key_exchange, key_exchange_data> construct_key_exchange{};
 	/// construct hash algorithm
 	ctor<hash, hash_type> construct_hash{};
+	/// generate new private key
+	ctor_shared<private_key, private_key_info> generate_private_key{};
 };
 
 crypto_context default_crypto_context();

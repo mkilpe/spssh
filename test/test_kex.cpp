@@ -105,8 +105,8 @@ void test_crypto_pairs(kex& k1, kex& k2) {
 	REQUIRE(k2_out);
 	REQUIRE(k1_in->cipher->block_size() == k2_out->cipher->block_size());
 	REQUIRE(k2_in->cipher->block_size() == k1_out->cipher->block_size());
-	REQUIRE(k1_in->cipher->is_aead() == k1_out->cipher->is_aead());
-	REQUIRE(k2_in->cipher->is_aead() == k2_out->cipher->is_aead());
+	REQUIRE(k1_in->cipher->is_aead() == k2_out->cipher->is_aead());
+	REQUIRE(k2_in->cipher->is_aead() == k1_out->cipher->is_aead());
 
 	test_cipher(*k1_out->cipher, *k2_in->cipher);
 	test_cipher(*k2_out->cipher, *k1_in->cipher);
