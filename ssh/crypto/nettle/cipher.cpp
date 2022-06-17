@@ -7,6 +7,8 @@
 
 #include <nettle/gcm.h>
 
+#include <iostream>
+
 namespace securepath::ssh::nettle {
 
 static_assert(GCM_IV_SIZE == 12, "invalid iv size");
@@ -19,10 +21,10 @@ public:
 	, dir_(dir)
 	, key_(secret.begin(), secret.end())
 	{
-		SPSSH_ASSERT(iv.size() == 12, "invalid iv size");
+		SPSSH_ASSERT(iv.size() == GCM_IV_SIZE, "invalid iv size");
 		SPSSH_ASSERT(key_.size() == 32, "invalid key size");
 
-		std::memcpy(iv_, iv.data(), 12);
+		std::memcpy(iv_, iv.data(), GCM_IV_SIZE);
 
 		nettle_gcm_aes256_set_key(&ctx_, to_uint8_ptr(key_));
 		nettle_gcm_aes256_set_iv(&ctx_, GCM_IV_SIZE, iv_);
@@ -54,7 +56,7 @@ public:
 		// the invocation counter is most significant bit first, we increment that counter by one
 		int i = sizeof(iv_)-1;
 		while(i > 3 && ++iv_[i] == 0) {
-			++i;
+			--i;
 		}
 		nettle_gcm_aes256_set_iv(&ctx_, GCM_IV_SIZE, iv_);
 	}
@@ -67,13 +69,13 @@ private:
 	byte_vector key_;
 
 	//rfc 5647 IV handling
-	std::uint8_t iv_[12];
+	std::uint8_t iv_[GCM_IV_SIZE]{};
 };
 
-std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_span const& secret, const_span const& iv, crypto_call_context const& call ) {
+std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_span secret, const_span iv, crypto_call_context const& call ) {
 	using enum cipher_type;
 	if(t == aes_256_gcm || t == openssh_aes_256_gcm) {
-		if(secret.size() == 32 && iv.size() == 12) {
+		if(secret.size() == 32 && iv.size() == GCM_IV_SIZE) {
 			return std::make_unique<aes256_gcm_cipher>(dir, secret, iv, call);
 		} else {
 			call.log.log(logger::error, "invalid key or iv size of aes_256_gcm");
