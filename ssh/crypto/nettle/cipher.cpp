@@ -6,8 +6,8 @@
 #include <memory>
 
 #include <nettle/gcm.h>
-
-#include <iostream>
+#include <nettle/aes.h>
+#include <nettle/ctr.h>
 
 namespace securepath::ssh::nettle {
 
@@ -72,6 +72,31 @@ private:
 	std::uint8_t iv_[GCM_IV_SIZE]{};
 };
 
+
+class aes256_ctr : public cipher {
+public:
+	aes256_ctr(const_span secret, const_span iv)
+	: cipher(AES_BLOCK_SIZE, false)
+	{
+		aes256_set_encrypt_key(&ctx_, to_uint8_ptr(secret));
+		std::memcpy(ctr_, iv.data(), 16);
+	}
+
+	/// encrypt/decrypt, it is possible that the range in == out
+	bool process(const_span in, span out) override {
+		SPSSH_ASSERT(same_source_or_non_overlapping(in, out), "invalid in/out");
+		if(in.size() <= out.size()) {
+			ctr_crypt(&ctx_, (nettle_cipher_func const*)aes256_encrypt, AES_BLOCK_SIZE, ctr_, in.size(), to_uint8_ptr(out), to_uint8_ptr(in));
+			return true;
+		}
+		return false;
+	}
+
+private:
+	aes256_ctx ctx_;
+	std::uint8_t ctr_[16]{};
+};
+
 std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_span secret, const_span iv, crypto_call_context const& call ) {
 	using enum cipher_type;
 	if(t == aes_256_gcm || t == openssh_aes_256_gcm) {
@@ -79,6 +104,12 @@ std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_
 			return std::make_unique<aes256_gcm_cipher>(dir, secret, iv, call);
 		} else {
 			call.log.log(logger::error, "invalid key or iv size of aes_256_gcm");
+		}
+	} else if(t == aes_256_ctr) {
+		if(secret.size() == AES256_KEY_SIZE && iv.size() == 16) {
+			return std::make_unique<aes256_ctr>(secret, iv);
+		} else {
+			call.log.log(logger::error, "invalid key or iv size of aes_256_ctr");
 		}
 	}
 	return nullptr;

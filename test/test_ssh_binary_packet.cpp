@@ -143,4 +143,42 @@ TEST_CASE("ssh_binary_packet crypto", "[unit]") {
 	CHECK(ignore == "test 2");
 }
 
+TEST_CASE("ssh_binary_packet crypto 2", "[unit]") {
+	crypto_test_context ctx;
+	ssh_config config;
+	string_io_buffer buf;
+	std::byte temp_buf[1024] = {};
+
+	byte_vector key(32, std::byte{'A'});
+	std::string_view iv = "0123456789ABCDEF";
+
+	ssh_binary_packet bp_1(config, test_log());
+	bp_1.set_random(test_rand);
+	bp_1.set_output_crypto(
+		ctx.construct_cipher(cipher_type::aes_256_ctr, cipher_dir::encrypt, key, to_span(iv), ctx.call),
+		ctx.construct_mac(mac_type::hmac_sha2_256, key, ctx.call));
+
+	REQUIRE(send_packet<ser::disconnect>(bp_1, buf, 1, "test 1", "test 2"));
+	CHECK(buf.used_size() > 0);
+
+	ssh_binary_packet bp_2(config, test_log());
+	bp_2.set_random(test_rand);
+	bp_2.set_input_crypto(
+		ctx.construct_cipher(cipher_type::aes_256_ctr, cipher_dir::decrypt, key, to_span(iv), ctx.call),
+		ctx.construct_mac(mac_type::hmac_sha2_256, key, ctx.call));
+
+	REQUIRE(bp_2.try_decode_header(buf.get()));
+	auto span = bp_2.decrypt_packet(buf.get(), temp_buf);
+	REQUIRE(!span.empty());
+
+	ser::disconnect::load packet(ser::match_type_t, span);
+	REQUIRE(packet);
+
+	auto & [code, desc, ignore] = packet;
+	CHECK(code == 1);
+	CHECK(desc == "test 1");
+	CHECK(ignore == "test 2");
+}
+
+
 }

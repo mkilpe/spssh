@@ -14,6 +14,9 @@ namespace securepath::ssh::test {
 client_config test_client_config();
 server_config test_server_config();
 
+client_config test_client_aes_ctr_config();
+server_config test_server_aes_ctr_config();
+
 }
 
 #endif

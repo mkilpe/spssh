@@ -37,4 +37,24 @@ server_config test_server_config() {
 	return c;
 }
 
+client_config test_client_aes_ctr_config() {
+	auto c = test_client_config();
+	c.algorithms.client_server_ciphers = {cipher_type::aes_256_ctr};
+	c.algorithms.server_client_ciphers = {cipher_type::aes_256_ctr};
+	c.algorithms.client_server_macs = {mac_type::hmac_sha2_256};
+	c.algorithms.server_client_macs = {mac_type::hmac_sha2_256};
+
+	return c;
+}
+
+server_config test_server_aes_ctr_config() {
+	auto c = test_server_config();
+	c.algorithms.client_server_ciphers = {cipher_type::aes_256_ctr};
+	c.algorithms.server_client_ciphers = {cipher_type::aes_256_ctr};
+	c.algorithms.client_server_macs = {mac_type::hmac_sha2_256};
+	c.algorithms.server_client_macs = {mac_type::hmac_sha2_256};
+
+	return c;
+}
+
 }

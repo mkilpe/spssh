@@ -163,14 +163,13 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 	// here the first block is already decrypted so that we found the packet_length
 	std::uint8_t padding = std::to_integer<std::uint8_t>(data[packet_lenght_size]);
 
-	// if we are not doing decryption in place, copy the first block to out
+	// if we are not doing decryption in place, copy the first block to out as it is already decrypted
 	if(data.data() != out.data()) {
 		std::memcpy(out.data(), data.data(), stream_in_.block_size);
 	}
-	data = safe_subspan(data, stream_in_.block_size);
 
-	std::size_t decrypt_size = stream_in_.current_packet.packet_size - stream_in_.block_size;
-	stream_in_.cipher->process(safe_subspan(data, 0, decrypt_size), safe_subspan(out, stream_in_.block_size, decrypt_size));
+	std::size_t decrypt_size = stream_in_.current_packet.packet_size - stream_in_.block_size - stream_in_.integrity_size;
+	stream_in_.cipher->process(safe_subspan(data, stream_in_.block_size, decrypt_size), safe_subspan(out, stream_in_.block_size, decrypt_size));
 
 	std::byte seq_buf[4];
 	// convert the packet sequence to binary and process for mac
@@ -185,13 +184,18 @@ span ssh_binary_packet::decrypt_with_mac(const_span data, span out) {
 
 	// check the tag matches
 	if(!compare_equal(stream_in_.tag_buffer
-		, safe_subspan(out, stream_in_.current_packet.packet_size - stream_in_.integrity_size, stream_in_.integrity_size)))
+		, safe_subspan(data, stream_in_.current_packet.packet_size - stream_in_.integrity_size, stream_in_.integrity_size)))
 	{
 		error_ = ssh_mac_error;
 		logger_.log(logger::debug, "SSH decrypt_with_mac verifying mac failed");
 		return span{};
 	}
 
+	if(packet_header_size + padding + stream_in_.integrity_size > stream_in_.current_packet.packet_size) {
+		set_error(spssh_invalid_packet, "Invalid packet");
+		logger_.log(logger::debug, "SSH decrypt_with_mac invalid packet");
+		return span{};
+	}
 	stream_in_.current_packet.data_size = stream_in_.current_packet.packet_size - packet_header_size - padding - stream_in_.integrity_size;
 	return span{safe_subspan(out, packet_header_size, stream_in_.current_packet.data_size)};
 }

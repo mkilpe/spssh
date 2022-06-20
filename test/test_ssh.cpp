@@ -161,5 +161,24 @@ TEST_CASE("ssh failing auth (no method)", "[unit]") {
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 }
 
+TEST_CASE("ssh test 2", "[unit]") {
+	test_server server(test_log(), test_server_aes_ctr_config());
+	test_client client(test_log(), test_client_aes_ctr_config());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
+
+	client.send_ignore(10);
+	server.send_ignore(25);
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
+}
 
 }
