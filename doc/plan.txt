@@ -31,7 +31,7 @@ Requirements:
  * Minimal dependencies in general
  * All well tested
  * Virtual filesystem to handle all filesystem operations
- * Abstract crypto operations - support at least Nettle and SP crypto abstraction
+ * Abstract crypto operations - support at least Nettle (and SP crypto abstraction? or something else)
  * Start with:
    * KEX: X25519 (ECDH with Curve25519 and SHA-256)
    * Host key format: ssh-ed25519
