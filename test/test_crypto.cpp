@@ -44,7 +44,7 @@ TEST_CASE("ed25519 public and private key", "[unit][crypto]") {
 	byte_vector gen_priv_key(ed25519_key_size);
 	ctx.rand->random_bytes(gen_priv_key);
 
-	ed25519_private_key_data data{ed25519_private_key_data::value_type(gen_priv_key.data(), gen_priv_key.size())};
+	ed25519_private_key_data data{const_span(gen_priv_key.data(), gen_priv_key.size())};
 	auto priv = ctx.construct_private_key(data, ctx.call);
 	REQUIRE(priv);
 
@@ -114,6 +114,46 @@ jgAAAAtzc2gtZWQyNTUxOQAAACCsm7xAxvk6dsfdVI3gwBcJnjn4rYoVvHyjeK8zH9gwZw
 AAAEBHnvTL6Kbrc9tOBdRLWOdcj7CxZtdJKSTsNbTFVcmU9qybvEDG+Tp2x91UjeDAFwme
 OfitihW8fKN4rzMf2DBnAAAAEW1pa2FlbEBtaWthZWwtZGV2AQIDBA==
 -----END OPENSSH PRIVATE KEY-----
+)**"},
+		{key_type::ssh_rsa, rsa_fprint,
+R"**(-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAQEA0XcuUXiZJyZ5bYqUaJpNtsifrUZhR9aEmAKvQGvo+E8wHTKdA8xG
+9+Xb8h0j+po34Oi6bbv9BOyV1eMaRfrGicy2YosMsRFYg0coESmj00EqIdYCK19qeT1q9s
+PTMNgiVVsbd96v3PcQbEYL8ea5GkGslanbBhLCdLe8v45vbD7ZMFZL1jHEys7/z0RQ0Zj3
+qKM8hO3Xnxev+GoPu8JL+7FRT1U7HGRcxMqyrkLUjMaAL+EmdN17oLTBdvZKKk65WZ4cwR
+iiXUNuXJtjNhJMQXl2Rtv022ljn/Pb0zKMbkeMHflQHZO2Ae/j9F9k9DM0M1yhWCWzaS6X
+KYjvW3CcJwAAA8jpgCQJ6YAkCQAAAAdzc2gtcnNhAAABAQDRdy5ReJknJnltipRomk22yJ
++tRmFH1oSYAq9Aa+j4TzAdMp0DzEb35dvyHSP6mjfg6Lptu/0E7JXV4xpF+saJzLZiiwyx
+EViDRygRKaPTQSoh1gIrX2p5PWr2w9Mw2CJVWxt33q/c9xBsRgvx5rkaQayVqdsGEsJ0t7
+y/jm9sPtkwVkvWMcTKzv/PRFDRmPeoozyE7defF6/4ag+7wkv7sVFPVTscZFzEyrKuQtSM
+xoAv4SZ03XugtMF29koqTrlZnhzBGKJdQ25cm2M2EkxBeXZG2/TbaWOf89vTMoxuR4wd+V
+Adk7YB7+P0X2T0MzQzXKFYJbNpLpcpiO9bcJwnAAAAAwEAAQAAAQBDrNPkMqiYw4972sg0
+O5ZcNdmRLCoGAcL5MfTZRYQRpdQPuuiL75YGRdeYE94p+2WOXuLMzW3kB2QppKQ6c9ltcB
+yFHhPNqaMFVxoU4XUyrd0k7XXp+Xv3C+bhL0eugkYlebgYNHRxWcmOkdsOHtMzLoDKIgTH
+o4v8Fdj/ss9BEz9/zpiQLRM0+d/Mj1E2XF4bKwB7ezWBUbMgjzqdP3AHI671c2v9B3NBED
+lx+AkNWecL/E0/5jpdIsMqcPm6VqwTDa2mo6HNvmiqAWmrtAy90gigQaMq8ssBUKxNp1bi
+Z2erK7Xvsaqt5OUNniajMnWHs9KYDaSQxflSYcdtCA2hAAAAgBWmCFy7Cau3IKv2Cf3uSY
+LxQd5DizOiY4AgaiJQvLt0mPyLW7C/AAVdUPboWIgUtIXz1b8qim59gx+SNvEBjtvImY+A
+uv4jfoMOHu3WJmoy2l3zKbYjxQ0c5aYgWQb0Gpdkb8gJWT4bwZjMgRAsGS+WJwrn7YzyLb
+YpeV1KBhtEAAAAgQDtFa7vCuUG7iPySparU/0STQ6rxb5e67C1x0JsYfhjqHdQh+m+wRYR
+Dl5N5N987r0uc/P13ZjlYAwDLVCKbiR4PCkfBPPzePQuOqqNDb7cTu5pbCXB7nTu4sCJ82
+ppwRErkx+uirIsNA9/W94EmXscyjMMnfTzW3sdVWHey+EsCQAAAIEA4i1kf6c6CIfzUbn7
+p+NwRLtMRQgRyjs7+pNldCT6RwiVpXWWjuXRsJBMAn19zsM28Xj0QoGbwTqsRSDaY1loGn
+QfjXXoRlF7fv9DzdmfF8+LYiLER2x1rX1X6ODHCnNkojvuoXXFueFra4FTZ+5HsPSk2Z6M
+lKTxtzHdAHiL8q8AAAARbWlrYWVsQG1pa2FlbC1kZXYBAg==
+-----END OPENSSH PRIVATE KEY-----
+)**"},
+{key_type::ecdsa_sha2_nistp256, ecdsa_fprint,
+R"**(-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAaAAAABNlY2RzYS
+1zaGEyLW5pc3RwMjU2AAAACG5pc3RwMjU2AAAAQQSBJKGeexNgOgefrZIqvTV8MNwnHMrP
+FyzUcuXvLc0QcicHU4MgQOZgIMj94HOthVEldW3Hx6NcX+Xd6BvVfEywAAAAsDOsX7kzrF
++5AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIEkoZ57E2A6B5+t
+kiq9NXww3Cccys8XLNRy5e8tzRByJwdTgyBA5mAgyP3gc62FUSV1bcfHo1xf5d3oG9V8TL
+AAAAAhAOnXZPTC1E5He4mnpR5yYZiOjtgNcXgM+rBwMmzRV/WSAAAAEW1pa2FlbEBtaWth
+ZWwtZGV2AQIDBAUG
+-----END OPENSSH PRIVATE KEY-----
 )**"}
 	};
 
@@ -140,6 +180,13 @@ TEST_CASE("load openssh private key", "[unit][crypto]") {
 		CHECK(pub.fingerprint(ctx, ctx.call) == openssh_test_keys[i].fprint);
 		CHECK(pub.verify(msg, sig));
 	}
+
+	// serialise
+	std::string ser = save_openssh_private_key(priv, ctx, ctx.call);
+	auto same_priv = load_ssh_private_key(to_span(ser), ctx, ctx.call);
+	REQUIRE(same_priv.valid());
+	CHECK(to_byte_vector(priv) == to_byte_vector(same_priv));
+
 }
 
 TEST_CASE("x25519 key exchange", "[unit][crypto]") {

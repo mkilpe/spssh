@@ -8,6 +8,12 @@ namespace securepath::ssh {
 
 class public_key;
 
+struct private_key_data {
+	virtual key_type type() const = 0;
+protected:
+	~private_key_data() = default;
+};
+
 class private_key {
 public:
 	virtual ~private_key() = default;
@@ -27,18 +33,14 @@ public:
 		}
 		return {};
 	}
-};
 
-struct private_key_data {
-	virtual key_type type() const = 0;
-protected:
-	~private_key_data() = default;
+	// the data must point to the same type as the public key
+	virtual bool fill_data(private_key_data& data) const = 0;
 };
 
 struct ed25519_private_key_data : private_key_data {
-	using value_type = std::span<std::byte const, ed25519_key_size>;
-
-	ed25519_private_key_data(value_type priv, std::optional<value_type> pub = std::nullopt)
+	ed25519_private_key_data() = default;
+	ed25519_private_key_data(const_span priv, std::optional<const_span> pub = std::nullopt)
 	: privkey(priv)
 	, pubkey(pub)
 	{}
@@ -47,14 +49,14 @@ struct ed25519_private_key_data : private_key_data {
 		return key_type::ssh_ed25519;
 	}
 
-	value_type privkey;
-	std::optional<value_type> pubkey;
+	const_span privkey;
+	std::optional<const_span> pubkey;
 };
 
 struct rsa_private_key_data : private_key_data {
-
-	rsa_private_key_data(const_mpint_span e, const_mpint_span n, const_mpint_span d, const_mpint_span p, const_mpint_span q)
-	: e(e), n(n), d(d), p(p), q(q)
+	rsa_private_key_data() = default;
+	rsa_private_key_data(const_mpint_span e, const_mpint_span n, const_mpint_span d, const_mpint_span p, const_mpint_span q, const_mpint_span iqmp)
+	: e(e), n(n), d(d), p(p), q(q), iqmp(iqmp)
 	{
 	}
 
@@ -63,6 +65,8 @@ struct rsa_private_key_data : private_key_data {
 	const_mpint_span d;
 	const_mpint_span p;
 	const_mpint_span q;
+	// this can be empty, just for optimisation (inverse of q modulo p)
+	const_mpint_span iqmp;
 
 	key_type type() const override {
 		return key_type::ssh_rsa;
@@ -71,7 +75,7 @@ struct rsa_private_key_data : private_key_data {
 
 
 struct ecdsa_private_key_data : private_key_data {
-
+	ecdsa_private_key_data() = default;
 	ecdsa_private_key_data(key_type t, const_span ecc_point = {}, const_mpint_span privkey = {})
 	: ecdsa_type(t)
 	, ecc_point(ecc_point)
@@ -79,7 +83,7 @@ struct ecdsa_private_key_data : private_key_data {
 	{
 	}
 
-	key_type ecdsa_type;
+	key_type ecdsa_type{};
 
 	// the public key encoded from an elliptic curve point into an octet string (https://www.secg.org/sec1-v2.pdf)
 	const_span ecc_point;

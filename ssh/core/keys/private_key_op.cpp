@@ -3,6 +3,8 @@
 #include "ssh/core/ssh_private_key.hpp"
 #include "ssh/core/ssh_binary_util.hpp"
 
+#include <limits>
+
 namespace securepath::ssh {
 
 std::string to_ecdsa_signature_blob(const_span s) {
@@ -14,6 +16,36 @@ std::string to_ecdsa_signature_blob(const_span s) {
 	w.write(const_mpint_span{safe_subspan(s, s.size()/2, s.size()/2)});
 
 	return res;
+}
+
+bool ser_ed25519_private_key(ssh_bf_binout_writer& w, private_key const& key, std::string_view comment) {
+	ed25519_private_key_data data;
+	return key.fill_data(data)
+		&& data.pubkey
+		&& w.write(to_string_view(*data.pubkey))
+		&& w.write(std::string(to_string_view(data.privkey)) + std::string(to_string_view(*data.pubkey)))
+		&& w.write(comment);
+}
+
+bool ser_rsa_private_key(ssh_bf_binout_writer& w, private_key const& key, std::string_view comment) {
+	rsa_private_key_data data;
+	return key.fill_data(data)
+		&& w.write(data.n)
+		&& w.write(data.e)
+		&& w.write(data.d)
+		&& w.write(data.iqmp)
+		&& w.write(data.p)
+		&& w.write(data.q)
+		&& w.write(comment);
+}
+
+bool ser_ecdsa_private_key(ssh_bf_binout_writer& w, private_key const& key, std::string_view comment) {
+	ecdsa_private_key_data data{key_type::ecdsa_sha2_nistp256};
+	return key.fill_data(data)
+		&& w.write(to_curve_name(data.ecdsa_type))
+		&& w.write(to_string_view(data.ecc_point))
+		&& w.write(data.privkey)
+		&& w.write(comment);
 }
 
 ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_context const& crypto, crypto_call_context const& call) {
@@ -28,8 +60,8 @@ ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_context co
 			auto priv_bytes = to_span(privkey).subspan(0, ed25519_key_size);
 
 			ed25519_private_key_data data{
-				ed25519_private_key_data::value_type(priv_bytes.data(), priv_bytes.size()),
-				ed25519_private_key_data::value_type(pub_bytes.data(), pub_bytes.size())
+				const_span(priv_bytes.data(), priv_bytes.size()),
+				const_span(pub_bytes.data(), pub_bytes.size())
 			};
 			return ssh_private_key(crypto.construct_private_key(data, call), comment);
 		} else {
@@ -46,7 +78,7 @@ ssh_private_key load_raw_rsa_private_key(ssh_bf_reader& r, crypto_context const&
 	std::string_view n, e, d, iqmp, p, q;
 	std::string_view comment;
 	if(r.read(n) && r.read(e) && r.read(d) && r.read(iqmp) && r.read(p) && r.read(q) && r.read(comment)) {
-		rsa_private_key_data data{to_umpint(e), to_umpint(n), to_umpint(d),	to_umpint(p), to_umpint(q)};
+		rsa_private_key_data data{to_umpint(e), to_umpint(n), to_umpint(d),	to_umpint(p), to_umpint(q), to_umpint(iqmp)};
 		return ssh_private_key(crypto.construct_private_key(data, call), comment);
 	} else {
 		call.log.log(logger::debug_trace, "Failed to read rsa private key");
@@ -82,6 +114,8 @@ ssh_private_key load_raw_ssh_private_key(ssh_bf_reader& r, crypto_context const&
 			return load_raw_rsa_private_key(r, crypto, call);
 		} else if(type == "ecdsa-sha2-nistp256") {
 			return load_raw_ecdsa_private_key(r, type, crypto, call);
+		} else {
+			call.log.log(logger::error, "Unknown private key type [{}]", type);
 		}
 	}
 	return {};
@@ -92,17 +126,15 @@ char const magic[] = "openssh-key-v1";
 std::string_view const openssh_start = "-----BEGIN OPENSSH PRIVATE KEY-----";
 std::string_view const openssh_end   = "-----END OPENSSH PRIVATE KEY-----";
 
-bool is_openssh_private_key(const_span data) {
-	auto view = to_string_view(data);
-	return view.starts_with(openssh_start);
+bool is_openssh_private_key(std::string_view data) {
+	return data.starts_with(openssh_start);
 }
 
-openssh_private_key::openssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call)
+openssh_private_key::openssh_private_key(std::string_view view, crypto_context const& crypto, crypto_call_context const& call)
 : crypto_(crypto)
 , call_(call)
 {
-	if(is_openssh_private_key(data)) {
-		auto view = to_string_view(data);
+	if(is_openssh_private_key(view)) {
 		// get the base64 encoded string
 		std::string encoded_data;
 		view = view.substr(openssh_start.size());
@@ -121,6 +153,15 @@ openssh_private_key::openssh_private_key(const_span data, crypto_context const& 
 				data_.clear();
 			}
 		}
+	}
+}
+
+openssh_private_key::openssh_private_key(ssh_private_key const& key, crypto_context const& crypto, crypto_call_context const& call)
+: crypto_(crypto)
+, call_(call)
+{
+	if(!construct_info(key)) {
+		data_.clear();
 	}
 }
 
@@ -184,6 +225,63 @@ bool openssh_private_key::extract_info() {
 	return true;
 }
 
+bool openssh_private_key::construct_info(ssh_private_key const& key) {
+	using namespace std::literals;
+	ssh_bf_writer w(data_);
+
+	if(!w.write(const_span{(std::byte const*)magic, sizeof(magic)}) ||
+		!w.write("none"sv) || // cipher
+		!w.write("none"sv) || // kdf
+		!w.write(""sv) || // kdf options
+		!w.write(std::uint32_t{1})) //num of keys
+	{
+		call_.log.log(logger::error, "Failed to write data");
+		return false;
+	}
+
+	ssh_public_key pub = key.public_key();
+	if(!w.write(to_string_view(to_byte_vector(pub)))) {
+		call_.log.log(logger::error, "Failed to serialise public key");
+		return false;
+	}
+
+	byte_vector priv;
+	ssh_bf_writer priv_w(priv);
+	std::uint32_t rand_int = call_.rand.random_uint(0, std::numeric_limits<std::uint32_t>::max());
+
+	if(!priv_w.write(rand_int) ||
+		!priv_w.write(rand_int) ||
+		!priv_w.write(const_span(to_byte_vector(key))))
+	{
+		call_.log.log(logger::error, "Failed to serialise private key");
+		return false;
+	}
+
+	// add padding to have block size of 8
+	std::size_t bsize = priv_w.used_size() % 8;
+	if(bsize) {
+		bsize = 8-bsize;
+	}
+	std::uint8_t pad{1};
+	while(bsize-- > 0) {
+		if(!priv_w.write(pad++)) {
+			call_.log.log(logger::error, "Failed to write padding");
+			return false;
+		}
+	}
+
+	std::size_t pos = w.used_size();
+
+	if(!w.write(to_string_view(priv))) {
+		call_.log.log(logger::error, "Failed to write data");
+		return false;
+	}
+
+	priv_keys_ = to_string_view(safe_subspan(data_, pos, priv.size()));
+
+	return true;
+}
+
 ssh_private_key openssh_private_key::construct() const {
 	ssh_bf_reader priv_r(to_span(priv_keys_));
 
@@ -195,6 +293,24 @@ ssh_private_key openssh_private_key::construct() const {
 	}
 
 	return load_raw_ssh_private_key(priv_r, crypto_, call_);
+}
+
+std::string openssh_private_key::serialise() const {
+	std::string res;
+	if(is_valid()) {
+		res += openssh_start;
+		res += "\n";
+		std::string enc = encode_base64(data_, true);
+		// split the base64 to 70 char lines
+		while(!enc.empty()) {
+			res += enc.substr(0, 70);
+			res += "\n";
+			enc = enc.substr(std::min<std::size_t>(enc.size(), 70));
+		}
+		res += openssh_end;
+		res += "\n";
+	}
+	return res;
 }
 
 }

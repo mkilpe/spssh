@@ -40,7 +40,6 @@ bool ssh_public_key::verify(const_span msg, const_span signature) const {
 }
 
 bool ssh_public_key::serialise(binout& out) const {
-	bool result = false;
 	ssh_bf_binout_writer w(out);
 
 	using enum key_type;

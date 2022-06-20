@@ -68,6 +68,16 @@ public:
 		return true;
 	}
 
+	bool fill_data(private_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<ed25519_private_key_data&>(data);
+			d.privkey = privkey_;
+			d.pubkey = pubkey_;
+		}
+		return ret;
+	}
+
 private:
 	byte_vector pubkey_;
 	byte_vector privkey_;
@@ -85,6 +95,9 @@ public:
 	: call_(call)
 	, e_(d.e.data.begin(), d.e.data.end())
 	, n_(d.n.data.begin(), d.n.data.end())
+	, d_(d.d.data.begin(), d.d.data.end())
+	, p_(d.p.data.begin(), d.p.data.end())
+	, q_(d.q.data.begin(), d.q.data.end())
 	{
 		nettle_rsa_public_key_init(&public_key_);
 		nettle_mpz_set_str_256_u(public_key_.e, d.e.data.size(), to_uint8_ptr(d.e.data));
@@ -124,9 +137,19 @@ public:
 		is_valid_ = nettle_rsa_generate_keypair(&public_key_, &key_, &call_.rand, extract_rand, nullptr, nullptr, info.size, 0) == 1;
 		if(is_valid_) {
 			e_.resize(nettle_mpz_sizeinbase_256_u(public_key_.e));
-			n_.resize(nettle_mpz_sizeinbase_256_u(public_key_.n));
 			nettle_mpz_get_str_256(e_.size(), to_uint8_ptr(e_), public_key_.e);
+
+			n_.resize(nettle_mpz_sizeinbase_256_u(public_key_.n));
 			nettle_mpz_get_str_256(n_.size(), to_uint8_ptr(n_), public_key_.n);
+
+			d_.resize(nettle_mpz_sizeinbase_256_u(key_.d));
+			nettle_mpz_get_str_256(d_.size(), to_uint8_ptr(d_), key_.d);
+
+			p_.resize(nettle_mpz_sizeinbase_256_u(key_.p));
+			nettle_mpz_get_str_256(p_.size(), to_uint8_ptr(p_), key_.p);
+
+			q_.resize(nettle_mpz_sizeinbase_256_u(key_.q));
+			nettle_mpz_get_str_256(q_.size(), to_uint8_ptr(q_), key_.q);
 		}
 	}
 
@@ -172,13 +195,31 @@ public:
 		return res;
 	}
 
+	bool fill_data(private_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<rsa_private_key_data&>(data);
+			d.e.data = const_span(e_);
+			d.n.data = const_span(n_);
+			d.d.data = const_span(d_);
+			d.p.data = const_span(p_);
+			d.q.data = const_span(q_);
+		}
+		return ret;
+	}
+
 private:
 	crypto_call_context call_;
 	bool is_valid_{};
 	::rsa_public_key public_key_;
 	::rsa_private_key key_;
+
+	// these are kept for fill_data and constructing public key
 	byte_vector e_;
 	byte_vector n_;
+	byte_vector d_;
+	byte_vector p_;
+	byte_vector q_;
 };
 
 
@@ -188,6 +229,7 @@ public:
 	: call_(call)
 	, type_(d.ecdsa_type)
 	, ecc_point_(d.ecc_point.begin(), d.ecc_point.end())
+	, priv_key_(d.privkey.data.begin(), d.privkey.data.end())
 	{
 		nettle_ecc_scalar_init(&key_, nettle_get_secp_256r1());
 
@@ -213,14 +255,20 @@ public:
 		ecc_point_.resize(65);
 		ecc_point_[0] = std::byte{0x04};
 
-		mpz_t x, y;
+		mpz_t x, y, p;
 		mpz_init(x);
 		mpz_init(y);
+		mpz_init(p);
 
 		nettle_ecc_point_get(&pub, x, y);
 		nettle_mpz_get_str_256(32, to_uint8_ptr(ecc_point_)+1, x);
 		nettle_mpz_get_str_256(32, to_uint8_ptr(ecc_point_)+33, y);
 
+		nettle_ecc_scalar_get(&key_, p);
+		priv_key_.resize(32);
+		nettle_mpz_get_str_256(32, to_uint8_ptr(priv_key_), p);
+
+		mpz_clear(p);
 		mpz_clear(y);
 		mpz_clear(x);
 
@@ -262,12 +310,24 @@ public:
 		return true;
 	}
 
+	bool fill_data(private_key_data& data) const override {
+		bool ret = data.type() == type();
+		if(ret) {
+			auto& d = static_cast<ecdsa_private_key_data&>(data);
+			d.ecdsa_type = type_;
+			d.ecc_point = ecc_point_;
+			d.privkey.data = const_span(priv_key_);
+		}
+		return ret;
+	}
+
 private:
 	crypto_call_context call_;
 	bool is_valid_{};
 	key_type type_;
 	ecc_scalar key_;
 	byte_vector ecc_point_;
+	byte_vector priv_key_;
 };
 
 

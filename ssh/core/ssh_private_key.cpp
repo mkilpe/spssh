@@ -48,6 +48,25 @@ byte_vector ssh_private_key::sign(const_span in) const {
 	return res;
 }
 
+bool ssh_private_key::serialise(binout& out) const {
+	ssh_bf_binout_writer w(out);
+
+	using enum key_type;
+	auto t = type();
+
+	if(t != unknown) {
+		w.write(to_string(t));
+	}
+
+	if(t == ssh_ed25519) {
+		return ser_ed25519_private_key(w, *key_impl_, comment_);
+	} else if(t == ssh_rsa) {
+		return ser_rsa_private_key(w, *key_impl_, comment_);
+	} else if(t == ecdsa_sha2_nistp256) {
+		return ser_ecdsa_private_key(w, *key_impl_, comment_);
+	}
+	return false;
+}
 
 ssh_private_key load_raw_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
 	ssh_bf_reader r(data);
@@ -61,8 +80,9 @@ ssh_private_key load_raw_base64_ssh_private_key(std::string_view s, crypto_conte
 
 ssh_private_key load_ssh_private_key(const_span data, crypto_context const& crypto, crypto_call_context const& call) {
 	ssh_private_key key;
-	if(is_openssh_private_key(data)) {
-		openssh_private_key k(data, crypto, call);
+	auto view = to_string_view(data);
+	if(is_openssh_private_key(view)) {
+		openssh_private_key k(view, crypto, call);
 		if(k.is_valid()) {
 			if(!k.is_encrypted()) {
 				key = k.construct();
@@ -74,6 +94,21 @@ ssh_private_key load_ssh_private_key(const_span data, crypto_context const& cryp
 		}
 	}
 	return key;
+}
+
+byte_vector to_byte_vector(ssh_private_key const& k) {
+	byte_vector v;
+	byte_vector_binout s(v);
+	return k.serialise(s) ? v : byte_vector{};
+}
+
+std::string save_openssh_private_key(ssh_private_key const& key, crypto_context const& crypto, crypto_call_context const& call) {
+	std::string res;
+	openssh_private_key p(key, crypto, call);
+	if(p.is_valid()) {
+		res = p.serialise();
+	}
+	return res;
 }
 
 }

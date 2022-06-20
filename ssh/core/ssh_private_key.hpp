@@ -23,6 +23,11 @@ public:
 	// this will return encoded ssh signature
 	byte_vector sign(const_span in) const;
 
+	bool serialise(binout&) const;
+
+	void set_comment(std::string s) { comment_ = std::move(s); }
+	std::string const& comment() const { return comment_; }
+
 private:
 	std::shared_ptr<private_key> key_impl_;
 	std::string comment_;
@@ -34,6 +39,11 @@ ssh_private_key load_raw_base64_ssh_private_key(std::string_view data, crypto_co
 
 // try to load one of the supported formats (e.g. openssh private key format)
 ssh_private_key load_ssh_private_key(const_span data, crypto_context const&, crypto_call_context const&);
+
+byte_vector to_byte_vector(ssh_private_key const&);
+
+// save private key as openssh new private key format
+std::string save_openssh_private_key(ssh_private_key const&, crypto_context const&, crypto_call_context const&);
 
 }
 
