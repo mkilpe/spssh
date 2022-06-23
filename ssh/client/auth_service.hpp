@@ -41,7 +41,7 @@ public:
 	auth_info info_authenticated() const override;
 
 public:
-	/// use no authentication (or query supported auth methods)
+	/// use no authentication (or query supported auth methods if auth required)
 	void no_authentication(std::string username, std::string service);
 
 	/// authenticate with password
