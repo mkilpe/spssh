@@ -3,15 +3,15 @@
 
 namespace securepath::ssh {
 
-bool send_payload(transport_base& base, const_span payload) {
-	base.call_context().log.log(logger::debug_trace, "SSH sending payload");
+bool transport_base::send_payload(const_span payload) {
+	call_context().log.log(logger::debug_trace, "SSH sending payload");
 
-	auto rec = base.alloc_out_packet(payload.size());
+	auto rec = alloc_out_packet(payload.size());
 	if(rec) {
 		copy(payload, rec->data);
-		return base.write_alloced_out_packet(*rec);
+		return write_alloced_out_packet(*rec);
 	} else {
-		base.set_error(spssh_memory_error, "Could not allocate buffer for sending payload");
+		set_error(spssh_memory_error, "Could not allocate buffer for sending payload");
 	}
 
 	return false;

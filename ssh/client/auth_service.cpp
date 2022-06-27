@@ -3,11 +3,11 @@
 #include "ssh/core/auth/auth_protocol.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/protocol.hpp"
-#include "ssh/core/ssh_transport.hpp"
+#include "ssh/core/transport_base.hpp"
 
 namespace securepath::ssh {
 
-client_auth_service::client_auth_service(ssh_transport& transport)
+client_auth_service::client_auth_service(transport_base& transport)
 : transport_(transport)
 , log_(transport_.log())
 {
@@ -324,7 +324,7 @@ void client_auth_service::authenticate_interactive(std::string username, std::st
 	}
 }
 
-default_client_auth::default_client_auth(ssh_transport& transport, client_config const& c)
+default_client_auth::default_client_auth(transport_base& transport, client_config const& c)
 : client_auth_service(transport)
 , config_(c)
 {

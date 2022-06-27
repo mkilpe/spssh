@@ -47,8 +47,7 @@ public:
 	crypto_context const& crypto() const final { return crypto_; }
 	crypto_call_context call_context() const final { return crypto_call_context{logger_, *rand_}; }
 
-	const_span session_id() const;
-	logger& log() const { return logger_; }
+	const_span session_id() const override;
 
 	void set_error_and_disconnect(ssh_error_code, std::string_view message = {}) override;
 	ssh_config const& config() const final { return config_; }
@@ -84,16 +83,6 @@ private: // init & generic packet handling
 
 private: // input
 	handler_result process_transport_payload(span payload);
-
-public: // output
-	template<typename Packet, typename... Args>
-	bool send_packet(Args&&... args) {
-		return ssh::send_packet<Packet>(*this, std::forward<Args>(args)...);
-	}
-
-	bool send_payload(const_span data) {
-		return ssh::send_payload(*this, data);
-	}
 
 private: // data
 	crypto_context crypto_;

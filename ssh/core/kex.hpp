@@ -63,14 +63,14 @@ public:
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
 		logger().log(logger::debug_trace, "SSH kex sending packet [type={}]", int(Packet::packet_type));
-		return ssh::send_packet<Packet>(transport_, std::forward<Args>(args)...);
+		return transport_.send_packet<Packet>(std::forward<Args>(args)...);
 	}
 
 	ssh_config const& config() const { return transport_.config(); }
 	kex_init_data const& init_data() const { return init_data_; }
 	crypto_context const& ccontext() const { return transport_.crypto(); }
 	crypto_call_context call_context() const { return transport_.call_context(); }
-	ssh::logger& logger() const { return transport_.call_context().log; }
+	ssh::logger& logger() const { return transport_.log(); }
 
 private:
 	transport_base& transport_;

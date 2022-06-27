@@ -31,7 +31,7 @@ struct test_auth_data {
 // simple container for passwords/fingerprints to test, _only to test_
 class server_test_auth_service : public server_auth_service {
 public:
-	server_test_auth_service(ssh_transport& transport, auth_config const&, test_auth_data data);
+	server_test_auth_service(transport_base& transport, auth_config const&, test_auth_data data);
 
 protected:
 	auth_state verify_password(auth_context const&, std::string_view password) override;
@@ -43,7 +43,7 @@ protected:
 	void auth_succeeded(auth_context const&) override;
 
 private:
-	ssh_transport& transport_;
+	transport_base& transport_;
 	test_auth_data data_;
 	std::size_t interactive_state{};
 };

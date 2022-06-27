@@ -43,27 +43,31 @@ public:
 	virtual std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) = 0;
 	/// write the allocated packet to buffer, must pass out_packet_record returned by alloc_out_packet
 	virtual bool write_alloced_out_packet(out_packet_record const&) = 0;
-};
 
-template<typename Packet, typename... Args>
-bool send_packet(transport_base& base, Args&&... args) {
-	base.call_context().log.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
+	/// if the session id is set, this will return it, otherwise empty span
+	virtual const_span session_id() const = 0;
 
-	typename Packet::save packet(std::forward<Args>(args)...);
-	std::size_t size = packet.size();
+	template<typename Packet, typename... Args>
+	bool send_packet(Args&&... args) {
+		call_context().log.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
 
-	auto rec = base.alloc_out_packet(size);
+		typename Packet::save packet(std::forward<Args>(args)...);
+		std::size_t size = packet.size();
 
-	if(rec && packet.write(rec->data)) {
-		return base.write_alloced_out_packet(*rec);
-	} else {
-		base.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
+		auto rec = alloc_out_packet(size);
+
+		if(rec && packet.write(rec->data)) {
+			return write_alloced_out_packet(*rec);
+		} else {
+			set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
+		}
+
+		return false;
 	}
 
-	return false;
-}
-
-bool send_payload(transport_base& base, const_span payload);
+	bool send_payload(const_span payload);
+	logger& log() { return call_context().log; }
+};
 
 }
 

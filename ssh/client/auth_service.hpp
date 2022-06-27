@@ -26,13 +26,13 @@ enum class interactive_result {
 };
 
 class logger;
-class ssh_transport;
+class transport_base;
 class ssh_private_key;
 
 class client_auth_service : public auth_service {
 public:
 
-	client_auth_service(ssh_transport& transport);
+	client_auth_service(transport_base& transport);
 
 	std::string_view name() const override;
 	service_state state() const override;
@@ -79,7 +79,7 @@ private:
 	void send_interactive_response(std::vector<std::string> const& results);
 
 protected:
-	ssh_transport& transport_;
+	transport_base& transport_;
 	logger& log_;
 	service_state state_{service_state::inprogress};
 	std::list<auth_try> auths_;
@@ -92,7 +92,7 @@ protected:
 */
 class default_client_auth : public client_auth_service {
 public:
-	default_client_auth(ssh_transport& transport, client_config const&);
+	default_client_auth(transport_base& transport, client_config const&);
 
 protected:
 	void on_banner(std::string_view) override;

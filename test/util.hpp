@@ -5,6 +5,7 @@
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/core/service/ssh_service.hpp"
+#include "ssh/core/ssh_transport.hpp"
 
 namespace securepath::ssh::test {
 

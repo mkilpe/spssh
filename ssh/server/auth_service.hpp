@@ -4,7 +4,7 @@
 #include "ssh/core/auth/auth.hpp"
 #include "ssh/core/service/ssh_service.hpp"
 #include "ssh/core/service/names.hpp"
-#include "ssh/core/ssh_transport.hpp"
+#include "ssh/core/transport_base.hpp"
 
 #include <map>
 
@@ -66,7 +66,7 @@ public:
 */
 class server_auth_service : public auth_service {
 public:
-	server_auth_service(ssh_transport& transport, auth_config const&);
+	server_auth_service(transport_base& transport, auth_config const&);
 
 	std::string_view name() const override;
 	service_state state() const override;
@@ -109,7 +109,7 @@ protected:
 	handler_result handle_interactive_response(const_span payload);
 	bool verify_user_auth_signature(ssh_public_key const& key, const_span p_msg, const_span sig) const;
 private:
-	ssh_transport& transport_;
+	transport_base& transport_;
 	auth_config const& auth_config_;
 	logger& log_;
 

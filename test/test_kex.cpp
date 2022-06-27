@@ -8,6 +8,7 @@
 #include "ssh/core/kex.hpp"
 #include "ssh/core/kex/ecdh.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/ssh_binary_packet.hpp"
 
 namespace securepath::ssh::test {
 namespace {
@@ -22,6 +23,7 @@ struct bp_to_transport_base : transport_base {
 	crypto_call_context call_context() const override { return ctx.call; }
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override { return bp.alloc_out_packet(data_size, out); }
 	bool write_alloced_out_packet(out_packet_record const& r) override { return bp.create_out_packet(r, out); }
+	const_span session_id() const override { return const_span{}; }
 
 	bp_to_transport_base(ssh_binary_packet& bp, crypto_test_context& ctx, out_buffer& out)
 	: bp(bp), ctx(ctx), out(out)

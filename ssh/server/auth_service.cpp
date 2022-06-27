@@ -29,7 +29,7 @@ std::vector<std::string_view> auth_context::succeeded_method_list() const {
 	return to_method_list(successful);
 }
 
-server_auth_service::server_auth_service(ssh_transport& transport, auth_config const& c)
+server_auth_service::server_auth_service(transport_base& transport, auth_config const& c)
 : transport_(transport)
 , auth_config_(c)
 , log_(transport_.log())

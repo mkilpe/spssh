@@ -23,7 +23,7 @@ void test_auth_data::add_interactive(std::string const& user, std::vector<intera
 	interactives[user] = test_interactive_data{std::move(req), std::move(res)};
 }
 
-server_test_auth_service::server_test_auth_service(ssh_transport& transport, auth_config const& config, test_auth_data data)
+server_test_auth_service::server_test_auth_service(transport_base& transport, auth_config const& config, test_auth_data data)
 : server_auth_service(transport, config)
 , transport_(transport)
 , data_(std::move(data))
