@@ -11,6 +11,27 @@
 
 namespace securepath::ssh::test {
 namespace {
+
+struct bp_to_transport_base : transport_base {
+	ssh_error_code error() const override { return bp.error(); }
+	std::string error_message() const override { return bp.error_message(); }
+	void set_error(ssh_error_code code, std::string_view message = {}) override { bp.set_error(code, message); }
+	void set_error_and_disconnect(ssh_error_code code, std::string_view message = {}) override { bp.set_error(code, message);}
+	ssh_config const& config() const override { return bp.config(); }
+	crypto_context const& crypto() const override { return ctx; }
+	crypto_call_context call_context() const override { return ctx.call; }
+	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override { return bp.alloc_out_packet(data_size, out); }
+	bool write_alloced_out_packet(out_packet_record const& r) override { return bp.create_out_packet(r, out); }
+
+	bp_to_transport_base(ssh_binary_packet& bp, crypto_test_context& ctx, out_buffer& out)
+	: bp(bp), ctx(ctx), out(out)
+	{}
+
+	ssh_binary_packet& bp;
+	crypto_test_context& ctx;
+	out_buffer& out;
+};
+
 struct test_context {
 	test_context(logger& l, std::string tag, ssh_config c = {})
 	: log(l, tag)
@@ -39,7 +60,8 @@ struct test_context {
 	string_io_buffer out_buf;
 	crypto_test_context ctx{log};
 	kex_init_data init_data;
-	kex_context kex_c{bp, out_buf, init_data, ctx, ctx.call};
+	bp_to_transport_base transport{bp, ctx, out_buf};
+	kex_context kex_c{transport, init_data};
 };
 }
 

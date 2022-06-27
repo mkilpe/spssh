@@ -71,6 +71,10 @@ void ssh_transport::send_ignore(std::size_t size) {
 	}
 }
 
+void ssh_transport::set_error(ssh_error_code code, std::string_view message) {
+	ssh_binary_packet::set_error(code, message);
+}
+
 void ssh_transport::set_error_and_disconnect(ssh_error_code code, std::string_view message) {
 	logger_.log(logger::debug_trace, "SSH setting error [error={}]", code);
 	SPSSH_ASSERT(error_ == ssh_noerror, "already error set");
@@ -306,10 +310,7 @@ void ssh_transport::send_kex_guess() {
 	kex_ = construct_kex(config_.side, config_.algorithms.kexes.preferred(),
 		kex_context{
 			*this,
-			output_,
-			kex_data_,
-			crypto_,
-			call_context()});
+			kex_data_});
 
 	kex_->initiate();
 }
@@ -502,10 +503,7 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 			kex_ = construct_kex(config_.side, crypto_conf.kex,
 				kex_context{
 					*this,
-					output_,
-					kex_data_,
-					crypto_,
-					call_context()});
+					kex_data_});
 
 			kex_->initiate();
 		}
@@ -523,6 +521,14 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 
 const_span ssh_transport::session_id() const {
 	return kex_data_.session_id;
+}
+
+std::optional<out_packet_record> ssh_transport::alloc_out_packet(std::size_t data_size) {
+	return ssh_binary_packet::alloc_out_packet(data_size, output_);
+}
+
+bool ssh_transport::write_alloced_out_packet(out_packet_record const& r) {
+	return ssh_binary_packet::create_out_packet(r, output_);
 }
 
 }

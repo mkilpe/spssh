@@ -3,7 +3,7 @@
 
 #include "kexinit.hpp"
 #include "packet_types.hpp"
-#include "ssh_binary_packet.hpp"
+#include "transport_base.hpp"
 #include "ssh/crypto/crypto_context.hpp"
 
 namespace securepath::ssh {
@@ -51,40 +51,30 @@ protected:
 	std::string err_message_;
 };
 
-class ssh_config;
 class supported_algorithms;
-class ssh_binary_packet;
-class out_buffer;
 
 class kex_context {
 public:
-	kex_context(ssh_binary_packet& bpacket, out_buffer& output, kex_init_data const& init_data
-		, crypto_context const& ccontext, crypto_call_context call_context)
-	: bpacket_(bpacket)
-	, output_(output)
+	kex_context(transport_base& transport, kex_init_data const& init_data)
+	: transport_(transport)
 	, init_data_(init_data)
-	, ccontext_(ccontext)
-	, call_context_(call_context)
 	{}
 
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
 		logger().log(logger::debug_trace, "SSH kex sending packet [type={}]", int(Packet::packet_type));
-		return ssh::send_packet<Packet>(bpacket_, output_, std::forward<Args>(args)...);
+		return ssh::send_packet<Packet>(transport_, std::forward<Args>(args)...);
 	}
 
-	ssh_config const& config() const { return bpacket_.config(); }
+	ssh_config const& config() const { return transport_.config(); }
 	kex_init_data const& init_data() const { return init_data_; }
-	crypto_context const& ccontext() const { return ccontext_; }
-	crypto_call_context const& call_context() const { return call_context_; }
-	ssh::logger& logger() const { return call_context_.log; }
+	crypto_context const& ccontext() const { return transport_.crypto(); }
+	crypto_call_context call_context() const { return transport_.call_context(); }
+	ssh::logger& logger() const { return transport_.call_context().log; }
 
 private:
-	ssh_binary_packet& bpacket_;
-	out_buffer& output_;
+	transport_base& transport_;
 	kex_init_data const& init_data_;
-	crypto_context const& ccontext_;
-	crypto_call_context call_context_;
 };
 
 std::unique_ptr<kex> construct_kex(transport_side, kex_type, kex_context);

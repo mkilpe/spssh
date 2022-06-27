@@ -4,6 +4,7 @@
 #include "ssh_config.hpp"
 #include "errors.hpp"
 #include "packet_types.hpp"
+#include "transport_base.hpp"
 #include "ssh/common/buffers.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh_constants.hpp"
@@ -64,21 +65,6 @@ struct stream_in_crypto : public stream_crypto {
 	byte_vector tag_buffer;
 };
 
-struct out_packet_record {
-	// size of the whole packet with padding and integrity
-	std::size_t size{};
-	// size of the payload
-	std::size_t payload_size{};
-	// size of the random padding
-	std::size_t padding_size{};
-	// this is where the payload is written to, sub-span of data_buffer
-	span data;
-	// buffer for the whole transport packet
-	span data_buffer;
-	// if this record is in-place allocated
-	bool inplace{};
-};
-
 struct stream_out_crypto : public stream_crypto {
 	// buffer for output data, contains the encrypted ready packet(s) to be send
 	byte_vector buffer;
@@ -126,10 +112,6 @@ private:
 	void shrink_out_buffer();
 
 protected:
-	template<typename Packet, typename... Args>
-	friend bool send_packet(ssh_binary_packet&, out_buffer&, Args&&...);
-	friend bool send_payload(ssh_binary_packet& bp, byte_vector const& payload, out_buffer& out);
-
 	ssh_config const& config_;
 	logger& logger_;
 	random* random_{};
@@ -140,24 +122,6 @@ protected:
 	stream_in_crypto  stream_in_;
 	stream_out_crypto stream_out_;
 };
-
-template<typename Packet, typename... Args>
-bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
-	typename Packet::save packet(std::forward<Args>(args)...);
-	std::size_t size = packet.size();
-
-	auto rec = bp.alloc_out_packet(size, out);
-
-	if(rec && packet.write(rec->data)) {
-		return bp.create_out_packet(*rec, out);
-	} else {
-		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
-	}
-
-	return false;
-}
-
-bool send_payload(ssh_binary_packet& bp, const_span payload, out_buffer& out);
 
 }
 

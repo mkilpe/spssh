@@ -24,6 +24,22 @@ std::string to_hex(securepath::ssh::const_span span) {
 
 namespace securepath::ssh::test {
 
+template<typename Packet, typename... Args>
+bool send_packet(ssh_binary_packet& bp, out_buffer& out, Args&&... args) {
+	typename Packet::save packet(std::forward<Args>(args)...);
+	std::size_t size = packet.size();
+
+	auto rec = bp.alloc_out_packet(size, out);
+
+	if(rec && packet.write(rec->data)) {
+		return bp.create_out_packet(*rec, out);
+	} else {
+		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending packet");
+	}
+
+	return false;
+}
+
 ssh_config test_configs[] =
 	{
 		{}

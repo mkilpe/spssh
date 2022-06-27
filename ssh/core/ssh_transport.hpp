@@ -27,7 +27,7 @@ class kex;
 
 /** \brief SSH Version 2 transport layer
  */
-class ssh_transport : private ssh_binary_packet {
+class ssh_transport : public transport_base, private ssh_binary_packet {
 public:
 	ssh_transport(ssh_config const&, logger&, out_buffer&, crypto_context);
 	~ssh_transport();
@@ -42,18 +42,20 @@ public:
 
 	out_buffer& output_buffer() { return output_; }
 
-	using ssh_binary_packet::error;
-	using ssh_binary_packet::error_message;
-
 	void send_ignore(std::size_t size);
 
-	crypto_context const& crypto() const { return crypto_; }
-	crypto_call_context call_context() const { return crypto_call_context{logger_, *rand_}; }
+	crypto_context const& crypto() const final { return crypto_; }
+	crypto_call_context call_context() const final { return crypto_call_context{logger_, *rand_}; }
+
 	const_span session_id() const;
 	logger& log() const { return logger_; }
 
-	void set_error_and_disconnect(ssh_error_code, std::string_view message = {});
-	using ssh_binary_packet::config;
+	void set_error_and_disconnect(ssh_error_code, std::string_view message = {}) override;
+	ssh_config const& config() const final { return config_; }
+	ssh_error_code error() const final { return ssh_binary_packet::error(); }
+	std::string error_message() const final { return ssh_binary_packet::error_message(); }
+	void set_error(ssh_error_code code, std::string_view message = {}) override;
+
 protected:
 	virtual void on_version_exchange(ssh_version const&);
 	virtual bool handle_basic_packets(ssh_packet_type, const_span payload);
@@ -61,6 +63,8 @@ protected:
 	virtual handler_result handle_transport_packet(ssh_packet_type, const_span payload) = 0;
 	virtual void on_state_change(ssh_state, ssh_state) {}
 
+	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override;
+	bool write_alloced_out_packet(out_packet_record const&) override;
 protected:
 	using ssh_binary_packet::config_;
 	using ssh_binary_packet::logger_;
@@ -84,12 +88,11 @@ private: // input
 public: // output
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
-		logger_.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
-		return ssh::send_packet<Packet>(*this, output_, std::forward<Args>(args)...);
+		return ssh::send_packet<Packet>(*this, std::forward<Args>(args)...);
 	}
 
 	bool send_payload(const_span data) {
-		return ssh::send_payload(*this, data, output_);
+		return ssh::send_payload(*this, data);
 	}
 
 private: // data

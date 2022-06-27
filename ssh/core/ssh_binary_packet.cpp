@@ -393,17 +393,5 @@ bool ssh_binary_packet::send_pending(out_buffer& out) {
 	return stream_out_.data.empty();
 }
 
-bool send_payload(ssh_binary_packet& bp, const_span payload, out_buffer& out) {
-	auto rec = bp.alloc_out_packet(payload.size(), out);
-	if(rec) {
-		copy(payload, rec->data);
-		return bp.create_out_packet(*rec, out);
-	} else {
-		bp.set_error(spssh_memory_error, "Could not allocate buffer for sending payload");
-	}
-
-	return false;
-}
-
 }
 
