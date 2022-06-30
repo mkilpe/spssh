@@ -30,7 +30,7 @@ public: //out
 	/// send extended data packet using binary data
 	bool send_extended_data(const_span);
 
-	/// send eof packet, after this one should not send anything anymore but can receive
+	/// send eof packet, after this one should not send anything any more but can receive
 	bool send_eof();
 
 	/// send close packet and initiate closing of the channel

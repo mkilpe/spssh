@@ -52,9 +52,8 @@ public:
 		call_context().log.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));
 
 		typename Packet::save packet(std::forward<Args>(args)...);
-		std::size_t size = packet.size();
 
-		auto rec = alloc_out_packet(size);
+		auto rec = alloc_out_packet( packet.size());
 
 		if(rec && packet.write(rec->data)) {
 			return write_alloced_out_packet(*rec);
