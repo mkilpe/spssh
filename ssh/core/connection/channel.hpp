@@ -28,7 +28,7 @@ public: //out
 	bool send_data(const_span);
 
 	/// send extended data packet using binary data
-	bool send_extended_data(const_span);
+	bool send_extended_data(std::uint32_t data_type, const_span);
 
 	/// send eof packet, after this one should not send anything any more but can receive
 	bool send_eof();
@@ -53,6 +53,14 @@ public: //out
 		return false;
 	}
 
+protected:
+
+	template<typename Packet>
+	bool write_to_buffer(Packet& packet);
+
+	template<typename Packet>
+	bool write_data(Packet& packet, std::size_t data_size);
+
 private:
 	transport_base& transport_;
 	channel_id sender_channel_{};
@@ -61,7 +69,7 @@ private:
 	std::uint32_t out_window_{};
 	// how much we have received without adjusting
 	std::uint32_t in_window_{};
-	std::uint32_t max_packet_size_{}
+	std::uint32_t max_packet_size_{};
 
 	// out buffer
 	byte_vector buffer_;

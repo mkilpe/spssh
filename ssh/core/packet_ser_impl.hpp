@@ -8,6 +8,7 @@
 #include <vector>
 #include <tuple>
 #include <utility>
+#include <type_traits>
 
 namespace securepath::ssh::ser {
 
@@ -114,6 +115,7 @@ struct bytes {
 };
 
 
+template<std::uint8_t Type, typename... TypeTags> struct ssh_packet_ser_save;
 template<std::uint8_t Type, typename... TypeTags> struct ssh_packet_ser_load;
 
 template<std::uint8_t Type, typename... TypeTags>
@@ -124,7 +126,7 @@ struct ssh_packet_ser {
 				...
 			}
 	*/
-	struct save;
+	using save = ssh_packet_ser_save<Type, TypeTags...>;
 
 	/*
 	usage: (using disconnect as example)
@@ -144,17 +146,24 @@ struct ssh_packet_ser {
 		});
 };
 
+struct packet_ser_save_base {};
 
 template<std::uint8_t Type, typename... TypeTags>
-struct ssh_packet_ser<Type, TypeTags...>::save {
-	save(TypeTags::type const&... values)
-	: m_{values...}
+struct ssh_packet_ser_save : private packet_ser_save_base {
+	using members = std::tuple<TypeTags...>;
+
+	template<typename... Args>
+	ssh_packet_ser_save(Args&&... args)
+	: m_{std::forward<Args>(args)...}
 	{
 	}
 
 	bool write(span out) {
 		ssh_bf_writer writer(out);
+		return write(writer);
+	}
 
+	bool write(ssh_bf_writer& writer) {
 		writer.write(std::uint8_t(Type));
 
 		bool ret = std::apply(
@@ -248,6 +257,49 @@ private:
 	bool result_{};
 	std::size_t size_{};
 };
+
+template<typename Packet>
+struct packet_string_adaptor {
+	packet_string_adaptor(Packet& p) : packet_(p) {}
+
+	Packet& packet_;
+
+	static constexpr std::size_t static_size = 4;
+	std::size_t size() const {
+		return static_size + std::uint32_t(packet_.size());
+	}
+
+	bool write(ssh_bf_writer& w) const {
+		return w.write(std::uint32_t(packet_.size())) && packet_.write(w);
+	}
+};
+
+template<typename>
+struct transform_args;
+
+template<std::uint8_t Type, typename... TypeTags>
+struct transform_args<ssh_packet_ser<Type, TypeTags...>> {
+	template<typename... Args>
+	static auto save(Args&&... args) {
+		return ssh_packet_ser_save<Type,
+			std::conditional_t<
+				std::is_base_of_v<packet_ser_save_base, std::decay_t<Args>> && std::is_same_v<TypeTags, string>,
+					packet_string_adaptor<std::decay_t<Args>>,
+					TypeTags
+			>...>
+			{
+				std::forward<Args>(args)...
+			};
+	}
+};
+
+// this is a work around because nested class deduction guidelines not working on g++ 11 and
+// implicit deduction guides seems not to work with clang for nested templates
+// Creates save-type that can use nested packets to serialise
+template<typename Packet, typename... Args>
+auto make_packet_saver(Args&&... args) {
+	return transform_args<Packet>::save(std::forward<Args>(args)...);
+}
 
 }
 
