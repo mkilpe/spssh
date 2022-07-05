@@ -1,10 +1,10 @@
 
 * check re-kexing works (automated test)
+* implement starting re-kexing after n-bytes
 * implement more kexes
 * check only correct packets allowed while in kex and other states
 * implement cryptographic random (for example nettle does not have one)
 * investigate post-quantum crypto algorithms
-
 
 not implemented yet:
 * possible certificates associated to public key when authenticating
