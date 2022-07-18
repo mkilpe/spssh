@@ -43,6 +43,10 @@ public:
 		return used_size() == 0;
 	}
 
+	std::size_t size() const override {
+		return -1;
+	}
+
 	std::size_t used_size() const { return pos; }
 	std::size_t max_size() const override { return -1; }
 

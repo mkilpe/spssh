@@ -531,4 +531,15 @@ bool ssh_transport::write_alloced_out_packet(out_packet_record const& r) {
 	return ssh_binary_packet::create_out_packet(r, output_);
 }
 
+std::uint32_t ssh_transport::max_in_packet_size() {
+	// we don't know if the other side uses random padding, so we use the maximum padding size here
+	return std::uint32_t(config_.max_in_packet_size - packet_header_size - maximum_padding_size - stream_in_.integrity_size);
+}
+
+std::uint32_t ssh_transport::max_out_packet_size() {
+	// if we use random padding, then use max padding size, otherwise block size
+	std::size_t max_padding = config_.random_packet_padding ? maximum_padding_size : stream_out_.block_size;
+	return std::uint32_t(config_.max_out_packet_size - packet_header_size - max_padding - stream_out_.integrity_size);
+}
+
 }

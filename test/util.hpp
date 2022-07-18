@@ -15,7 +15,7 @@ struct test_context {
 	{
 	}
 
-	session_logger slog;
+	mutable session_logger slog;
 	string_io_buffer out_buf;
 };
 

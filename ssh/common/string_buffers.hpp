@@ -57,11 +57,10 @@ public:
 		used += size;
 	}
 
+	std::size_t size() const override { return maximum_size - used; }
 	std::size_t max_size() const override { return maximum_size; }
 
-	bool empty() const {
-		return used == 0;
-	}
+	bool empty() const { return used == 0; }
 
 	std::string extract_committed() {
 		auto s = data.substr(0, used);

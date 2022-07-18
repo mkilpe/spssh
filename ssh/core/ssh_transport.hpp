@@ -64,6 +64,8 @@ protected:
 
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override;
 	bool write_alloced_out_packet(out_packet_record const&) override;
+	std::uint32_t max_in_packet_size() override;
+	std::uint32_t max_out_packet_size() override;
 protected:
 	using ssh_binary_packet::config_;
 	using ssh_binary_packet::logger_;

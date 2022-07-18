@@ -47,6 +47,11 @@ public:
 	/// if the session id is set, this will return it, otherwise empty span
 	virtual const_span session_id() const = 0;
 
+	/// maximum size of incoming packet (excluding the header, padding and mac)
+	virtual std::uint32_t max_in_packet_size() = 0;
+	/// maximum size of outgoing packet (excluding the header, padding and mac)
+	virtual std::uint32_t max_out_packet_size() = 0;
+
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args) {
 		call_context().log.log(logger::debug_trace, "SSH sending packet [type={}]", int(Packet::packet_type));

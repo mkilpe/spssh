@@ -2,86 +2,129 @@
 #include "channel.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 
+#include <algorithm>
+#include <limits>
+
 namespace securepath::ssh {
+
+std::string_view to_string(channel_state s) {
+	using enum channel_state;
+	switch(s) {
+		case init:          return "init";
+		case open_pending:  return "open_pending";
+		case established:   return "established";
+		case close_pending: return "close_pending";
+		case closed:        return "closed";
+	}
+	return "unknown";
+}
+
+std::uint32_t const packet_overhead = 32;
 
 channel::channel(transport_base& transport, channel_side_info local, std::size_t buffer_size)
 : channel_base(local.id)
 , transport_(transport)
+, log_(transport_.log())
 , local_info_(std::move(local))
 {
+	log_.log(logger::debug_trace, "channel id={} constructed", local.id);
 	buffer_.resize(buffer_size);
+
+	local_info_.max_packet_size =
+		std::min(local_info_.max_packet_size, transport_.max_in_packet_size())-packet_overhead;
+
+	in_window_ = local_info_.window_size;
 }
 
-template<typename Packet>
-bool channel::write_to_buffer(Packet& packet) {
-	std::size_t size = packet.size();
-	if(buffer_.size() - used_ < size) {
-		transport_.log().log(logger::debug, "channel internal buffer full, dropping outgoing packet");
-		return false;
-	}
+channel::~channel()
+{
+	log_.log(logger::debug_trace, "channel id={} destroyed", local_info_.id);
+}
 
-	auto s = safe_subspan(buffer_, used_, size);
-	bool ret = packet.write(s);
-	if(ret) {
+std::uint32_t channel::write_to_buffer(const_span data) {
+	std::size_t size = std::min(data.size(), buffer_.size() - used_);
+
+	if(size) {
+		log_.log(logger::debug_trace, "adding {} bytes to buffer for channel id={} [used={}, buffer_size={}]", size, local_info_.id, used_, buffer_.size());
+		copy(safe_subspan(data, 0, size), safe_subspan(buffer_, used_, size));
 		used_ += size;
-	} else {
-		transport_.log().log(logger::error, "failed to serialise packet to channel internal buffer");
 	}
 
-	return ret;
+	return std::uint32_t(size);
 }
 
-template<typename Packet>
-bool channel::write_data(Packet& packet, std::size_t data_size) {
+std::uint32_t channel::send_data(const_span s) {
+	// see if we have something to send already
+	do_flush();
 
-	// first see if we are out of window or there is something in buffer and add to buffer is that is the case
-	if(used_ || out_window_ < data_size) {
-		return write_to_buffer(packet);
+	if(state_ >= channel_state::close_pending) {
+		// we are closing or already closed, abort sending
+		return 0;
 	}
 
-	// try to allocated space from the main out buffer to send directly
-	auto rec = transport_.alloc_out_packet(packet.size());
-
-	// if we can't, add to buffer
-	if(!rec) {
-		return write_to_buffer(packet);
+	// is there something pending still, just use the buffer
+	if(used_) {
+		return write_to_buffer(s);
 	}
 
-	if(packet.write(rec->data)) {
-		return transport_.write_alloced_out_packet(*rec);
-	} else {
-		transport_.set_error(spssh_invalid_packet, "Failed to serialise outgoing packet");
+	// see if we can directly send some data
+	std::uint32_t pos = 0;
+	bool failed_to_alloc = false;
+	do {
+		std::uint32_t size = std::min(out_window_, std::min(max_out_size_, std::uint32_t(s.size())-pos));
+
+		if(size) {
+			auto data_span = safe_subspan(s, pos, size);
+			ser::channel_data::save p(remote_info_.id, to_string_view(data_span));
+
+			auto rec = transport_.alloc_out_packet(p.size());
+			if(rec) {
+				if(!p.write(rec->data) || !transport_.write_alloced_out_packet(*rec)) {
+					log_.log(logger::error, "could not serialise packet?!");
+					return 0;
+				}
+				pos += size;
+				out_window_ -= size;
+			}
+		} else {
+			failed_to_alloc = true;
+		}
+	} while(!failed_to_alloc && out_window_ && pos < s.size());
+
+	if(pos < s.size()) {
+		pos += write_to_buffer(safe_subspan(s, pos));
 	}
 
-	return false;
-}
-
-template bool channel::write_data(ser::channel_data::save& packet, std::size_t data_size);
-template bool channel::write_data(ser::channel_extended_data::save& packet, std::size_t data_size);
-
-bool channel::send_data(const_span s) {
-	ser::channel_data::save packet(remote_info_.id, to_string_view(s));
-	return write_data(packet, s.size());
-}
-
-bool channel::send_extended_data(std::uint32_t data_type, const_span s) {
-	ser::channel_extended_data::save packet(remote_info_.id, data_type, to_string_view(s));
-	return write_data(packet, s.size());
+	return pos;
 }
 
 bool channel::send_eof() {
-	ser::channel_eof::save packet(remote_info_.id);
-	return write_data(packet, 0);
+	return transport_.send_packet<ser::channel_eof>(remote_info_.id);
 }
 
 bool channel::send_close() {
-	ser::channel_close::save packet(remote_info_.id);
-	return write_data(packet, 0);
+	bool res = true;
+	if(!sent_close_) {
+		if(state_ <= channel_state::close_pending) {
+			if(!used_) {
+				res = transport_.send_packet<ser::channel_close>(remote_info_.id);
+				if(res) {
+					sent_close_ = true;
+				}
+			}
+
+			if(received_close_ && sent_close_) {
+				set_state(channel_state::closed);
+			} else if(res) {
+				set_state(channel_state::close_pending);
+			}
+		}
+	}
+	return res;
 }
 
 bool channel::send_window_adjust(std::uint32_t n) {
-	ser::channel_window_adjust::save packet(remote_info_.id, n);
-	bool ret = write_data(packet, 0);
+	bool ret = transport_.send_packet<ser::channel_window_adjust>(remote_info_.id, n);
 	if(ret) {
 		in_window_ -= std::min(n, in_window_);
 	}
@@ -97,7 +140,11 @@ bool channel::send_open(std::string_view type) {
 }
 
 bool channel::on_open(channel_side_info remote, const_span /*extra_data*/) {
+	log_.log(logger::info, "channel open id={} ({})", local_info_.id, remote.id);
 	remote_info_ = remote;
+	out_window_ = remote_info_.window_size;
+	max_out_size_ = std::min(remote_info_.max_packet_size, transport_.max_out_packet_size())-packet_overhead;
+	set_state(channel_state::established);
 	return transport_.send_packet<ser::channel_open_confirmation>(
 			remote_info_.id,
 			local_info_.id,
@@ -105,32 +152,128 @@ bool channel::on_open(channel_side_info remote, const_span /*extra_data*/) {
 			local_info_.max_packet_size);
 }
 
-bool channel::on_confirm(const_span /*extra_data*/) {
+bool channel::on_confirm(channel_side_info remote, const_span /*extra_data*/) {
+	log_.log(logger::info, "channel open confirmed id={} ({})", local_info_.id, remote.id);
+	remote_info_ = remote;
+	out_window_ = remote_info_.window_size;
+	max_out_size_ = std::min(remote_info_.max_packet_size, transport_.max_out_packet_size()-packet_overhead);
+	set_state(channel_state::established);
 	return true;
 }
 
 void channel::on_failure(std::uint32_t code, std::string_view message) {
-	transport_.log().log(logger::info, "failed to open channel (remote refuses) [code={}, msg={}]", code, message);
+	set_state(channel_state::closed);
+	log_.log(logger::info, "failed to open channel id={} (remote refuses) [code={}, msg={}]", local_info_.id, code, message);
 }
 
-void channel::on_data(const_span) {
-
+void channel::on_data(const_span d) {
+	// just call to adjust window with chosen strategy
+	adjust_in_window(std::uint32_t(d.size()));
 }
 
-void channel::on_extended_data(std::uint32_t data_type, const_span) {
-
+void channel::on_extended_data(std::uint32_t data_type, const_span d) {
+	// just call to adjust window with chosen strategy
+	adjust_in_window(std::uint32_t(d.size()));
 }
 
 void channel::on_window_adjust(std::uint32_t bytes) {
+	log_.log(logger::debug_trace, "adjusting out window id={} [bytes={}]", local_info_.id, bytes);
+	// lets not increase the size over 2^32-1
+	out_window_ += std::min(bytes, std::numeric_limits<std::uint32_t>::max() - out_window_);
 
+	//see if we can send something directly
+	if(used_) {
+		do_flush();
+	}
+
+	if(state_ == channel_state::established && used_ < buffer_.size() && out_window_) {
+		on_send_more();
+	}
 }
 
 void channel::on_eof() {
-
+	// nothing here
 }
 
 void channel::on_close() {
+	log_.log(logger::debug_trace, "received on_close for channel id={}", local_info_.id);
+	if(!received_close_) {
+		received_close_ = true;
+		if(state_ <= channel_state::close_pending) {
+			if(sent_close_) {
+				set_state(channel_state::closed);
+			} else {
+				if(used_) {
+					//lets wait for flush
+					set_state(channel_state::close_pending);
+				} else {
+					transport_.send_packet<ser::channel_close>(remote_info_.id);
+					sent_close_ = true;
+					set_state(channel_state::closed);
+				}
+			}
+		}
+	}
+}
 
+bool channel::send_data_packet() {
+	std::uint32_t size = std::min(out_window_, std::min(max_out_size_, used_));
+	ser::channel_data::save packet(remote_info_.id, to_string_view(safe_subspan(buffer_, used_, size)));
+	auto rec = transport_.alloc_out_packet(packet.size());
+
+	bool res = packet.write(rec->data) && transport_.write_alloced_out_packet(*rec);
+	if(res) {
+		used_ -= size;
+		out_window_ -= size;
+	} else {
+		log_.log(logger::debug_trace, "failed to send buffered channel data [channel={}, used={}, size={}, out_window={}]"
+			, local_info_.id, used_, size, out_window_);
+	}
+	return res;
+}
+
+bool channel::flush() {
+	std::uint32_t used_before = used_;
+	bool res = do_flush();
+	if(state_ == channel_state::established && used_ < used_before && out_window_) {
+		on_send_more();
+	}
+	return res;
+}
+
+bool channel::do_flush() {
+	log_.log(logger::debug_trace, "trying to flush buffer for channel id={} [used={}, out_window={}]", local_info_.id, used_, out_window_);
+	while(used_ && out_window_ && send_data_packet())
+	{
+	}
+	if(!used_ && state_ == channel_state::close_pending) {
+		if(!sent_close_) {
+			transport_.send_packet<ser::channel_close>(remote_info_.id);
+			sent_close_ = true;
+		}
+		set_state(channel_state::closed);
+	}
+	return used_;
+}
+
+
+void channel::on_send_more() {
+	//nothing here
+}
+
+// default strategy: wait for half of the window and then adjust
+void channel::adjust_in_window(std::uint32_t s) {
+	// lets not increase the size over 2^32-1
+	in_window_ += std::min(s, std::numeric_limits<std::uint32_t>::max() - in_window_);
+	if(in_window_ >= remote_info_.window_size/2) {
+		send_window_adjust(in_window_);
+	}
+}
+
+void channel::set_state(channel_state s) {
+	SPSSH_ASSERT(state_ < s, "invalid state change");
+	log_.log(logger::debug_trace, "changing state for id={} [{} -> {}]", local_info_.id, to_string(state_), to_string(s));
+	state_ = s;
 }
 
 }

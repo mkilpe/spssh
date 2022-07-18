@@ -15,7 +15,7 @@ public:
 
 protected:
 	virtual std::unique_ptr<auth_service> construct_auth() = 0;
-	virtual std::unique_ptr<ssh_service> construct_service(auth_info const&) = 0;
+	virtual std::unique_ptr<ssh_service> construct_service(auth_info const&);
 	handler_result handle_transport_packet(ssh_packet_type, const_span payload) override;
 
 protected:

@@ -1,12 +1,12 @@
 #include "ssh_connection.hpp"
 #include "conn_protocol.hpp"
 
-#include "ssh/core/ssh_transport.hpp"
+#include "ssh/core/transport_base.hpp"
 #include "ssh/core/service/names.hpp"
 
 namespace securepath::ssh {
 
-ssh_connection::ssh_connection(ssh_transport& t)
+ssh_connection::ssh_connection(transport_base& t)
 : transport_(t)
 , log_(transport_.log())
 {
@@ -72,7 +72,8 @@ handler_result ssh_connection::handle_open_confirm(const_span payload) {
 		auto& [local_id, remote_id, initial_window, max_packet] = packet;
 		auto it = channels_.find(local_id);
 		if(it != channels_.end()) {
-			if(!it->second->on_confirm(safe_subspan(payload, packet.size()))) {
+			channel_side_info remote{remote_id, initial_window, max_packet};
+			if(!it->second->on_confirm(std::move(remote), safe_subspan(payload, packet.size()))) {
 				//t: what to send here? a close packet?
 				channels_.erase(it);
 			}
@@ -105,6 +106,22 @@ handler_result ssh_connection::handle_open_failure(const_span payload) {
 }
 
 handler_result ssh_connection::handle_close(const_span payload) {
+	ser::channel_close::load packet(payload);
+	if(packet) {
+		auto& [local_id] = packet;
+		auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->on_close();
+			if(it->second->state() == channel_state::closed) {
+				channels_.erase(it);
+			}
+		} else {
+			log_.log(logger::error, "Invalid channel id with open failure [id={}]", local_id);
+		}
+	} else {
+		log_.log(logger::error, "Invalid channel open failure packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
 	return handler_result::handled;
 }
 
@@ -172,6 +189,19 @@ handler_result ssh_connection::handle_extended_data(const_span payload) {
 }
 
 handler_result ssh_connection::handle_eof(const_span payload) {
+	ser::channel_eof::load packet(payload);
+	if(packet) {
+		auto& [local_id] = packet;
+		auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->on_eof();
+		} else {
+			log_.log(logger::error, "Invalid channel id with eof [id={}]", local_id);
+		}
+	} else {
+		log_.log(logger::error, "Invalid channel eof packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
 	return handler_result::handled;
 }
 
@@ -195,19 +225,37 @@ handler_result ssh_connection::process(ssh_packet_type type, const_span payload)
 	return handler_result::unknown;
 }
 
+bool ssh_connection::flush() {
+	//todo
+		/*auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->flush();
+			if(it->second->state() == channel_state::closed) {
+				channels_.erase(it);
+			}
+		}*/
+	return false;
+}
+
 void ssh_connection::add_channel_type(std::string_view type, channel_constructor ctor) {
 	channel_ctors_[std::string(type)] = std::move(ctor);
 }
 
-bool ssh_connection::open_channel(std::string_view type) {
+channel_base* ssh_connection::open_channel(std::string_view type) {
+	channel_base* res{};
 	auto ch = construct_channel(type);
 	if(ch) {
 		if(ch->send_open(type)) {
+			res = ch.get();
 			add_channel(std::move(ch));
-			return true;
 		}
 	}
-	return false;
+	return res;
+}
+
+channel_base* ssh_connection::find_channel(channel_id id) const {
+	auto it = channels_.find(id);
+	return it != channels_.end() ? it->second.get() : nullptr;
 }
 
 }

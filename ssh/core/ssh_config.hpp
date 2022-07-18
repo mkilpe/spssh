@@ -31,11 +31,17 @@ struct ssh_config {
 	// add random size of padding for each packet
 	bool random_packet_padding{true};
 
-	// maximum output buffer size, single transport packet cannot be bigger than this
-	std::size_t max_out_buffer_size{128*1024};
+	// maximum output buffer size (should be at least max_out_packet_size)
+	std::uint32_t max_out_buffer_size{128*1024};
 
 	// size to shrink the output buffer after handling output packet
-	std::size_t shrink_out_buffer_size{std::size_t(-1)};
+	std::uint32_t shrink_out_buffer_size{std::uint32_t(-1)};
+
+	// the maximum size for incoming packet, the external buffer must be able to hold at least this many bytes
+	std::uint32_t max_in_packet_size{64*1024};
+
+	// the maximum size for outgoing packet, the external buffer must be able to hold at least this many bytes
+	std::uint32_t max_out_packet_size{64*1024};
 
 	// send initial guess of kex before receiving remote side kex-init packet
 	bool guess_kex_packet{false};

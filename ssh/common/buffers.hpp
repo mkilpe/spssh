@@ -41,7 +41,11 @@ public:
 	/// Commit to the size of the output data after writing to above span. Size given must be less or equal to the size of the span.
 	virtual void commit(std::size_t size) = 0;
 
-	/// Maximum range the get can return (for example if it is limited by maximum buffer size)
+	/// Current free space in the buffer, this is the maximum size of the range the get function can return at this instant
+	virtual std::size_t size() const = 0;
+
+	/// Maximum range the get can return (for example if it is limited by maximum buffer size).
+	/// This should remain constant during the life time of the buffer object
 	virtual std::size_t max_size() const = 0;
 
 	/// Uses get and commit to write string_view to the buffer

@@ -1,6 +1,10 @@
 
+* check that packet is not too large before sending
+* check that packet is not too large when receiving
 * check re-kexing works (automated test)
 * implement starting re-kexing after n-bytes
+* refactor common bits from ssh_client and ssh_server to a base class
+
 * implement more kexes
 * check only correct packets allowed while in kex and other states
 * implement cryptographic random (for example nettle does not have one)

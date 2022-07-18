@@ -261,7 +261,7 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 		, padding_size
 		};
 
-	// check if we have pending data to write out
+	// check if we don't have pending data to write out
 	if(stream_out_.data.empty()) {
 		logger_.log(logger::debug_trace, "SSH trying inplace sending");
 
@@ -371,7 +371,7 @@ bool ssh_binary_packet::send_pending(out_buffer& out) {
 	logger_.log(logger::debug_trace, "SSH send_pending [data size={}]", stream_out_.data.size());
 
 	if(!stream_out_.data.empty()) {
-		std::size_t ask_size = std::min(out.max_size(), stream_out_.data.size());
+		std::size_t ask_size = std::min(out.size(), stream_out_.data.size());
 		if(ask_size) {
 			auto buf = out.get(ask_size);
 			if(!buf.empty()) {

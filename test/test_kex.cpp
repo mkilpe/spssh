@@ -25,6 +25,10 @@ struct bp_to_transport_base : transport_base {
 	bool write_alloced_out_packet(out_packet_record const& r) override { return bp.create_out_packet(r, out); }
 	const_span session_id() const override { return const_span{}; }
 
+	// should we use the config to deduce these?
+	std::uint32_t max_in_packet_size() override { return 32000; }
+	std::uint32_t max_out_packet_size() override { return 32000; }
+
 	bp_to_transport_base(ssh_binary_packet& bp, crypto_test_context& ctx, out_buffer& out)
 	: bp(bp), ctx(ctx), out(out)
 	{}

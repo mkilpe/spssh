@@ -1,6 +1,8 @@
 #include "ssh_client.hpp"
+#include "ssh/core/connection/ssh_connection.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/protocol.hpp"
+#include "ssh/core/service/names.hpp"
 
 namespace securepath::ssh {
 
@@ -136,7 +138,10 @@ std::unique_ptr<auth_service> ssh_client::construct_auth() {
 	return std::make_unique<default_client_auth>(*this, config_);
 }
 
-std::unique_ptr<ssh_service> ssh_client::construct_service(auth_info const&) {
+std::unique_ptr<ssh_service> ssh_client::construct_service(auth_info const& info) {
+	if(info.service == connection_service_name) {
+		return std::make_unique<ssh_connection>(*this);
+	}
 	return nullptr;
 }
 

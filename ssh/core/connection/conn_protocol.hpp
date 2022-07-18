@@ -110,7 +110,6 @@ using channel_window_adjust = ssh_packet_ser
 	byte      SSH_MSG_CHANNEL_DATA
 	uint32    recipient channel
 	string    data
-
 */
 using channel_data = ssh_packet_ser
 <

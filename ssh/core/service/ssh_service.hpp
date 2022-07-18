@@ -25,6 +25,9 @@ public:
 	// called after constructing the service, returns true on success (this function can send packets specific to the service)
 	virtual bool init() = 0;
 
+	// flush buffers if possible, returns true if more data left to be flushed. Default impl does nothing.
+	virtual bool flush() { return false; }
+
 	// process a packet from network
 	virtual handler_result process(ssh_packet_type, const_span payload) = 0;
 
