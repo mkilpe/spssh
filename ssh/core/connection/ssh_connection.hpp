@@ -10,11 +10,6 @@
 
 namespace securepath::ssh {
 
-// do we need these parameterised for ssh_connection?
-//std::size_t const default_initial_window{2*1024*1024};
-std::size_t const default_initial_window{10};
-std::size_t const default_max_packet_size{64*1024};
-
 class transport_base;
 
 using channel_constructor = std::function<std::unique_ptr<channel>(transport_base&, channel_side_info)>;
@@ -60,6 +55,7 @@ protected:
 private:
 	transport_base& transport_;
 	logger& log_;
+	ssh_config const& config_;
 	service_state state_{service_state::inprogress};
 
 	std::map<std::string, channel_constructor, std::less<>> channel_ctors_;

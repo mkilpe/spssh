@@ -10,8 +10,9 @@
 namespace securepath::ssh::test {
 
 struct test_context {
-	test_context(logger& l, std::string tag)
+	test_context(logger& l, std::string tag, std::size_t buffer_size = -1)
 	: slog(l, tag)
+	, out_buf(buffer_size)
 	{
 	}
 

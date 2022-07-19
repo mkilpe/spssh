@@ -32,8 +32,6 @@ channel::channel(transport_base& transport, channel_side_info local, std::size_t
 
 	local_info_.max_packet_size =
 		std::min(local_info_.max_packet_size, transport_.max_in_packet_size())-packet_overhead;
-
-	in_window_ = local_info_.window_size;
 }
 
 channel::~channel()
@@ -85,9 +83,9 @@ std::uint32_t channel::send_data(const_span s) {
 				}
 				pos += size;
 				out_window_ -= size;
+			} else {
+				failed_to_alloc = true;
 			}
-		} else {
-			failed_to_alloc = true;
 		}
 	} while(!failed_to_alloc && out_window_ && pos < s.size());
 
@@ -218,11 +216,15 @@ void channel::on_close() {
 
 bool channel::send_data_packet() {
 	std::uint32_t size = std::min(out_window_, std::min(max_out_size_, used_));
-	ser::channel_data::save packet(remote_info_.id, to_string_view(safe_subspan(buffer_, used_, size)));
+	auto data_span = safe_subspan(buffer_, 0, size);
+	ser::channel_data::save packet(remote_info_.id, to_string_view(data_span));
 	auto rec = transport_.alloc_out_packet(packet.size());
 
 	bool res = packet.write(rec->data) && transport_.write_alloced_out_packet(*rec);
 	if(res) {
+		if(used_ > size) {
+			std::memmove(buffer_.data(), buffer_.data()+size, used_-size);
+		}
 		used_ -= size;
 		out_window_ -= size;
 	} else {
@@ -266,13 +268,14 @@ void channel::adjust_in_window(std::uint32_t s) {
 	// lets not increase the size over 2^32-1
 	in_window_ += std::min(s, std::numeric_limits<std::uint32_t>::max() - in_window_);
 	if(in_window_ >= remote_info_.window_size/2) {
+		log_.log(logger::debug_trace, "adjusting in window [in_window={}, window_size={}]", in_window_, remote_info_.window_size);
 		send_window_adjust(in_window_);
 	}
 }
 
 void channel::set_state(channel_state s) {
 	SPSSH_ASSERT(state_ < s, "invalid state change");
-	log_.log(logger::debug_trace, "changing state for id={} [{} -> {}]", local_info_.id, to_string(state_), to_string(s));
+	log_.log(logger::debug_trace, "changing state for channel id={} [{} -> {}]", local_info_.id, to_string(state_), to_string(s));
 	state_ = s;
 }
 

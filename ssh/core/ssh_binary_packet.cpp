@@ -219,13 +219,13 @@ bool ssh_binary_packet::resize_out_buffer(std::size_t size) {
 	std::size_t used_size = stream_out_.data.size();
 	std::size_t free_size = stream_out_.buffer.size() - used_size;
 
-	bool ret = free_size < size;
-	if(ret) {
+	bool ret = size <= free_size;
+	if(!ret) {
 		std::size_t new_size = stream_out_.buffer.size() + size - free_size;
 		ret = new_size <= config_.max_out_buffer_size;
 		if(ret) {
 			stream_out_.buffer.resize(new_size);
-			stream_out_.data = span(stream_out_.buffer).subspan(0, used_size);
+			stream_out_.data = safe_subspan(stream_out_.buffer, 0, used_size);
 		} else {
 			set_error(ssh_error_code::spssh_memory_error, "asking for bigger buffer than max_out_buffer_size");
 		}
@@ -276,7 +276,7 @@ std::optional<out_packet_record> ssh_binary_packet::alloc_out_packet(std::size_t
 			logger_.log(logger::info, "SSH alloc_out_packet failed to allocate data buffer [size={}]", res.size);
 			return std::nullopt;
 		}
-		res.data_buffer = safe_subspan(stream_out_.buffer, stream_out_.data.size());
+		res.data_buffer = safe_subspan(stream_out_.buffer, stream_out_.data.size(), res.size);
 	}
 
 	res.data = safe_subspan(res.data_buffer, packet_header_size, data_size);
@@ -361,7 +361,7 @@ bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buf
 		if(info.inplace) {
 			out_buf.commit(info.size);
 		} else {
-			stream_out_.data = info.data_buffer;
+			stream_out_.data = safe_subspan(stream_out_.buffer, 0, stream_out_.data.size() + info.size);
 		}
 	}
 	return ret;

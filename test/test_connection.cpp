@@ -139,8 +139,8 @@ struct test_client : test_context, client_config, ssh_client {
 
 
 struct test_server : test_context, server_config, ssh_server {
-	test_server(std::size_t out_data_size)
-	: test_context(test_log(), "[server] ")
+	test_server(std::size_t out_data_size, std::size_t buffer_size = -1)
+	: test_context(test_log(), "[server] ", buffer_size)
 	, server_config(test_server_config())
 	, ssh_server(*this, slog, out_buf)
 	, out_data_size(out_data_size)
@@ -164,17 +164,32 @@ struct test_server : test_context, server_config, ssh_server {
 };
 }
 
-//std::size_t data_sizes[] = {1, 32*1024, 256*1024+1, 1024*1024*2, 1024*1024*9};
-std::size_t data_sizes[] = {11};
+std::size_t data_sizes[] = {1, 11, 32*1024, 256*1024+1, 1024*1024*2, 1024*1024*9};
 std::size_t const data_sizes_count = sizeof(data_sizes) / sizeof(*data_sizes);
 
-TEST_CASE("connection test", "[unit]") {
-	auto i = GENERATE(range(0ul, data_sizes_count));
-	CAPTURE(i);
+std::uint32_t window_sizes[] = {1024, 256*1024, 2*1024*1024, std::uint32_t(-1)};
+std::size_t const window_sizes_count = sizeof(window_sizes) / sizeof(*window_sizes);
 
-	std::size_t const data_size = data_sizes[i];
+std::uint32_t packet_sizes[] = {1024, 64*1024, 196*1024};
+std::size_t const packet_sizes_count = sizeof(packet_sizes) / sizeof(*packet_sizes);
+
+
+TEST_CASE("connection test", "[unit]") {
+	auto data_i = GENERATE(range(0ul, data_sizes_count));
+	auto window_i = GENERATE(range(0ul, window_sizes_count));
+	auto packet_i = GENERATE(range(0ul, packet_sizes_count));
+	CAPTURE(data_i);
+	CAPTURE(window_i);
+	CAPTURE(packet_i);
+
+	std::size_t const data_size = data_sizes[data_i];
 	test_server server(data_size);
 	test_client client;
+
+	server.channel.max_packet_size = packet_sizes[packet_i];
+	client.channel.max_packet_size = packet_sizes[packet_i];
+	server.channel.initial_window_size = window_sizes[window_i];
+	client.channel.initial_window_size = window_sizes[window_i];
 
 	REQUIRE(run(client, server));
 
@@ -196,6 +211,29 @@ TEST_CASE("connection test", "[unit]") {
 	CHECK(client.state() == ssh_state::service);
 	CHECK(server.state() == ssh_state::service);
 	CHECK(!client.get_channel());
+}
+
+TEST_CASE("connection test - transport buffer full", "[unit]") {
+	std::size_t const data_size = 2*1024*1024;
+
+	test_server server(data_size, 128*1024);
+	test_client client;
+
+	REQUIRE(run(client, server));
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
+
+	REQUIRE(client.open_channel());
+
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::service);
+	CHECK(server.state() == ssh_state::service);
+
+	REQUIRE(client.check_data(data_size));
+	client.close_channel();
+
+	REQUIRE(run(client, server));
 }
 
 }

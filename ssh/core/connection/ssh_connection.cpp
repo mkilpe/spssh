@@ -9,6 +9,7 @@ namespace securepath::ssh {
 ssh_connection::ssh_connection(transport_base& t)
 : transport_(t)
 , log_(transport_.log())
+, config_(t.config())
 {
 }
 
@@ -28,7 +29,7 @@ std::unique_ptr<channel_base> ssh_connection::construct_channel(std::string_view
 	std::unique_ptr<channel_base> res;
 	auto it = channel_ctors_.find(type);
 	if(it != channel_ctors_.end()) {
-		channel_side_info local{++current_id_, default_initial_window, default_max_packet_size};
+		channel_side_info local{++current_id_, config_.channel.initial_window_size, config_.channel.max_packet_size};
 		res = it->second(transport_, std::move(local));
 		if(!res) {
 			log_.log(logger::info, "failed to construct channel [type={}]", type);

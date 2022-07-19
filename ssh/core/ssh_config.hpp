@@ -46,6 +46,13 @@ struct ssh_config {
 	// send initial guess of kex before receiving remote side kex-init packet
 	bool guess_kex_packet{false};
 
+	struct {
+		// default maximum channel packet size
+		std::uint32_t max_packet_size{64*1024};
+		// default initial out window size for channel
+		std::uint32_t initial_window_size{2*1024*1024};
+	} channel;
+
 public:
 	// simple check that we have at least one kexes, cipher and so on (does not check if the algorithms are compatible)
 	bool valid() const;
