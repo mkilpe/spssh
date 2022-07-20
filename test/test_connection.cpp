@@ -213,6 +213,8 @@ TEST_CASE("connection test", "[unit]") {
 	CHECK(!client.get_channel());
 }
 
+
+// this is to test the flushing after buffers full and some space comes available
 TEST_CASE("connection test - transport buffer full", "[unit]") {
 	std::size_t const data_size = 2*1024*1024;
 
