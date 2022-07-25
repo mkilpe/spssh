@@ -219,28 +219,30 @@ bool channel::send_data_packet() {
 	auto data_span = safe_subspan(buffer_, 0, size);
 	ser::channel_data::save packet(remote_info_.id, to_string_view(data_span));
 	auto rec = transport_.alloc_out_packet(packet.size());
-
-	bool res = packet.write(rec->data) && transport_.write_alloced_out_packet(*rec);
+	bool res(rec);
 	if(res) {
-		if(used_ > size) {
-			std::memmove(buffer_.data(), buffer_.data()+size, used_-size);
+		res = packet.write(rec->data) && transport_.write_alloced_out_packet(*rec);
+		if(res) {
+			if(used_ > size) {
+				std::memmove(buffer_.data(), buffer_.data()+size, used_-size);
+			}
+			used_ -= size;
+			out_window_ -= size;
+		} else {
+			log_.log(logger::debug_trace, "failed to send buffered channel data [channel={}, used={}, size={}, out_window={}]"
+				, local_info_.id, used_, size, out_window_);
 		}
-		used_ -= size;
-		out_window_ -= size;
-	} else {
-		log_.log(logger::debug_trace, "failed to send buffered channel data [channel={}, used={}, size={}, out_window={}]"
-			, local_info_.id, used_, size, out_window_);
 	}
 	return res;
 }
 
 bool channel::flush() {
 	std::uint32_t used_before = used_;
-	bool res = do_flush();
+	do_flush();
 	if(state_ == channel_state::established && used_ < used_before && out_window_) {
 		on_send_more();
 	}
-	return res;
+	return used_ && out_window_;
 }
 
 bool channel::do_flush() {
@@ -255,7 +257,7 @@ bool channel::do_flush() {
 		}
 		set_state(channel_state::closed);
 	}
-	return used_;
+	return used_ && out_window_;
 }
 
 

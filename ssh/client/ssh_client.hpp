@@ -29,6 +29,7 @@ protected:
 protected:
 	handler_result handle_service_accept(const_span payload);
 	handler_result process_service(ssh_packet_type type, const_span payload);
+	bool flush() override;
 	void start_user_auth();
 	void start_service(auth_info const& info);
 

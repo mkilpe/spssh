@@ -141,6 +141,10 @@ handler_result ssh_transport::handle_binary_packet(in_buffer& in) {
 }
 
 transport_op ssh_transport::process(in_buffer& in) {
+	if(state() >= ssh_state::transport && state() < ssh_state::disconnected) {
+		// if we have data in the internal buffer, it is possible that the service has buffered data
+		flush_service_ = flush_service_ || !stream_out_.data.empty();
+	}
 	// we try to write even in case of disconnect (maybe we want to send disconnect packet)
 	if(!send_pending(output_)) {
 		return transport_op::want_write_more;
@@ -162,6 +166,10 @@ transport_op ssh_transport::process(in_buffer& in) {
 		if(handle_binary_packet(in) == handler_result::pending && state() != ssh_state::disconnected) {
 			logger_.log(logger::debug_trace, "action pending");
 			return transport_op::pending_action;
+		}
+
+		if(flush_service_ && state() != ssh_state::disconnected) {
+			flush_service_ = flush();
 		}
 	}
 

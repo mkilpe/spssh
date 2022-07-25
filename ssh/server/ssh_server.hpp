@@ -23,6 +23,7 @@ protected:
 	void start_service(auth_info const& info);
 	void handle_service_request(const_span payload);
 	handler_result process_service(ssh_packet_type type, const_span payload);
+	bool flush() override;
 
 protected:
 	std::unique_ptr<ssh_service> service_;

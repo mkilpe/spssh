@@ -227,7 +227,11 @@ TEST_CASE("connection test - transport buffer full", "[unit]") {
 
 	REQUIRE(client.open_channel());
 
-	REQUIRE(run(client, server));
+	bool err = run(client, server);
+	if(!err) {
+		client.slog.log(logger::debug_trace, "client err = {}, server err = {}", client.error(), server.error());
+	}
+	REQUIRE(err);
 
 	CHECK(client.state() == ssh_state::service);
 	CHECK(server.state() == ssh_state::service);

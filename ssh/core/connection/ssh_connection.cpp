@@ -227,15 +227,19 @@ handler_result ssh_connection::process(ssh_packet_type type, const_span payload)
 }
 
 bool ssh_connection::flush() {
-	//todo
-		/*auto it = channels_.find(local_id);
-		if(it != channels_.end()) {
-			it->second->flush();
-			if(it->second->state() == channel_state::closed) {
-				channels_.erase(it);
-			}
-		}*/
-	return false;
+	bool more = false;
+	for(auto it = channels_.begin(); it != channels_.end(); ) {
+		channel_base& c = *it->second;
+		if(c.state() == channel_state::established || c.state() == channel_state::close_pending) {
+			more |= c.flush();
+		}
+		if(c.state() == channel_state::closed) {
+			it = channels_.erase(it);
+		} else {
+			++it;
+		}
+	}
+	return more;
 }
 
 void ssh_connection::add_channel_type(std::string_view type, channel_constructor ctor) {

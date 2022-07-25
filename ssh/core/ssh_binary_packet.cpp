@@ -140,7 +140,7 @@ span ssh_binary_packet::decrypt_aead(aead_cipher& cip, const_span data, span out
 		, safe_subspan(data, data.size() - stream_in_.integrity_size, stream_in_.integrity_size)))
 	{
 		set_error(ssh_mac_error, "verifying tag failed");
-		logger_.log(logger::debug, "SSH decrypt_aead verifying tag failed");
+		logger_.log(logger::debug, "SSH decrypt_aead verifying tag failed [seq={}]", stream_in_.packet_sequence);
 		return span{};
 	}
 
@@ -209,6 +209,7 @@ std::string ssh_binary_packet::error_message() const {
 }
 
 void ssh_binary_packet::set_error(ssh_error_code code, std::string_view message) {
+	logger_.log(logger::debug_trace, "setting error [code={}, message={}]", code, message);
 	error_ = code;
 	error_msg_ = message;
 }
@@ -226,8 +227,6 @@ bool ssh_binary_packet::resize_out_buffer(std::size_t size) {
 		if(ret) {
 			stream_out_.buffer.resize(new_size);
 			stream_out_.data = safe_subspan(stream_out_.buffer, 0, used_size);
-		} else {
-			set_error(ssh_error_code::spssh_memory_error, "asking for bigger buffer than max_out_buffer_size");
 		}
 	}
 
@@ -341,7 +340,7 @@ void ssh_binary_packet::encrypt_packet(const_span data, span out) {
 }
 
 bool ssh_binary_packet::create_out_packet(out_packet_record const& info, out_buffer& out_buf) {
-	logger_.log(logger::debug_trace, "SSH create_out_packet [size={}, payload_size={}, padding_size={}]", info.size, info.payload_size, info.padding_size);
+	logger_.log(logger::debug_trace, "SSH create_out_packet [size={}, payload_size={}, padding_size={}, seq={}]", info.size, info.payload_size, info.padding_size, stream_out_.packet_sequence);
 	SPSSH_ASSERT(random_, "random generator not set");
 
 	ssh_bf_writer p(info.data_buffer);

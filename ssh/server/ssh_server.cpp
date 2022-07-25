@@ -107,4 +107,9 @@ std::unique_ptr<ssh_service> ssh_server::construct_service(auth_info const& info
 	return nullptr;
 }
 
+bool ssh_server::flush() {
+	return service_ ? service_->flush() : false;
+}
+
+
 }

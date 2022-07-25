@@ -61,6 +61,7 @@ protected:
 	virtual handler_result handle_kex_done(kex const&);
 	virtual handler_result handle_transport_packet(ssh_packet_type, const_span payload) = 0;
 	virtual void on_state_change(ssh_state, ssh_state) {}
+	virtual bool flush() { return false; }
 
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override;
 	bool write_alloced_out_packet(out_packet_record const&) override;
@@ -105,6 +106,8 @@ private: // data
 	bool local_kex_done_{};
 	bool remote_kex_done_{};
 	std::unique_ptr<kex> kex_;
+
+	bool flush_service_{};
 };
 
 }
