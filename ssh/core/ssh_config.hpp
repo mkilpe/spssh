@@ -4,7 +4,10 @@
 #include "ssh_private_key.hpp"
 #include "supported_algorithms.hpp"
 
+#include <chrono>
 namespace securepath::ssh {
+
+using namespace std::literals;
 
 struct key_pair {
 	ssh_private_key key;
@@ -25,8 +28,11 @@ struct ssh_config {
 	// host keys for server, possible authentication keys for client
 	std::vector<key_pair> private_keys;
 
-	// re-key interval in bytes (== 0 means no rekeying)
-	std::uint64_t rekey_inverval{1024ULL*1024*1024*2};
+	// re-key interval in bytes (== 0 means no rekeying). When combined transported bytes (in and out) reaches this value, start re-keying
+	std::uint64_t rekey_data_interval{1024ULL*1024*1024};
+
+	// re-key interval in time
+	std::chrono::steady_clock::duration rekey_time_interval{1h};
 
 	// add random size of padding for each packet
 	bool random_packet_padding{true};

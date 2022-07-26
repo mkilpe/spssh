@@ -11,8 +11,6 @@ enum class ssh_state {
 	version_exchange,
 	kex,
 	transport,
-	user_authentication, // this is service too but we give it special handling
-	service,
 	disconnected,
 };
 std::string_view to_string(ssh_state);

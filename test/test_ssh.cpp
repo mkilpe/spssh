@@ -72,15 +72,14 @@ TEST_CASE("ssh test", "[unit]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
 
 	client.send_ignore(10);
 	server.send_ignore(25);
 	CHECK(run(client, server));
-
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
 }
 
 TEST_CASE("ssh test guess", "[unit]") {
@@ -96,8 +95,10 @@ TEST_CASE("ssh test guess", "[unit]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
 }
 
 TEST_CASE("ssh failing version exchange", "[unit]") {
@@ -170,15 +171,14 @@ TEST_CASE("ssh test 2", "[unit]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
 
 	client.send_ignore(10);
 	server.send_ignore(25);
 	CHECK(run(client, server));
-
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
 }
 
 }

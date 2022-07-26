@@ -22,6 +22,7 @@ void ssh_server::handle_service_request(const_span payload) {
 			return;
 		}
 
+		requesting_auth_ = true;
 		start_user_auth();
 
 	} else {
@@ -39,8 +40,6 @@ void ssh_server::start_service(auth_info const& info) {
 	} else if(service_->error() != ssh_noerror) {
 		set_error_and_disconnect(service_->error(), service_->error_message());
 	} else {
-		set_state(ssh_state::service);
-
 		// initialise the service after sending the service accept in case it sends service specific packets
 		if(!service_->init()) {
 			set_error_and_disconnect(service_->error(), service_->error_message());
@@ -55,8 +54,10 @@ handler_result ssh_server::process_service(ssh_packet_type type, const_span payl
 		// see if the service is done
 		auto s_state = service_->state();
 		if(s_state == service_state::done) {
-			if(state() == ssh_state::user_authentication) {
+			if(requesting_auth_) {
 				auth_service& auth = static_cast<auth_service&>(*service_);
+				requesting_auth_ = false;
+				user_authenticated_ = true;
 				//get the service we authenticated for and start it
 				start_service(auth.info_authenticated());
 			} else {
@@ -90,7 +91,6 @@ void ssh_server::start_user_auth() {
 	} else if(service_->error() != ssh_noerror) {
 		set_error_and_disconnect(service_->error(), service_->error_message());
 	} else {
-		set_state(ssh_state::user_authentication);
 		send_packet<ser::service_accept>(user_auth_service_name);
 
 		// initialise the service after sending the service accept in case it sends service specific packets

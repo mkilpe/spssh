@@ -140,8 +140,39 @@ handler_result ssh_transport::handle_binary_packet(in_buffer& in) {
 	return res;
 }
 
+void ssh_transport::start_kex() {
+	set_state(ssh_state::kex);
+	if(!send_kex_init(config_.guess_kex_packet)) {
+		logger_.log(logger::error, "key exchange failed, aborting...");
+		set_error_and_disconnect(ssh_key_exchange_failed);
+	}
+}
+
+bool ssh_transport::do_rekeying() {
+	bool res = false;
+	if(state() == ssh_state::transport) {
+		bool time_passed = rekey_time_ <= std::chrono::steady_clock::now();
+		bool in_data_reached = stream_in_.transferred_bytes >= config_.rekey_data_interval;
+		bool out_data_reached = stream_out_.transferred_bytes >= config_.rekey_data_interval;
+		if(time_passed) {
+			logger_.log(logger::debug_trace, "rekey time interval passed");
+		}
+		if(in_data_reached) {
+			logger_.log(logger::debug_trace, "rekey data interval for in has been reached [transferred={}, limit={}]", stream_in_.transferred_bytes, config_.rekey_data_interval);
+		}
+		if(out_data_reached) {
+			logger_.log(logger::debug_trace, "rekey data interval for out has been reached [transferred={}, limit={}]", stream_out_.transferred_bytes, config_.rekey_data_interval);
+		}
+		res = time_passed || in_data_reached || out_data_reached;
+		if(res) {
+			start_kex();
+		}
+	}
+	return res;
+}
+
 transport_op ssh_transport::process(in_buffer& in) {
-	if(state() >= ssh_state::transport && state() < ssh_state::disconnected) {
+	if(state() == ssh_state::transport) {
 		// if we have data in the internal buffer, it is possible that the service has buffered data
 		flush_service_ = flush_service_ || !stream_out_.data.empty();
 	}
@@ -163,12 +194,16 @@ transport_op ssh_transport::process(in_buffer& in) {
 			}
 		}
 	} else {
+		if(do_rekeying() && state() == ssh_state::disconnected) {
+			return transport_op::disconnected;
+		}
+
 		if(handle_binary_packet(in) == handler_result::pending && state() != ssh_state::disconnected) {
 			logger_.log(logger::debug_trace, "action pending");
 			return transport_op::pending_action;
 		}
 
-		if(flush_service_ && state() != ssh_state::disconnected) {
+		if(flush_service_ && state() == ssh_state::transport) {
 			flush_service_ = flush();
 		}
 	}
@@ -186,6 +221,15 @@ transport_op ssh_transport::process(in_buffer& in) {
 	return transport_op::want_read_more;
 }
 
+handler_result ssh_transport::do_handle_transport_packet(ssh_packet_type type, const_span payload) {
+	handler_result result = handle_transport_packet(type, payload.subspan(1));
+	if(result == handler_result::unknown) {
+		logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
+		send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
+	}
+	return result;
+}
+
 handler_result ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
@@ -196,22 +240,29 @@ handler_result ssh_transport::process_transport_payload(span payload) {
 
 	handler_result result = handler_result::handled;
 	if(!res) {
+		if(state() == ssh_state::transport && type == ssh_kexinit)	{
+			//rekeying
+			start_kex();
+		}
+
 		if(state() == ssh_state::kex) {
 			// give whole payload as we need to save it for kex
 			if(!handle_raw_kex_packet(type, payload)) {
-				//error, return that the packet was unknown
-				result = handler_result::unknown;
+				if(kex_data_.session_id.empty()) {
+					//error, return that the packet was unknown
+					if(!error()) {
+						logger_.log(logger::error, "SSH Received non-kex packet [type={}]", type);
+						set_error_and_disconnect(ssh_key_exchange_failed);
+					}
+					result = handler_result::unknown;
+				} else {
+					// if we are rekeying, handle incoming packets as normal
+					result = do_handle_transport_packet(type, payload);
+				}
 			}
 		} else {
-			if(state() == ssh_state::transport
-				|| state() == ssh_state::user_authentication
-				|| state() == ssh_state::service)
-			{
-				result = handle_transport_packet(type, payload.subspan(1));
-				if(result == handler_result::unknown) {
-					logger_.log(logger::debug, "SSH Unknown packet type, sending unimplemented packet [type={}]", type);
-					send_packet<ser::unimplemented>(stream_in_.current_packet.sequence);
-				}
+			if(state() == ssh_state::transport)	{
+				result = do_handle_transport_packet(type, payload);
 			} else {
 				logger_.log(logger::debug_trace, "SSH invalid state");
 				set_error_and_disconnect(ssh_protocol_error);
@@ -332,6 +383,8 @@ void ssh_transport::kex_set_done() {
 		local_kex_done_ = false;
 		remote_kex_done_ = false;
 		set_state(ssh_state::transport);
+
+		rekey_time_ = std::chrono::steady_clock::now() + config_.rekey_time_interval;
 	}
 }
 
@@ -371,7 +424,7 @@ bool ssh_transport::handle_remote_newkeys() {
 		//set receiving encryption
 		set_input_crypto(std::move(in_keys->cipher), std::move(in_keys->mac));
 		remote_kex_done_ = true;
-		//remember out session id
+		//remember our session id
 		if(kex_data_.session_id.empty()) {
 			auto s = kex_->session_id();
 			kex_data_.session_id = byte_vector(s.begin(), s.end());
@@ -387,6 +440,11 @@ bool ssh_transport::handle_remote_newkeys() {
 
 bool ssh_transport::handle_raw_kex_packet(ssh_packet_type type, const_span payload) {
 	logger_.log(logger::debug_trace, "SSH handle_raw_kex_packet [type={}]", type);
+
+	// check if it is a kex packet
+	if(!is_kex_packet(type)) {
+		return false;
+	}
 
 	if(kexinit_received_) {
 		// see if we need to ignore initial guess
@@ -429,10 +487,10 @@ bool ssh_transport::handle_kex_packet(ssh_packet_type type, const_span payload) 
 			handled = handle_kex_done(*kex_) == handler_result::handled;
 		}
 		return handled;
-	} else {
-		set_error_and_disconnect(ssh_key_exchange_failed);
-		return false;
 	}
+
+	set_error_and_disconnect(ssh_key_exchange_failed);
+	return false;
 }
 
 bool ssh_transport::handle_kexinit_packet(const_span payload) {

@@ -16,6 +16,8 @@ public:
 
 	void start_auth(std::string service);
 
+	bool user_authenticated() const { return user_authenticated_; }
+
 protected:
 	virtual std::unique_ptr<auth_service> construct_auth();
 	virtual std::unique_ptr<ssh_service> construct_service(auth_info const&);
@@ -36,6 +38,7 @@ protected:
 protected:
 	client_config const& config_;
 	bool requesting_auth_{};
+	bool user_authenticated_{};
 
 	// the current active service (e.g. authentication, user defined service, etc)
 	std::unique_ptr<ssh_service> service_;

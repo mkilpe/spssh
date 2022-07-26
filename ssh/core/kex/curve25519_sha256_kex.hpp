@@ -254,7 +254,7 @@ struct curve25519_sha256_kex_client : public curve25519_sha256_kex_base {
 				set_error(ssh_key_exchange_failed, "Invalid kex packet");
 			}
 		} else {
-			set_error(ssh_key_exchange_failed, "Wrong kex packet");
+			set_error(ssh_key_exchange_failed, "Wrong kex packet [type={}]", type);
 		}
 		return kex_state::error;
 	}
@@ -298,7 +298,7 @@ struct curve25519_sha256_kex_server : public curve25519_sha256_kex_base {
 				set_error(ssh_key_exchange_failed, "Invalid kex packet");
 			}
 		} else {
-			set_error(ssh_key_exchange_failed, "Wrong kex packet");
+			set_error(ssh_key_exchange_failed, "Wrong kex packet [type={}]", type);
 		}
 		return kex_state::error;
 	}

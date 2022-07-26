@@ -98,21 +98,21 @@ struct test_client : test_context, client_config, ssh_client {
 	bool open_channel() {
 		auto ch = static_cast<test_connection_service&>(*service_).open_channel("data-test");
 		if(ch) {
-			id = ch->id();
+			ids.push_back(ch->id());
 		}
 		return ch != nullptr;
 	}
 
-	bool close_channel() {
-		auto ch = get_channel();
+	bool close_channel(std::size_t id = 0) {
+		auto ch = get_channel(id);
 		if(ch) {
 			ch->send_close();
 		}
 		return ch != nullptr;
 	}
 
-	bool check_data(std::size_t size) const {
-		auto ch = get_channel();
+	bool check_data(std::size_t size, std::size_t id = 0) const {
+		auto ch = get_channel(id);
 		if(ch) {
 			if(ch->in_data != byte_vector(size, std::byte('A'))) {
 				slog.log(logger::error, "bad in_data content [size={}]", ch->in_data.size());
@@ -129,19 +129,20 @@ struct test_client : test_context, client_config, ssh_client {
 		return ch != nullptr;
 	}
 
-	test_data_channel* get_channel() const {
+	test_data_channel* get_channel(std::size_t id = 0) const {
+		assert(id < ids.size());
 		return static_cast<test_data_channel*>(
-			static_cast<test_connection_service const&>(*service_).find_channel(id));
+			static_cast<test_connection_service const&>(*service_).find_channel(ids[id]));
 	}
 
-	channel_id id{};
+	std::vector<channel_id> ids{};
 };
 
 
 struct test_server : test_context, server_config, ssh_server {
-	test_server(std::size_t out_data_size, std::size_t buffer_size = -1)
+	test_server(std::size_t out_data_size, std::size_t buffer_size = -1, server_config conf = test_server_config())
 	: test_context(test_log(), "[server] ", buffer_size)
-	, server_config(test_server_config())
+	, server_config(std::move(conf))
 	, ssh_server(*this, slog, out_buf)
 	, out_data_size(out_data_size)
 	{
@@ -193,23 +194,23 @@ TEST_CASE("connection test", "[unit]") {
 
 	REQUIRE(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	REQUIRE(client.open_channel());
 
 	REQUIRE(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();
 
 	REQUIRE(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 	CHECK(!client.get_channel());
 }
 
@@ -222,19 +223,70 @@ TEST_CASE("connection test - transport buffer full", "[unit]") {
 	test_client client;
 
 	REQUIRE(run(client, server));
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	REQUIRE(client.open_channel());
 
-	bool err = run(client, server);
-	if(!err) {
-		client.slog.log(logger::debug_trace, "client err = {}, server err = {}", client.error(), server.error());
-	}
-	REQUIRE(err);
+	REQUIRE(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	REQUIRE(client.check_data(data_size));
+	client.close_channel();
+
+	REQUIRE(run(client, server));
+}
+
+TEST_CASE("connection test - multi", "[unit]") {
+	std::size_t const channels = 10;
+	std::size_t const data_size = 2*1024*1024;
+
+	test_server server(data_size, 128*1024);
+	test_client client;
+
+	REQUIRE(run(client, server));
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	for(std::size_t i = 0; i != channels; ++i) {
+		REQUIRE(client.open_channel());
+	}
+
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	for(std::size_t i = 0; i != channels; ++i) {
+		REQUIRE(client.check_data(data_size, i));
+		client.close_channel(i);
+	}
+
+	REQUIRE(run(client, server));
+}
+
+
+TEST_CASE("connection test - rekey", "[unit]") {
+	std::size_t const data_size = 10*1024*1024;
+
+	server_config conf = test_server_config();
+	conf.rekey_data_interval = 1024*1024;
+
+	test_server server(data_size, 128*1024, std::move(conf));
+	test_client client;
+
+	REQUIRE(run(client, server));
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	REQUIRE(client.open_channel());
+
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();

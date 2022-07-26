@@ -3,7 +3,10 @@
 * check that packet is not too large when receiving
 * check re-kexing works (automated test)
 * implement starting re-kexing after n-bytes
+* change the ssh_state to have just transport state and separately keep track of service et al
 * refactor common bits from ssh_client and ssh_server to a base class
+* implement requests for channels/connection
+* implement test client/server configuration from command line / settings file
 
 * implement more kexes
 * check only correct packets allowed while in kex and other states

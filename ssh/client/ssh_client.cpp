@@ -14,9 +14,11 @@ ssh_client::ssh_client(client_config const& conf, logger& log, out_buffer& out, 
 
 void ssh_client::on_state_change(ssh_state old_s, ssh_state new_s) {
 	if(old_s == ssh_state::kex && new_s == ssh_state::transport) {
-		// we are done with kex, request user auth
-		send_packet<ser::service_request>(user_auth_service_name);
-		requesting_auth_ = true;
+		// we are done with kex, request user auth unless we are already authenticated (rekeying)
+		if(!user_authenticated_) {
+			send_packet<ser::service_request>(user_auth_service_name);
+			requesting_auth_ = true;
+		}
 	}
 }
 
@@ -39,9 +41,9 @@ handler_result ssh_client::handle_service_accept(const_span payload) {
 		return handler_result::handled;
 	}
 
-	auto& [service] = packet;
-
 	if(state() == ssh_state::transport && requesting_auth_) {
+		auto& [service] = packet;
+
 		if(service == user_auth_service_name) {
 			logger_.log(logger::debug_trace, "SSH user auth service accepted");
 			start_user_auth();
@@ -63,8 +65,6 @@ void ssh_client::start_service(auth_info const& info) {
 	} else if(service_->error() != ssh_noerror) {
 		set_error_and_disconnect(service_->error(), service_->error_message());
 	} else {
-		set_state(ssh_state::service);
-
 		if(!service_->init()) {
 			logger_.log(logger::error, "Failed to initialise required service");
 			set_error_and_disconnect(ssh_service_not_available);
@@ -79,8 +79,10 @@ handler_result ssh_client::process_service(ssh_packet_type type, const_span payl
 		// see if the service is done
 		auto s_state = service_->state();
 		if(s_state == service_state::done) {
-			if(state() == ssh_state::user_authentication) {
+			if(requesting_auth_) {
 				auth_service& auth = static_cast<auth_service&>(*service_);
+				requesting_auth_ = false;
+				user_authenticated_ = true;
 				//get the service we authenticated for and start it
 				start_service(auth.info_authenticated());
 			} else {
@@ -100,14 +102,14 @@ handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_s
 	if(type == ssh_service_accept) {
 		return handle_service_accept(payload);
 	} else if(type >= 51 && type < 80) { //accept only auth packets types from server
-		if(state() != ssh_state::user_authentication) {
+		if(!requesting_auth_) {
 			set_error_and_disconnect(ssh_protocol_error);
 			logger_.log(logger::error, "SSH Received packet in wrong state [type={}]", int(type));
 			return handler_result::handled;
 		}
 		return process_service(type, payload);
 	} else if(type >= 80) {
-		if(state() != ssh_state::service) {
+		if(!user_authenticated_) {
 			set_error_and_disconnect(ssh_protocol_error);
 			logger_.log(logger::error, "SSH Received packet in wrong state [type={}]", int(type));
 			return handler_result::handled;
@@ -119,7 +121,6 @@ handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_s
 }
 
 void ssh_client::start_user_auth() {
-	set_state(ssh_state::user_authentication);
 	service_ = construct_auth();
 	if(!service_) {
 		set_error_and_disconnect(ssh_service_not_available);

@@ -9,6 +9,7 @@
 #include "ssh/common/logger.hpp"
 #include "ssh/crypto/crypto_context.hpp"
 
+#include <chrono>
 #include <iosfwd>
 
 namespace securepath::ssh {
@@ -63,6 +64,8 @@ protected:
 	virtual void on_state_change(ssh_state, ssh_state) {}
 	virtual bool flush() { return false; }
 
+	handler_result do_handle_transport_packet(ssh_packet_type, const_span payload);
+
 	std::optional<out_packet_record> alloc_out_packet(std::size_t data_size) override;
 	bool write_alloced_out_packet(out_packet_record const&) override;
 	std::uint32_t max_in_packet_size() override;
@@ -83,6 +86,9 @@ private: // init & generic packet handling
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();
+
+	bool do_rekeying();
+	void start_kex();
 
 private: // input
 	handler_result process_transport_payload(span payload);
@@ -108,6 +114,7 @@ private: // data
 	std::unique_ptr<kex> kex_;
 
 	bool flush_service_{};
+	std::chrono::steady_clock::time_point rekey_time_;
 };
 
 }

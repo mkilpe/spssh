@@ -9,8 +9,6 @@ char const* const state_strings[] =
 	, "version_exchange"
 	, "kex"
 	, "transport"
-	, "user_authentication"
-	, "service"
 	, "disconnected"
 	};
 

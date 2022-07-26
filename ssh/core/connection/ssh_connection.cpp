@@ -228,10 +228,11 @@ handler_result ssh_connection::process(ssh_packet_type type, const_span payload)
 
 bool ssh_connection::flush() {
 	bool more = false;
-	for(auto it = channels_.begin(); it != channels_.end(); ) {
+	// in case the channel reports there are more data still, we probably fully filled the out buffers and give up
+	for(auto it = channels_.begin(); !more && it != channels_.end(); ) {
 		channel_base& c = *it->second;
 		if(c.state() == channel_state::established || c.state() == channel_state::close_pending) {
-			more |= c.flush();
+			more = c.flush();
 		}
 		if(c.state() == channel_state::closed) {
 			it = channels_.erase(it);

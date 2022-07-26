@@ -49,6 +49,8 @@ enum ssh_packet_type : std::uint8_t {
 	// 192-255	Reserved for Private Use (local extensions)
 };
 
+bool is_kex_packet(ssh_packet_type);
+
 std::ostream& operator<<(std::ostream&, ssh_packet_type);
 
 }

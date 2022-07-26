@@ -32,7 +32,7 @@ struct stream_crypto {
 	// this is mac->size() or aead_cipher->tag_size() when we are encrypting, otherwise 0
 	std::uint32_t integrity_size{};
 
-	// bytes that has been transferred
+	// bytes that has been transferred since re-keying
 	std::uint64_t transferred_bytes{};
 };
 

@@ -193,15 +193,15 @@ TEST_CASE("no auth for methods", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	client.send_no_auth();
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(client.data.last_try.type == auth_type::none);
 	CHECK(client.data.last_try.username == "test-user");
@@ -211,8 +211,10 @@ TEST_CASE("no auth for methods", "[unit][crypto][auth]") {
 }
 
 void success_check(test_client& client, test_server& server) {
-	REQUIRE(client.state() == ssh_state::service);
-	REQUIRE(server.state() == ssh_state::service);
+	REQUIRE(client.state() == ssh_state::transport);
+	REQUIRE(server.state() == ssh_state::transport);
+	REQUIRE(client.user_authenticated());
+	REQUIRE(server.user_authenticated());
 
 	REQUIRE(client.data.banner == "test-banner");
 	REQUIRE(client.data.success.user == "test-user");
@@ -231,9 +233,6 @@ TEST_CASE("password auth test", "[unit][crypto][auth]") {
 	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::password), 1};
 
 	CHECK(run(client, server));
-
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
 
 	client.send_password();
 
@@ -256,9 +255,6 @@ TEST_CASE("public key auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_public_key("test-user", key);
 
 	CHECK(run(client, server));
@@ -279,9 +275,6 @@ TEST_CASE("public key auth test with check", "[unit][crypto][auth]") {
 	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::public_key), 1};
 
 	CHECK(run(client, server));
-
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
 
 	client.send_public_key_with_check("test-user", key);
 
@@ -309,9 +302,6 @@ TEST_CASE("hostbased auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	CHECK(run(client, server));
@@ -337,9 +327,6 @@ TEST_CASE("interactive auth test 1", "[unit][crypto][auth]") {
 	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::interactive), 1};
 
 	CHECK(run(client, server));
-
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
 
 	client.send_interactive("test-user");
 
@@ -377,9 +364,6 @@ TEST_CASE("interactive auth test 2", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_interactive("test-user");
 
 	CHECK(run(client, server));
@@ -404,9 +388,6 @@ TEST_CASE("interactive auth test 3", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_interactive("test-user");
 
 	CHECK(run(client, server));
@@ -428,9 +409,6 @@ TEST_CASE("bad password auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_password();
 
 	// goes into error state
@@ -438,6 +416,9 @@ TEST_CASE("bad password auth test", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -463,9 +444,6 @@ TEST_CASE("bad public key auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_public_key("test-user", key);
 
 	// goes into error state
@@ -473,6 +451,9 @@ TEST_CASE("bad public key auth test", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -503,9 +484,6 @@ TEST_CASE("bad hostbased auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	// goes into error state
@@ -513,6 +491,9 @@ TEST_CASE("bad hostbased auth test", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -543,9 +524,6 @@ TEST_CASE("bad interactive auth test 1", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_interactive("test-user");
 
 	// goes into error state
@@ -553,6 +531,9 @@ TEST_CASE("bad interactive auth test 1", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -590,9 +571,6 @@ TEST_CASE("bad interactive auth test 2", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_interactive("test-user");
 
 	// goes into error state
@@ -600,6 +578,9 @@ TEST_CASE("bad interactive auth test 2", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -631,9 +612,6 @@ TEST_CASE("bad interactive auth test 3", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
-
 	client.send_interactive("test-user");
 
 	// goes into error state
@@ -641,6 +619,9 @@ TEST_CASE("bad interactive auth test 3", "[unit][crypto][auth]") {
 
 	CHECK(client.state() == ssh_state::disconnected);
 	CHECK(server.state() == ssh_state::disconnected);
+
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 	CHECK(server.error() == ssh_error_code::ssh_no_more_auth_methods_available);
@@ -665,15 +646,15 @@ TEST_CASE("no matching methods auth test", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 3;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	// try with password
 	client.send_password();
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::password);
 	CHECK(client.data.last_try.username == "test-user");
@@ -683,8 +664,8 @@ TEST_CASE("no matching methods auth test", "[unit][crypto][auth]") {
 	client.send_public_key("test-user", key);
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::public_key);
 	CHECK(client.data.last_try.username == "test-user");
@@ -714,8 +695,8 @@ TEST_CASE("no auth required", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_no_auth();
 
@@ -745,14 +726,14 @@ TEST_CASE("multi methods required 1", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_password();
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::password);
 	CHECK(client.data.last_try.username == "test-user");
@@ -784,14 +765,14 @@ TEST_CASE("multi methods required 2", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::hostbased);
 	CHECK(client.data.last_try.username == "test-user");
@@ -823,14 +804,14 @@ TEST_CASE("multi methods required 3", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::hostbased);
 	CHECK(client.data.last_try.username == "test-user");
@@ -839,8 +820,8 @@ TEST_CASE("multi methods required 3", "[unit][crypto][auth]") {
 	CHECK(run(client, server));
 
 	// both of the authentications succeed but the user is not authenticated because public_key auth is required
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 }
 
 
@@ -864,14 +845,14 @@ TEST_CASE("multi methods required 4", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::hostbased);
 	CHECK(client.data.last_try.username == "test-user");
@@ -905,8 +886,8 @@ TEST_CASE("interrupted interactive auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_interactive("test-user");
 
@@ -938,14 +919,14 @@ TEST_CASE("change of user", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_public_key("test-user", key);
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::public_key);
 	CHECK(client.data.last_try.username == "test-user");
@@ -953,8 +934,8 @@ TEST_CASE("change of user", "[unit][crypto][auth]") {
 	// this uses different user, and so it succeeds but the state on server has been reset, the user is not yet authenticated
 	client.send_password();
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::password);
 	CHECK(client.data.last_try.username == "other-user");
@@ -978,14 +959,14 @@ TEST_CASE("change of service", "[unit][crypto][auth]") {
 	server.auth.num_of_tries = 1;
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_public_key("test-user", key);
 
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::public_key);
 	CHECK(client.data.last_try.username == "test-user");
@@ -995,8 +976,8 @@ TEST_CASE("change of service", "[unit][crypto][auth]") {
 	client.service = "other-service";
 	client.send_password();
 	CHECK(run(client, server));
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.last_try.type == auth_type::password);
 	CHECK(client.data.last_try.username == "test-user");
@@ -1098,15 +1079,15 @@ TEST_CASE("pending interactive auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_interactive("test-user");
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	CHECK(client.data.name == "test");
 	CHECK(client.data.instruction == "string");
@@ -1118,8 +1099,8 @@ TEST_CASE("pending interactive auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(server.check_service());
 }
@@ -1231,23 +1212,23 @@ TEST_CASE("pending server password auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_password();
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	//set the data and try again
 	server.data.password = "hophiphap";
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(server.check_service());
 }
@@ -1263,23 +1244,23 @@ TEST_CASE("pending server public key auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_public_key("test-user", key);
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	//set the data and try again
 	server.data.fingerprint = key.public_key().fingerprint(client.crypto(), client.call_context());
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(server.check_service());
 }
@@ -1295,23 +1276,23 @@ TEST_CASE("pending server hostbased auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_host("test-user", key, "mydomain.net", "testuser");
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	//set the data and try again
 	server.data.host = "mydomain.net";
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(server.check_service());
 }
@@ -1327,30 +1308,30 @@ TEST_CASE("pending server interactive auth test", "[unit][crypto][auth]") {
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	client.send_interactive("test-user");
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	//set the data and try again
 	server.data.req = interactive_request{"test", "other", {interactive_prompt{false, "pass"}}};
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::user_authentication);
-	CHECK(server.state() == ssh_state::user_authentication);
+	CHECK(!client.user_authenticated());
+	CHECK(!server.user_authenticated());
 
 	server.data.res = {"hipshops"};
 
 	CHECK(run(client, server));
 
-	CHECK(client.state() == ssh_state::service);
-	CHECK(server.state() == ssh_state::service);
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
 
 	CHECK(server.check_service());
 }

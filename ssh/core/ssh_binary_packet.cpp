@@ -32,6 +32,8 @@ void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher
 		s.integrity_size = s.mac->size();
 	}
 
+	// reset the transfered bytes as we set new crypto
+	s.transferred_bytes = 0;
 	s.block_size = std::max(minimum_block_size, s.cipher->block_size());
 	SPSSH_ASSERT(s.block_size < maximum_padding_size, "too big cipher block size");
 }
@@ -104,7 +106,7 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 		stream_in_.current_packet.status = in_packet_status::data_ready;
 		stream_in_.current_packet.sequence = stream_in_.packet_sequence;
 		stream_in_.current_packet.payload = payload;
-		stream_in_.transferred_bytes += in_data.size();
+		stream_in_.transferred_bytes += stream_in_.current_packet.packet_size;
 		// incremented for every packet and let wrap around
 		++stream_in_.packet_sequence;
 	}
