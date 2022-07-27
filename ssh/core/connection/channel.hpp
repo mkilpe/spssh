@@ -65,7 +65,15 @@ public:
 
 	/// called when remote side closed the channel
 	virtual void on_close() = 0;
-	//virtual void on_request(...) = 0;
+
+	// called when received channel request, return true if handling the message (this also means replying to it)
+	virtual void on_request(std::string_view name, bool reply, const_span extra_data) = 0;
+
+	// called for successful response to channel request. The responses for request come in the order the requests were sent.
+	virtual void on_request_success() = 0;
+
+	// called for channel response failure
+	virtual void on_request_failure() = 0;
 
 	// try to flush out buffer, return true if more still left to be flushed
 	virtual bool flush() = 0;
@@ -115,6 +123,9 @@ protected:
 	void on_close() override;
 	bool flush() override;
 	void on_send_more() override;
+	void on_request(std::string_view name, bool reply, const_span extra_data) override;
+	void on_request_success() override;
+	void on_request_failure() override;
 
 	virtual void adjust_in_window(std::uint32_t size);
 

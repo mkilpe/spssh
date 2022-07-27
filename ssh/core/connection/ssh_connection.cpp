@@ -127,14 +127,40 @@ handler_result ssh_connection::handle_close(const_span payload) {
 }
 
 handler_result ssh_connection::handle_global_request(const_span payload) {
+	ser::global_request::load packet(payload);
+	if(packet) {
+		auto& [request_name, reply] = packet;
+		if(!on_global_request(request_name, reply, safe_subspan(payload, packet.size()))) {
+			if(reply) {
+				transport_.send_packet<ser::request_failure>();
+			}
+		}
+	} else {
+		log_.log(logger::error, "Invalid global request packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
 	return handler_result::handled;
 }
 
 handler_result ssh_connection::handle_request_success(const_span payload) {
+	ser::request_success::load packet(payload);
+	if(packet) {
+		on_request_success(safe_subspan(payload, packet.size()));
+	} else {
+		log_.log(logger::error, "Invalid global request success packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
 	return handler_result::handled;
 }
 
 handler_result ssh_connection::handle_request_failure(const_span payload) {
+	ser::request_success::load packet(payload);
+	if(packet) {
+		on_request_failure();
+	} else {
+		log_.log(logger::error, "Invalid global request failure packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
 	return handler_result::handled;
 }
 
@@ -206,6 +232,57 @@ handler_result ssh_connection::handle_eof(const_span payload) {
 	return handler_result::handled;
 }
 
+handler_result ssh_connection::handle_channel_request(const_span payload) {
+	ser::channel_request::load packet(payload);
+	if(packet) {
+		auto& [local_id, name, reply] = packet;
+		auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->on_request(name, reply, safe_subspan(payload, packet.size()));
+		} else {
+			log_.log(logger::error, "Invalid channel id with channel request [id={}]", local_id);
+		}
+	} else {
+		log_.log(logger::error, "Invalid channel request packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
+	return handler_result::handled;
+}
+
+handler_result ssh_connection::handle_channel_success(const_span payload) {
+	ser::channel_success::load packet(payload);
+	if(packet) {
+		auto& [local_id] = packet;
+		auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->on_request_success();
+		} else {
+			log_.log(logger::error, "Invalid channel id with channel request success [id={}]", local_id);
+		}
+	} else {
+		log_.log(logger::error, "Invalid channel request success packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
+	return handler_result::handled;
+}
+
+handler_result ssh_connection::handle_channel_failure(const_span payload) {
+	ser::channel_failure::load packet(payload);
+	if(packet) {
+		auto& [local_id] = packet;
+		auto it = channels_.find(local_id);
+		if(it != channels_.end()) {
+			it->second->on_request_failure();
+		} else {
+			log_.log(logger::error, "Invalid channel id with channel request failure [id={}]", local_id);
+		}
+	} else {
+		log_.log(logger::error, "Invalid channel request failure packet");
+		transport_.set_error_and_disconnect(ssh_protocol_error);
+	}
+	return handler_result::handled;
+}
+
 handler_result ssh_connection::process(ssh_packet_type type, const_span payload) {
 	switch(type) {
 		case ssh_channel_open :              return handle_open(payload);
@@ -219,6 +296,9 @@ handler_result ssh_connection::process(ssh_packet_type type, const_span payload)
 		case ssh_channel_data :              return handle_data(payload);
 		case ssh_channel_extended_data :     return handle_extended_data(payload);
 		case ssh_channel_eof :               return handle_eof(payload);
+		case ssh_channel_request :           return handle_channel_request(payload);
+		case ssh_channel_success :           return handle_channel_success(payload);
+		case ssh_channel_failure :           return handle_channel_failure(payload);
 	};
 
 	log_.log(logger::error, "Unknown packet type for ssh_connection [type={}]", int(type));
@@ -262,6 +342,19 @@ channel_base* ssh_connection::open_channel(std::string_view type) {
 channel_base* ssh_connection::find_channel(channel_id id) const {
 	auto it = channels_.find(id);
 	return it != channels_.end() ? it->second.get() : nullptr;
+}
+
+bool ssh_connection::on_global_request(std::string_view name, bool reply, const_span) {
+	log_.log(logger::debug_trace, "received global request '{}' [reply={}]", name, reply);
+	return false;
+}
+
+void ssh_connection::on_request_success(const_span) {
+	log_.log(logger::debug_trace, "received global request success");
+}
+
+void ssh_connection::on_request_failure() {
+	log_.log(logger::debug_trace, "received global request failure");
 }
 
 }

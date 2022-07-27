@@ -156,6 +156,41 @@ using channel_close = ssh_packet_ser
 	uint32
 >;
 
+/*
+	byte      SSH_MSG_CHANNEL_REQUEST
+	uint32    recipient channel
+	string    request type in US-ASCII characters only
+	boolean   want reply
+	....      type-specific data follows
+*/
+using channel_request = ssh_packet_ser
+<
+	ssh_channel_request,
+	uint32,
+	string,
+	boolean
+>;
+
+/*
+	byte     SSH_MSG_CHANNEL_SUCCESS
+	uint32   recipient channel
+*/
+using channel_success = ssh_packet_ser
+<
+	ssh_channel_success,
+	uint32
+>;
+
+/*
+	byte     SSH_MSG_CHANNEL_FAILURE
+	uint32   recipient channel
+*/
+using channel_failure = ssh_packet_ser
+<
+	ssh_request_failure,
+	uint32
+>;
+
 }
 
 #endif

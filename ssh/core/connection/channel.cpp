@@ -265,6 +265,21 @@ void channel::on_send_more() {
 	//nothing here
 }
 
+void channel::on_request(std::string_view name, bool reply, const_span) {
+	log_.log(logger::debug_trace, "received channel request [name={}, reply={}]", name, reply);
+	if(reply) {
+		transport_.send_packet<ser::channel_failure>(remote_info_.id);
+	}
+}
+
+void channel::on_request_success() {
+	log_.log(logger::debug_trace, "received channel request success");
+}
+
+void channel::on_request_failure() {
+	log_.log(logger::debug_trace, "received channel request failure");
+}
+
 // default strategy: wait for half of the window and then adjust
 void channel::adjust_in_window(std::uint32_t s) {
 	// lets not increase the size over 2^32-1

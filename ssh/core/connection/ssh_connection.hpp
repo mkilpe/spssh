@@ -39,6 +39,16 @@ protected:
 	std::unique_ptr<channel_base> construct_channel(std::string_view type);
 	void add_channel(std::unique_ptr<channel_base> ch);
 
+
+	/*
+		Global requests
+			The request does not contain any identification but the replies must come in order,
+			so one has to keep book on what was sent and match the response to that
+	*/
+	// gets called on global requests, return true if the request was handled (if reply is set, one has to send reply if handling the request)
+	virtual bool on_global_request(std::string_view name, bool reply, const_span extra_data);
+	virtual void on_request_success(const_span extra_data);
+	virtual void on_request_failure();
 protected:
 	handler_result handle_open(const_span payload);
 	handler_result handle_open_confirm(const_span payload);
@@ -51,6 +61,9 @@ protected:
 	handler_result handle_data(const_span payload);
 	handler_result handle_extended_data(const_span payload);
 	handler_result handle_eof(const_span payload);
+	handler_result handle_channel_request(const_span payload);
+	handler_result handle_channel_success(const_span payload);
+	handler_result handle_channel_failure(const_span payload);
 
 private:
 	transport_base& transport_;

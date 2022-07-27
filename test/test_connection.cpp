@@ -281,12 +281,19 @@ TEST_CASE("connection test - rekey", "[unit]") {
 	CHECK(client.state() == ssh_state::transport);
 	CHECK(server.state() == ssh_state::transport);
 
+	auto sid_span = server.session_id();
+	byte_vector sid{sid_span.begin(), sid_span.end()};
+
 	REQUIRE(client.open_channel());
 
 	REQUIRE(run(client, server));
 
 	CHECK(client.state() == ssh_state::transport);
 	CHECK(server.state() == ssh_state::transport);
+
+	auto sid_span2 = server.session_id();
+	byte_vector sid2{sid_span2.begin(), sid_span2.end()};
+	CHECK(sid == sid2);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();
