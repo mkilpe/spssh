@@ -1,17 +1,24 @@
 
+
+for first version:
+----------
+* sftp
+* refactor common bits from ssh_client and ssh_server to a base class (service_handler)
+* implement test client/server configuration from command line / settings file
+* implement another kex (dh) and refactor common bits
+* implement crypto with cryptopp
+* implement random
+* cross compile for windows and run tests
+* test against openssh, filezilla
+* make build system independent of sp
+* add license information
+----------
+
 * check that packet is not too large before sending
 * check that packet is not too large when receiving
-* check re-kexing works (automated test)
-* implement starting re-kexing after n-bytes
-* change the ssh_state to have just transport state and separately keep track of service et al
-* refactor common bits from ssh_client and ssh_server to a base class
-* implement requests for channels/connection
-* implement test client/server configuration from command line / settings file
-
-* implement more kexes
 * check only correct packets allowed while in kex and other states
-* implement cryptographic random (for example nettle does not have one)
 * investigate post-quantum crypto algorithms
 
 not implemented yet:
 * possible certificates associated to public key when authenticating
+
