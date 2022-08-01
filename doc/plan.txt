@@ -8,12 +8,14 @@ Overview:
 * Own protocol over SSH (remote object?)
 * Make it easy for people to make their own protocols over ssh
 * asio integration
+* support ssh-agent for client
 
 Other possibilities:
 * vpn (or a like)
 * sftp backend that uses archive as filesystem
 * end-to-end encryption/signatures with sftp
 * piping support through ssh connection
+* investigate post-quantum crypto algorithms
 
 services/sessions/subsystems:
 * sftp

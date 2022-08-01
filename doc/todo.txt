@@ -3,7 +3,6 @@
 for first version:
 ----------
 * sftp
-* refactor common bits from ssh_client and ssh_server to a base class (service_handler)
 * implement test client/server configuration from command line / settings file
 * implement another kex (dh) and refactor common bits
 * implement crypto with cryptopp
@@ -17,7 +16,7 @@ for first version:
 * check that packet is not too large before sending
 * check that packet is not too large when receiving
 * check only correct packets allowed while in kex and other states
-* investigate post-quantum crypto algorithms
+
 
 not implemented yet:
 * possible certificates associated to public key when authenticating

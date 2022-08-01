@@ -13,7 +13,7 @@ class crypto_context;
 class crypto_call_context;
 class ssh_public_key;
 
-byte_vector ecdsa_sig(std::string_view payload);
+byte_vector ecdsa_sig(std::string_view payload, std::size_t integer_size);
 bool ser_ed25519_public_key(ssh_bf_binout_writer& w, public_key const& key);
 bool ser_rsa_public_key(ssh_bf_binout_writer& w, public_key const& key);
 bool ser_ecdsa_public_key(ssh_bf_binout_writer& w, public_key const& key);

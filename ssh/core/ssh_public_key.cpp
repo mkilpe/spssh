@@ -33,7 +33,7 @@ bool ssh_public_key::verify(const_span msg, const_span signature) const {
 	}
 
 	if(t == key_type::ecdsa_sha2_nistp256) {
-		return key_impl_->verify(msg, ecdsa_sig(payload));
+		return key_impl_->verify(msg, ecdsa_sig(payload, 32));
 	} else {
 		return key_impl_->verify(msg, to_span(payload));
 	}

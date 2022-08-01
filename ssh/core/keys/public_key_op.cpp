@@ -5,7 +5,7 @@
 
 namespace securepath::ssh {
 
-byte_vector ecdsa_sig(std::string_view payload) {
+byte_vector ecdsa_sig(std::string_view payload, std::size_t integer_size) {
 	ssh_bf_reader r(to_span(payload));
 	std::string_view p1, p2;
 	if(!r.read(p1) || !r.read(p2)) {
@@ -14,7 +14,16 @@ byte_vector ecdsa_sig(std::string_view payload) {
 	auto pi1 = to_umpint(p1);
 	auto pi2 = to_umpint(p2);
 	byte_vector sig;
+	sig.reserve(integer_size*2);
+	// we add leading zeros to make sure the integer is correct length as that is what we expect later on
+	for(std::size_t i = pi1.data.size(); i < integer_size; ++i) {
+		sig.push_back(std::byte{});
+	}
 	sig.insert(sig.end(), pi1.data.begin(), pi1.data.end());
+
+	for(std::size_t i = pi2.data.size(); i < integer_size; ++i) {
+		sig.push_back(std::byte{});
+	}
 	sig.insert(sig.end(), pi2.data.begin(), pi2.data.end());
 	return sig;
 }

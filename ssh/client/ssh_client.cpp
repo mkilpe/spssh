@@ -7,7 +7,7 @@
 namespace securepath::ssh {
 
 ssh_client::ssh_client(client_config const& conf, logger& log, out_buffer& out, crypto_context cc)
-: ssh_transport(conf, log, out, std::move(cc))
+: service_handler(conf, log, out, std::move(cc))
 , config_(conf)
 {
 }
@@ -55,21 +55,6 @@ handler_result ssh_client::handle_service_accept(const_span payload) {
 	}
 
 	return handler_result::unknown;
-}
-
-void ssh_client::start_service(auth_info const& info) {
-	service_ = construct_service(info);
-	if(!service_) {
-		set_error_and_disconnect(ssh_service_not_available);
-		logger_.log(logger::error, "Failed to construct required service");
-	} else if(service_->error() != ssh_noerror) {
-		set_error_and_disconnect(service_->error(), service_->error_message());
-	} else {
-		if(!service_->init()) {
-			logger_.log(logger::error, "Failed to initialise required service");
-			set_error_and_disconnect(ssh_service_not_available);
-		}
-	}
 }
 
 handler_result ssh_client::process_service(ssh_packet_type type, const_span payload) {
@@ -120,34 +105,8 @@ handler_result ssh_client::handle_transport_packet(ssh_packet_type type, const_s
 	return handler_result::unknown;
 }
 
-void ssh_client::start_user_auth() {
-	service_ = construct_auth();
-	if(!service_) {
-		set_error_and_disconnect(ssh_service_not_available);
-		logger_.log(logger::error, "Failed to construct required service");
-	} else if(service_->error() != ssh_noerror) {
-		set_error_and_disconnect(service_->error(), service_->error_message());
-	} else {
-		if(!service_->init()) {
-			logger_.log(logger::error, "Failed to initialise required service");
-			set_error_and_disconnect(ssh_service_not_available);
-		}
-	}
-}
-
 std::unique_ptr<auth_service> ssh_client::construct_auth() {
 	return std::make_unique<default_client_auth>(*this, config_);
-}
-
-std::unique_ptr<ssh_service> ssh_client::construct_service(auth_info const& info) {
-	if(info.service == connection_service_name) {
-		return std::make_unique<ssh_connection>(*this);
-	}
-	return nullptr;
-}
-
-bool ssh_client::flush() {
-	return service_ ? service_->flush() : false;
 }
 
 }
