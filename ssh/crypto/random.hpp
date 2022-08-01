@@ -2,6 +2,7 @@
 #define SP_SSH_CRYPTO_RANDOM_HEADER
 
 #include "ssh/common/types.hpp"
+#include <memory>
 
 namespace securepath::ssh {
 
@@ -16,6 +17,8 @@ public:
 	// fills the given span with random bytes
 	virtual void random_bytes(span output) = 0;
 };
+
+std::unique_ptr<random> default_random();
 
 }
 
