@@ -1,0 +1,8 @@
+#ifndef SPSSH_CONFIG_HEADER
+#define SPSSH_CONFIG_HEADER
+
+#cmakedefine USE_NETTLE
+#cmakedefine HAVE_GETENTROPY
+#cmakedefine HAVE_GETRANDOM
+
+#endif

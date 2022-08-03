@@ -1,10 +1,7 @@
 *.[oa]
-*.pyc
 *.swp
 *.dblite
-local_config.py
 bin
-src/bin
 *-workspace
 *.exe
 *.cc
@@ -12,28 +9,19 @@ src/bin
 *.so
 *.la
 *.depends
-src/build
-src/html
-src/latex
-src/tmp
 
-qrc_*.cpp
-
-android-build
 CMakeCache.txt
 Makefile
 CMakeFiles
 cmake_install.cmake
 *_autogen/
-src/cmake.config
 cmake.config
 
 external
-external_libs
 
 CMakeDoxyfile.in
 CMakeDoxygenDefaults.cmake
 Doxyfile.Doxygen
 
 .asciidoctor
-
+config.hpp

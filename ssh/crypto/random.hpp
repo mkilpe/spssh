@@ -18,7 +18,7 @@ public:
 	virtual void random_bytes(span output) = 0;
 };
 
-std::unique_ptr<random> default_random();
+std::unique_ptr<random> create_default_random();
 
 }
 
