@@ -31,7 +31,7 @@ static bool my_random(securepath::ssh::span output) {
 			by signals.
         */
 		std::size_t s = std::min<std::size_t>(output.size(), 256);
-		ssize_t res = ::get-random(output.data(), s, 0);
+		ssize_t res = ::getrandom(output.data(), s, 0);
 		if(res > 0) {
 			output = securepath::ssh::safe_subspan(output, s);
 		} else {

@@ -54,7 +54,7 @@ ssh_private_key load_raw_ed25519_private_key(ssh_bf_reader& r, crypto_context co
 	std::string_view privkey;
 	std::string_view comment;
 	if(r.read(pubkey) && r.read(privkey) && r.read(comment)) {
-		if(pubkey.size() == ed25519_key_size && privkey.size() == ed25519_key_size || privkey.size() == 2*ed25519_key_size) {
+		if(pubkey.size() == ed25519_key_size && (privkey.size() == ed25519_key_size || privkey.size() == 2*ed25519_key_size)) {
 			auto pub_bytes = to_span(pubkey);
 			// openssh has 64 bytes in the private key part, apparently the public key is repeated in the latter 32 bytes
 			auto priv_bytes = to_span(privkey).subspan(0, ed25519_key_size);

@@ -87,16 +87,17 @@ std::string my_simple_format(std::string_view fmt, Args const&... args) {
 	std::ostringstream out;
 	std::string_view::size_type pos = 0;
 
-	auto replace = [&](auto&& arg) {
-		if(pos != std::string_view::npos) {
-			auto f = fmt.find("{}", pos);
-			if(f != std::string_view::npos) {
-				out << fmt.substr(pos, f-pos);
-				out << arg;
-				pos = f+2;
+	//unused if args empty
+	[[maybe_unused]] auto replace = [&](auto&& arg) {
+			if(pos != std::string_view::npos) {
+				auto f = fmt.find("{}", pos);
+				if(f != std::string_view::npos) {
+					out << fmt.substr(pos, f-pos);
+					out << arg;
+					pos = f+2;
+				}
 			}
-		}
-	};
+		};
 
 	(replace(args), ...);
 

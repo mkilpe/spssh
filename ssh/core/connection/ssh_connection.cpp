@@ -299,6 +299,7 @@ handler_result ssh_connection::process(ssh_packet_type type, const_span payload)
 		case ssh_channel_request :           return handle_channel_request(payload);
 		case ssh_channel_success :           return handle_channel_success(payload);
 		case ssh_channel_failure :           return handle_channel_failure(payload);
+		default: break; // to suppress warning
 	};
 
 	log_.log(logger::error, "Unknown packet type for ssh_connection [type={}]", int(type));

@@ -34,8 +34,8 @@ bool operator==(std::span<std::byte const, 16> const& l, test_span const& r) {
 }
 
 TEST_CASE("packet serialisation", "[unit]") {
-	CHECK(test_packet_ser<ser::disconnect>(1, "test 1", "test 2"));
-	CHECK(test_packet_ser<ser::unimplemented>(25));
+	CHECK(test_packet_ser<ser::disconnect>(1u, "test 1", "test 2"));
+	CHECK(test_packet_ser<ser::unimplemented>(25u));
 	CHECK(test_packet_ser<ser::debug>(true, "test 1", "test 2"));
 	CHECK(test_packet_ser<ser::ignore>("test 1"));
 	CHECK(test_packet_ser<ser::kexinit>(
@@ -51,7 +51,7 @@ TEST_CASE("packet serialisation", "[unit]") {
 			std::vector<std::string_view>{"16", "17", "18"},
 			std::vector<std::string_view>{"19"},
 			true,
-			1
+			1u
 		));
 }
 

@@ -2,6 +2,8 @@
 #define SPSSH_CONFIG_HEADER
 
 #cmakedefine USE_NETTLE
+#cmakedefine USE_CRYPTOPP
+
 #cmakedefine HAVE_GETENTROPY
 #cmakedefine HAVE_GETRANDOM
 

@@ -11,6 +11,7 @@ for first version:
 * test against openssh, filezilla
 * make build system independent of sp
 * add license information
+* add version number
 ----------
 
 * check that packet is not too large before sending
