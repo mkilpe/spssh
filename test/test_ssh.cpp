@@ -1,4 +1,5 @@
 
+#include "config.hpp"
 #include "configs.hpp"
 #include "util.hpp"
 #include "ssh/crypto/private_key.hpp"
@@ -6,14 +7,19 @@
 #include "ssh/server/ssh_server.hpp"
 #include "test/util/server_auth_service.hpp"
 
+#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+#	include "ssh/crypto/nettle/crypto_context.hpp"
+#	include "ssh/crypto/cryptopp/crypto_context.hpp"
+#endif
+
 namespace securepath::ssh::test {
 namespace {
 
 struct test_client : test_context, client_config, ssh_client {
-	test_client(logger& l, client_config c = {})
+	test_client(logger& l, client_config c = {}, crypto_context ccontext = default_crypto_context())
 	: test_context(l, "[client] ")
 	, client_config{std::move(c)}
-	, ssh_client(*this, slog, out_buf)
+	, ssh_client(*this, slog, out_buf, std::move(ccontext))
 	{
 		side = transport_side::client;
 	}
@@ -33,10 +39,10 @@ struct test_client : test_context, client_config, ssh_client {
 };
 
 struct test_server : test_context, server_config, ssh_server {
-	test_server(logger& l, ssh_config c = {})
+	test_server(logger& l, ssh_config c = {}, crypto_context ccontext = default_crypto_context())
 	: test_context(l, "[server] ")
 	, server_config{std::move(c)}
-	, ssh_server(*this, slog, out_buf)
+	, ssh_server(*this, slog, out_buf, std::move(ccontext))
 	{
 		side = transport_side::server;
 	}
@@ -180,5 +186,45 @@ TEST_CASE("ssh test 2", "[unit]") {
 	server.send_ignore(25);
 	CHECK(run(client, server));
 }
+
+#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+TEST_CASE("ssh crypto interoperability 1", "[unit]") {
+	test_server server(test_log(), test_server_config(), nettle::create_nettle_context());
+	test_client client(test_log(), test_client_config(), cryptopp::create_cryptopp_context());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+
+	client.send_ignore(10);
+	server.send_ignore(25);
+	CHECK(run(client, server));
+}
+
+TEST_CASE("ssh crypto interoperability 2", "[unit]") {
+	test_server server(test_log(), test_server_config(), cryptopp::create_cryptopp_context());
+	test_client client(test_log(), test_client_config(), nettle::create_nettle_context());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+
+	client.send_ignore(10);
+	server.send_ignore(25);
+	CHECK(run(client, server));
+}
+#endif
 
 }
