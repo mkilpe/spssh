@@ -16,8 +16,8 @@ bool send_version_string(ssh_version const& version, out_buffer& out) {
 // US ascii is-printable
 // can't use std::isprint because it is locale dependent
 static bool is_valid_version_char(char c) {
-	return c >= 0x21 && c <= 0x2f
-		|| c >= 0x30 && c <= 0x7e;
+	return (c >= 0x21 && c <= 0x2f)
+		|| (c >= 0x30 && c <= 0x7e);
 }
 
 static bool is_valid_version_string(std::string_view str) {

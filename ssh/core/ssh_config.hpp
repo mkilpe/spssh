@@ -43,18 +43,18 @@ struct ssh_config {
 	// size to shrink the output buffer after handling output packet
 	std::uint32_t shrink_out_buffer_size{std::uint32_t(-1)};
 
-	// the maximum size for incoming packet, the external buffer must be able to hold at least this many bytes
+	// the maximum total size for incoming packet, the external buffer must be able to hold at least this many bytes
 	std::uint32_t max_in_packet_size{64*1024};
 
-	// the maximum size for outgoing packet, the external buffer must be able to hold at least this many bytes
+	// the maximum total size for outgoing packet, the external buffer must be able to hold at least this many bytes
 	std::uint32_t max_out_packet_size{64*1024};
 
 	// send initial guess of kex before receiving remote side kex-init packet
 	bool guess_kex_packet{false};
 
 	struct {
-		// default maximum channel packet size
-		std::uint32_t max_packet_size{64*1024};
+		// default maximum channel packet (payload) size
+		std::uint32_t max_packet_size{32*1024}; //32k as required by rfc4253 to be compatible with other implementations
 		// default initial out window size for channel
 		std::uint32_t initial_window_size{2*1024*1024};
 	} channel;
