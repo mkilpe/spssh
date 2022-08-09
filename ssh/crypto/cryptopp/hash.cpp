@@ -29,10 +29,14 @@ private:
 };
 
 
-std::unique_ptr<ssh::hash> create_hash(hash_type t, crypto_call_context const&) {
+std::unique_ptr<ssh::hash> create_hash(hash_type t, crypto_call_context const& call) {
 	using enum hash_type;
-	if(t == sha2_256) {
-		return std::make_unique<sha2_256_hash>();
+	try {
+		if(t == sha2_256) {
+			return std::make_unique<sha2_256_hash>();
+		}
+	} catch(CryptoPP::Exception const& ex) {
+		call.log.log(logger::error, "cryptopp exception: {}", ex.what());
 	}
 	return nullptr;
 }

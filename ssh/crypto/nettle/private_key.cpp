@@ -39,6 +39,7 @@ public:
 		privkey_.resize(ed25519_key_size);
 		pubkey_.resize(ed25519_key_size);
 		call.rand.random_bytes(privkey_);
+		clamp25519(privkey_);
 		nettle_ed25519_sha512_public_key(to_uint8_ptr(pubkey_), to_uint8_ptr(privkey_));
 	}
 

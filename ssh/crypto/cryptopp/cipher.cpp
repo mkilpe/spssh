@@ -11,8 +11,8 @@
 
 namespace securepath::ssh::cryptopp {
 
-std::size_t const gcm_iv_size = 12;
-std::size_t const aes_key_size = 32;
+std::size_t constexpr gcm_iv_size = 12;
+std::size_t constexpr aes_key_size = 32;
 
 template<typename Cipher>
 class aes256_gcm_cipher : public aead_cipher {
@@ -24,6 +24,8 @@ public:
 	{
 		SPSSH_ASSERT(iv.size() == gcm_iv_size, "invalid iv size");
 		SPSSH_ASSERT(secret.size() == aes_key_size, "invalid key size");
+
+		std::memcpy(iv_, iv.data(), gcm_iv_size);
 
 		cipher_.SetKeyWithIV(to_uint8_ptr(secret), secret.size(), to_uint8_ptr(iv), iv.size());
 	}
@@ -41,11 +43,23 @@ public:
 	void tag(span out) override {
 		SPSSH_ASSERT(out.size() == cipher_.DigestSize(), "invalid digest size");
 		cipher_.Final(to_uint8_ptr(out));
+
+		//the iv_ is combination of 4 bytes fixed and 8 bytes of invocation counter.
+		// the invocation counter is most significant bit first, we increment that counter by one
+		int i = sizeof(iv_)-1;
+		while(i > 3 && ++iv_[i] == 0) {
+			--i;
+		}
+
+		cipher_.Resynchronize(iv_, gcm_iv_size);
 	}
 
 private:
 	crypto_call_context call_;
 	Cipher cipher_;
+
+	//rfc 5647 IV handling
+	std::uint8_t iv_[gcm_iv_size]{};
 };
 
 template<typename Cipher>
@@ -70,26 +84,30 @@ private:
 
 std::unique_ptr<ssh::cipher> create_cipher(cipher_type t, cipher_dir dir, const_span secret, const_span iv, crypto_call_context const& call ) {
 	using enum cipher_type;
-	if(t == aes_256_gcm || t == openssh_aes_256_gcm) {
-		if(secret.size() == aes_key_size && iv.size() == gcm_iv_size) {
-			if(dir == cipher_dir::encrypt) {
-				return std::make_unique<aes256_gcm_cipher<CryptoPP::GCM<CryptoPP::AES>::Encryption>>(secret, iv, call);
+	try {
+		if(t == aes_256_gcm || t == openssh_aes_256_gcm) {
+			if(secret.size() == aes_key_size && iv.size() == gcm_iv_size) {
+				if(dir == cipher_dir::encrypt) {
+					return std::make_unique<aes256_gcm_cipher<CryptoPP::GCM<CryptoPP::AES>::Encryption>>(secret, iv, call);
+				} else {
+					return std::make_unique<aes256_gcm_cipher<CryptoPP::GCM<CryptoPP::AES>::Decryption>>(secret, iv, call);
+				}
 			} else {
-				return std::make_unique<aes256_gcm_cipher<CryptoPP::GCM<CryptoPP::AES>::Decryption>>(secret, iv, call);
+				call.log.log(logger::error, "invalid key or iv size of aes_256_gcm");
 			}
-		} else {
-			call.log.log(logger::error, "invalid key or iv size of aes_256_gcm");
-		}
-	} else if(t == aes_256_ctr) {
-		if(secret.size() == aes_key_size && iv.size() == 16) {
-			if(dir == cipher_dir::encrypt) {
-				return std::make_unique<aes256_ctr<CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption>>(secret, iv);
+		} else if(t == aes_256_ctr) {
+			if(secret.size() == aes_key_size && iv.size() == 16) {
+				if(dir == cipher_dir::encrypt) {
+					return std::make_unique<aes256_ctr<CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption>>(secret, iv);
+				} else {
+					return std::make_unique<aes256_ctr<CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption>>(secret, iv);
+				}
 			} else {
-				return std::make_unique<aes256_ctr<CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption>>(secret, iv);
+				call.log.log(logger::error, "invalid key or iv size of aes_256_ctr");
 			}
-		} else {
-			call.log.log(logger::error, "invalid key or iv size of aes_256_ctr");
 		}
+	} catch(CryptoPP::Exception const& ex) {
+		call.log.log(logger::error, "cryptopp exception: {}", ex.what());
 	}
 	return nullptr;
 }

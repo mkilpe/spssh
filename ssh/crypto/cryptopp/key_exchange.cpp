@@ -49,9 +49,13 @@ public:
 
 };
 
-std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_data const& d, crypto_call_context const& c) {
-	if(d.type() == key_exchange_type::X25519) {
-		return std::make_unique<X25519_key_exchange>(c);
+std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_data const& d, crypto_call_context const& call) {
+	try {
+		if(d.type() == key_exchange_type::X25519) {
+			return std::make_unique<X25519_key_exchange>(call);
+		}
+	} catch(CryptoPP::Exception const& ex) {
+		call.log.log(logger::error, "cryptopp exception: {}", ex.what());
 	}
 	return nullptr;
 }

@@ -34,9 +34,13 @@ private:
 	hmac mac_;
 };
 
-std::unique_ptr<ssh::mac> create_mac(mac_type type, const_span secret, crypto_call_context const&) {
-	if(type == mac_type::hmac_sha2_256) {
-		return std::make_unique<hmac_sha2_256>(secret);
+std::unique_ptr<ssh::mac> create_mac(mac_type type, const_span secret, crypto_call_context const& call) {
+	try {
+		if(type == mac_type::hmac_sha2_256) {
+			return std::make_unique<hmac_sha2_256>(secret);
+		}
+	} catch(CryptoPP::Exception const& ex) {
+		call.log.log(logger::error, "cryptopp exception: {}", ex.what());
 	}
 	return nullptr;
 }

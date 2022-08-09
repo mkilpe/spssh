@@ -12,6 +12,11 @@ set(CMAKE_MODULE_PATH ${my_root_directory}/cmake)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
+if(NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Debug)
+	message("-- Enabling debug build")
+endif()
+
 if(DEFINED USE_NETTLE)
 	find_package(Nettle REQUIRED)
 	find_package(Hogweed REQUIRED)

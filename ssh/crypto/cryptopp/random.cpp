@@ -37,7 +37,14 @@ public:
 };
 
 std::unique_ptr<random> create_random() {
-	return std::make_unique<random>();
+	try {
+		return std::make_unique<random>();
+	} catch(CryptoPP::Exception const& ex) {
+		// cannot get random, nothing we can do...
+		fprintf( stderr, "Could not construct cryptopp random, aborting...");
+		std::abort();
+	}
+	return nullptr;
 }
 
 }
