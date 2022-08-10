@@ -1,0 +1,13 @@
+
+# Set asio network library include directory (used by the test tools)
+#set(Asio_INCLUDE_DIR "/home/mikael/dev/libs/asio/include")
+
+# Enable Nettle crypto library
+#set(USE_NETTLE on)
+
+# Enable Crypto++
+#set(USE_CRYPTOPP on)
+
+# Enable debug or release build
+#set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Release)

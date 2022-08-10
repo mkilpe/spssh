@@ -5,11 +5,9 @@ for first version:
 * sftp
 * implement test client/server configuration from command line / settings file
 * implement another kex (dh) and refactor common bits
-* implement crypto with cryptopp
-* implement random
 * cross compile for windows and run tests
+* implement random (windows still missing)
 * test against openssh, filezilla
-* make build system independent of sp
 * add license information
 * add version number
 ----------

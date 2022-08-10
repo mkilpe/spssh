@@ -29,11 +29,11 @@ if(DEFINED USE_CRYPTOPP)
 	message("-- Using cryptopp")
 endif()
 
-find_package(Asio REQUIRED)
+# asio networking is required for the testing tools
+find_package(Asio)
 
-include_directories(${my_root_directory} ${Asio_INCLUDE_DIR})
+include_directories(${my_root_directory})
 link_directories(${my_root_directory}/lib)
-
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_FLAGS} -g3 -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${CXX_FLAGS} -O2")
