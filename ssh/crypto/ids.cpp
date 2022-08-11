@@ -92,12 +92,16 @@ key_type from_string(type_tag<key_type>, std::string_view s) {
 std::string_view to_string(key_exchange_type t) {
 	using enum key_exchange_type;
 	if(t == X25519) return "X25519";
+	if(t == diffie_hellman_group14_sha256) return "diffie-hellman-group14-sha256";
+	if(t == diffie_hellman_group16_sha512) return "diffie-hellman-group16-sha512";
 	return "unknown";
 }
 
 key_exchange_type from_string(type_tag<key_exchange_type>, std::string_view s) {
 	using enum key_exchange_type;
 	if(s == "X25519") return X25519;
+	if(s == "diffie-hellman-group14-sha256") return diffie_hellman_group14_sha256;
+	if(s == "diffie-hellman-group16-sha512") return diffie_hellman_group16_sha512;
 	return unknown;
 }
 

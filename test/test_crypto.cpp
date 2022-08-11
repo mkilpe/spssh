@@ -189,11 +189,21 @@ TEST_CASE("load openssh private key", "[unit][crypto]") {
 
 }
 
-TEST_CASE("x25519 key exchange", "[unit][crypto]") {
+key_exchange_type const exchanges[] =
+	{ key_exchange_type::X25519
+	, key_exchange_type::diffie_hellman_group14_sha256
+	, key_exchange_type::diffie_hellman_group16_sha512 };
+
+std::size_t const exchange_count = sizeof(exchanges) / sizeof(*exchanges);
+
+TEST_CASE("key exchange", "[unit][crypto]") {
+	auto i = GENERATE(range(0ul, exchange_count));
+	CAPTURE(i);
+
 	crypto_test_context ctx;
 
-	auto exc1 = ctx.construct_key_exchange(x25519_key_exchange_data{}, ctx.call);
-	auto exc2 = ctx.construct_key_exchange(x25519_key_exchange_data{}, ctx.call);
+	auto exc1 = ctx.construct_key_exchange(key_exchange_data_type{exchanges[i]}, ctx.call);
+	auto exc2 = ctx.construct_key_exchange(key_exchange_data_type{exchanges[i]}, ctx.call);
 
 	REQUIRE(exc1);
 	REQUIRE(exc2);

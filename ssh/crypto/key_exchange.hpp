@@ -25,10 +25,15 @@ protected:
 	~key_exchange_data() = default;
 };
 
-struct x25519_key_exchange_data : key_exchange_data {
+// common type to construct key exchange that doesn't require any data
+struct key_exchange_data_type : key_exchange_data {
+	key_exchange_data_type(key_exchange_type t) : type_(t) {}
+
 	key_exchange_type type() const override {
-		return key_exchange_type::X25519;
+		return type_;
 	}
+
+	key_exchange_type type_;
 };
 
 }
