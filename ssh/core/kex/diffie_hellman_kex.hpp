@@ -1,21 +1,21 @@
-#ifndef SPSSH_CORE_KEX_CURVE25519_SHA256_HEADER
-#define SPSSH_CORE_KEX_CURVE25519_SHA256_HEADER
+#ifndef SPSSH_CORE_KEX_DIFFIE_HELLMAN_HEADER
+#define SPSSH_CORE_KEX_DIFFIE_HELLMAN_HEADER
 
-#include "ecdh.hpp"
+#include "dh.hpp"
 #include "kex_common.hpp"
 
 namespace securepath::ssh {
 
-struct curve25519_sha256_kex_client : public kex_common {
-	curve25519_sha256_kex_client(kex_context kex_c)
-	: kex_common(kex_c, kex_type::curve25519_sha256)
+struct diffie_hellman_kex_client : public kex_common {
+	diffie_hellman_kex_client(kex_context kex_c, kex_type type)
+	: kex_common(kex_c, type)
 	{
-		context_.logger().log(logger::debug_trace, "constructing curve25519_sha256_kex_client");
+		context_.logger().log(logger::debug_trace, "constructing diffie_hellman_kex_client");
 	}
 
 	kex_state initiate() override {
 		if(exchange_) {
-			if(context_.send_packet<ser::kex_ecdh_init>(to_string_view(exchange_->public_key()))) {
+			if(context_.send_packet<ser::kexdh_init>(to_umpint(exchange_->public_key()))) {
 				return set_state(kex_state::inprogress);
 			}
 		}
@@ -29,12 +29,12 @@ struct curve25519_sha256_kex_client : public kex_common {
 			return kex_state::error;
 		}
 
-		if(type == ssh_packet_type(ssh_kex_ecdh_reply)) {
-			ser::kex_ecdh_reply::load packet(ser::match_type_t, payload);
+		if(type == ssh_packet_type(ssh_kexdh_reply)) {
+			ser::kexdh_reply::load packet(ser::match_type_t, payload);
 			if(packet) {
 				auto & [host_key, server_eph_key, sig] = packet;
 
-				auto secret = exchange_->agree(to_span(server_eph_key));
+				auto secret = exchange_->agree(server_eph_key.data);
 
 				if(is_zero(secret)) {
 					set_error(ssh_key_exchange_failed, "Invalid shared secret");
@@ -72,11 +72,11 @@ struct curve25519_sha256_kex_client : public kex_common {
 
 };
 
-struct curve25519_sha256_kex_server : public kex_common {
-	curve25519_sha256_kex_server(kex_context kex_c)
-	: kex_common(kex_c, kex_type::curve25519_sha256)
+struct diffie_hellman_kex_server : public kex_common {
+	diffie_hellman_kex_server(kex_context kex_c, kex_type type)
+	: kex_common(kex_c, type)
 	{
-		context_.logger().log(logger::debug_trace, "constructing curve25519_sha256_kex_server");
+		context_.logger().log(logger::debug_trace, "constructing diffie_hellman_kex_server");
 	}
 
 	kex_state initiate() override {
@@ -92,12 +92,12 @@ struct curve25519_sha256_kex_server : public kex_common {
 			set_error(ssh_key_exchange_failed, "Invalid state");
 			return kex_state::error;
 		}
-		if(type == ssh_packet_type(ssh_kex_ecdh_init)) {
-			ser::kex_ecdh_init::load packet(ser::match_type_t, payload);
+		if(type == ssh_packet_type(ssh_kexdh_init)) {
+			ser::kexdh_init::load packet(ser::match_type_t, payload);
 			if(packet) {
 				auto & [client_key] = packet;
 
-				auto secret = exchange_->agree(to_span(client_key));
+				auto secret = exchange_->agree(client_key.data);
 
 				if(is_zero(secret)) {
 					set_error(ssh_key_exchange_failed, "Invalid shared secret");
@@ -114,7 +114,7 @@ struct curve25519_sha256_kex_server : public kex_common {
 		return kex_state::error;
 	}
 
-	kex_state send_reply(std::string_view client_key, byte_vector secret) {
+	kex_state send_reply(const_mpint_span client_key, byte_vector secret) {
 		auto it = std::find_if(context_.config().private_keys.begin(),
 							context_.config().private_keys.end(),
 							[&](auto&& v) { return v.key.type() == conf_.host_key; });
@@ -136,9 +136,9 @@ struct curve25519_sha256_kex_server : public kex_common {
 			return kex_state::error;
 		}
 
-		if(!context_.send_packet<ser::kex_ecdh_reply>(
+		if(!context_.send_packet<ser::kexdh_reply>(
 			to_string_view(it->ser_pubkey),
-			to_string_view(exchange_->public_key()),
+			to_umpint(exchange_->public_key()),
 			to_string_view(sig)))
 		{
 			set_error(ssh_key_exchange_failed, "Failed to create reply packet");

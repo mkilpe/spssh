@@ -50,7 +50,6 @@ public:
 
 };
 
-// notice that even though the key_exchange_type has the sha algorithm in it, this class only implements the plain dh without any hashing
 class dh_key_exchange : public key_exchange {
 public:
 	dh_key_exchange(key_exchange_type t, crypto_call_context const& c, CryptoPP::Integer const& modulus, CryptoPP::Integer const& generator)
@@ -172,12 +171,12 @@ std::unique_ptr<ssh::key_exchange> create_key_exchange(key_exchange_data const& 
 	try {
 		if(d.type() == key_exchange_type::X25519) {
 			return std::make_unique<X25519_key_exchange>(call);
-		} else if(d.type() == key_exchange_type::diffie_hellman_group14_sha256) {
+		} else if(d.type() == key_exchange_type::dh_group14) {
 			auto p = std::make_unique<dh_key_exchange>(d.type(), call, modp_group_14{});
 			if(p->is_valid()) {
 				return p;
 			}
-		} else if(d.type() == key_exchange_type::diffie_hellman_group16_sha512) {
+		} else if(d.type() == key_exchange_type::dh_group16) {
 			auto p = std::make_unique<dh_key_exchange>(d.type(), call, modp_group_16{});
 			if(p->is_valid()) {
 				return p;

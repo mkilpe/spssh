@@ -51,6 +51,18 @@ struct uint32 : type_base<std::uint32_t> {
 	std::size_t size() const {	return static_size; }
 };
 
+struct uint64 : type_base<std::uint64_t> {
+	using type_base::type_base;
+	static constexpr std::size_t static_size = 8;
+	std::size_t size() const {	return static_size; }
+};
+
+struct mpint : type_base<const_mpint_span> {
+	using type_base::type_base;
+	static constexpr std::size_t static_size = 4;
+	std::size_t size() const {	return encoded_size(data); }
+};
+
 struct string : type_base<std::string_view> {
 	using type_base::type_base;
 	static constexpr std::size_t static_size = 4;

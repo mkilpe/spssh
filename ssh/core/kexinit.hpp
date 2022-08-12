@@ -14,6 +14,7 @@ namespace securepath::ssh {
 enum class kex_type {
 	unknown = 0,
 	dh_group14_sha256,
+	dh_group16_sha512,
 	curve25519_sha256,
 	ecdh_sha2_nistp256
 };

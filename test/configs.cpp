@@ -57,4 +57,16 @@ server_config test_server_aes_ctr_config() {
 	return c;
 }
 
+client_config test_client_dh_kex_config() {
+	auto c = test_client_config();
+	c.algorithms.kexes = {kex_type::dh_group16_sha512};
+	return c;
+}
+
+server_config test_server_dh_kex_config() {
+	auto c = test_server_config();
+	c.algorithms.kexes = {kex_type::dh_group16_sha512};
+	return c;
+}
+
 }

@@ -80,8 +80,8 @@ std::string_view to_curve_name(key_type);
 enum class key_exchange_type {
 	unknown = 0,
 	X25519,
-	diffie_hellman_group14_sha256,
-	diffie_hellman_group16_sha512
+	dh_group14,
+	dh_group16
 };
 
 std::string_view to_string(key_exchange_type);

@@ -227,4 +227,24 @@ TEST_CASE("ssh crypto interoperability 2", "[unit]") {
 }
 #endif
 
+
+TEST_CASE("ssh test dh kex", "[unit]") {
+	test_server server(test_log(), test_server_dh_kex_config());
+	test_client client(test_log(), test_client_dh_kex_config());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+
+	client.send_ignore(10);
+	server.send_ignore(25);
+	CHECK(run(client, server));
+}
+
 }

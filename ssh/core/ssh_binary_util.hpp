@@ -11,6 +11,23 @@
 
 namespace securepath::ssh {
 
+inline bool requires_padding(const_mpint_span s) {
+	return !s.data.empty()
+		&& s.sign == const_mpint_span::unsigned_t
+		&& (std::to_integer<std::uint8_t>(s.data[0]) & 0x80);
+}
+
+inline std::size_t encoded_size(const_mpint_span s) {
+	std::size_t size = 4+s.data.size();
+
+	if(requires_padding(s))	{
+		++size;
+	}
+
+	return size;
+}
+
+//todo: implement this using ssh_bf_binout_writer
 class ssh_bf_writer {
 public:
 	ssh_bf_writer(span out)
@@ -92,6 +109,23 @@ public:
 		return ret;
 	}
 
+	bool write(const_mpint_span mpint) {
+		const_span d = mpint.data;
+		// remove the trailing zeroes
+		while(!d.empty() && d[0] == std::byte{0x0}) {
+			d = d.subspan(1);
+		}
+		bool ret = false;
+		// write size and add required zero if most significant bit is set and it is unsigned integer
+		if(requires_padding(mpint))	{
+			ret = write(std::uint32_t(d.size()+1))
+				&& write(std::uint8_t{0x0});
+		} else {
+			ret = write(std::uint32_t(d.size()));
+		}
+		return ret && write(d);
+	}
+
 	template<std::size_t S>
 	bool write(std::span<std::byte const, S> const& s) {
 		return write(const_span(s));
@@ -157,8 +191,8 @@ public:
 			d = d.subspan(1);
 		}
 		bool ret = false;
-		// write size and add required zero if most significant bit is set
-		if(!d.empty() && (std::to_integer<std::uint8_t>(d[0]) & 0x80)) {
+		// write size and add required zero if most significant bit is set and it is unsigned integer
+		if(requires_padding(mpint))	{
 			ret = write(std::uint32_t(d.size()+1))
 				&& write(std::uint8_t{0x0});
 		} else {
@@ -231,6 +265,23 @@ public:
 		if(ret) {
 			v = std::string_view{reinterpret_cast<char const*>(in_.data())+pos_, size};
 			pos_ += size;
+		}
+		return ret;
+	}
+
+	bool read(const_mpint_span& mpint) {
+		std::string_view s;
+		bool ret = read(s);
+		if(ret) {
+			if(s.empty()) {
+				mpint = const_mpint_span{};
+			} else {
+				if(std::uint8_t(s[0]) & 0x80) {
+					mpint = const_mpint_span{to_span(s), const_mpint_span::signed_t};
+				} else {
+					mpint = to_umpint(s);
+				}
+			}
 		}
 		return ret;
 	}

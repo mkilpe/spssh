@@ -58,12 +58,18 @@ inline std::uint64_t ntou64(std::byte const* in) {
 }
 
 // as per rfc4251 the unsigned mpint has trailing 0 byte, this removes that if present
-inline const_mpint_span to_umpint(const_span mpint) {
+// also other leading zeros are removed as those are redundant
+inline const_mpint_span to_mpint(const_span mpint, const_mpint_span::sign_type s) {
 	// remove the trailing zeroes
 	while(!mpint.empty() && mpint[0] == std::byte{0x0}) {
 		mpint = mpint.subspan(1);
 	}
-	return const_mpint_span{mpint};
+
+	return const_mpint_span{mpint, s};
+}
+
+inline const_mpint_span to_umpint(const_span mpint) {
+	return to_mpint(mpint, const_mpint_span::unsigned_t);
 }
 
 inline const_mpint_span to_umpint(std::string_view mpint) {

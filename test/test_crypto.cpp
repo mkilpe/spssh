@@ -191,8 +191,8 @@ TEST_CASE("load openssh private key", "[unit][crypto]") {
 
 key_exchange_type const exchanges[] =
 	{ key_exchange_type::X25519
-	, key_exchange_type::diffie_hellman_group14_sha256
-	, key_exchange_type::diffie_hellman_group16_sha512 };
+	, key_exchange_type::dh_group14
+	, key_exchange_type::dh_group16 };
 
 std::size_t const exchange_count = sizeof(exchanges) / sizeof(*exchanges);
 

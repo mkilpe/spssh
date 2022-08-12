@@ -10,6 +10,7 @@ namespace securepath::ssh {
 std::string_view to_string(kex_type t) {
 	using enum kex_type;
 	if(t == dh_group14_sha256) return "diffie-hellman-group14-sha256";
+	if(t == dh_group16_sha512) return "diffie-hellman-group16-sha512";
 	if(t == curve25519_sha256) return "curve25519-sha256";
 	if(t == ecdh_sha2_nistp256) return "ecdh-sha2-nistp256";
 	return "unknown";
@@ -18,6 +19,7 @@ std::string_view to_string(kex_type t) {
 kex_type from_string(type_tag<kex_type>, std::string_view s) {
 	using enum kex_type;
 	if(s == "diffie-hellman-group14-sha256") return dh_group14_sha256;
+	if(s == "diffie-hellman-group16-sha512") return dh_group16_sha512;
 	if(s == "curve25519-sha256") return curve25519_sha256;
 	if(s == "ecdh-sha2-nistp256") return ecdh_sha2_nistp256;
 	return unknown;
@@ -38,14 +40,15 @@ bool crypto_configuration::valid() const {
 
 static bool is_compatible(kex_type kex, key_type key) {
 	using enum kex_type;
-	if(kex == curve25519_sha256) {
-		return key_capabilities[std::size_t(key)] & signature_capable;
-	}
-	if(kex == dh_group14_sha256) {
-		return key_capabilities[std::size_t(key)] & signature_capable;
-	}
-	if(kex == ecdh_sha2_nistp256) {
-		return key_capabilities[std::size_t(key)] & signature_capable;
+
+	switch(kex) {
+		case curve25519_sha256: [[fallthrough]];
+		case dh_group14_sha256: [[fallthrough]];
+		case dh_group16_sha512: [[fallthrough]];
+		case ecdh_sha2_nistp256:
+			return key_capabilities[std::size_t(key)] & signature_capable;
+		case unknown:
+			return false;
 	}
 
 	return false;

@@ -18,6 +18,7 @@ using const_span = std::span<std::byte const>;
 // Represents multiple precision integers in two's complement format, 8 bits per byte, MSB first.
 struct const_mpint_span {
 	const_span data;
+	enum sign_type { unsigned_t, signed_t } sign = unsigned_t;
 };
 
 struct ssh_version {
