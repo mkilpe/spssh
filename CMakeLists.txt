@@ -31,6 +31,7 @@ endif()
 
 # asio networking is required for the testing tools
 find_package(Asio)
+find_package(Doxygen)
 
 include_directories(${my_root_directory})
 link_directories(${my_root_directory}/lib)

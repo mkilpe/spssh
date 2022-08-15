@@ -1,0 +1,15 @@
+
+Cross compiling for windows using fedora
+----------------------------------------
+
+* install mingw cross compiling tools (dnf install mingw64-gcc-c++)
+* install dependencies (dnf install mingw64-nettle)
+* instead of 'cmake' use 'mingw64-cmake'
+* make
+
+Test on Wine:
+* install wine
+* set path for dlls: for example 'wine reg add HKCU\\Environment /f /v PATH /d "z:\usr\x86_64-w64-mingw32\sys-root\mingw\bin"'
+  (can first try to run the test_spssh.exe on wine and see which dlls not found and use locate to find them)
+* wine test_spssh.exe
+

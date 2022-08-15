@@ -43,14 +43,38 @@ static bool my_random(securepath::ssh::span output) {
 #define USE_RANDOM
 
 #elif _WIN32
+
+#define WIN32_LEAN_AND_MEAN
+#define STRICT 1
+
+#include <windows.h>
 #include <wincrypt.h>
 
-#error implement
+struct crypto_context {
+	crypto_context() {
+		if(!::CryptAcquireContext(&handle, nullptr, nullptr, PROV_RSA_FULL, CRYPT_SILENT | CRYPT_VERIFYCONTEXT)) {
+			handle = 0;
+		}
+	}
+
+	~crypto_context() {
+		if(handle) {
+			::CryptReleaseContext(handle, 0);
+		}
+	}
+
+	bool generate_random(securepath::ssh::span output) {
+		return handle && ::CryptGenRandom(handle, output.size(), securepath::ssh::to_uint8_ptr(output));
+	}
+
+	HCRYPTPROV handle{};
+};
 
 static bool my_random(securepath::ssh::span output) {
-	//use CryptGenRandom
-	return false;
+	thread_local crypto_context ctx;
+	return ctx.generate_random(output);
 }
+
 #define USE_RANDOM
 #endif
 

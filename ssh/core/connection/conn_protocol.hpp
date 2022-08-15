@@ -133,7 +133,7 @@ using channel_extended_data = ssh_packet_ser
 >;
 
 enum extended_data_type : std::uint32_t {
-	stderr = 1
+	standard_error = 1
 };
 
 /*

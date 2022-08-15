@@ -4,7 +4,6 @@ for first version:
 ----------
 * sftp
 * implement test client/server configuration from command line / settings file
-* implement another kex (dh) and refactor common bits
 * cross compile for windows and run tests
 * implement random (windows still missing)
 * test against openssh, filezilla

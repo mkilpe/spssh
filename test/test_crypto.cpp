@@ -59,7 +59,7 @@ TEST_CASE("ed25519 public and private key", "[unit][crypto]") {
 }
 
 TEST_CASE("ssh public key", "[unit][crypto]") {
-	auto i = GENERATE(range(0ul, test_key_count));
+	auto i = GENERATE(range(std::size_t{}, test_key_count));
 	CAPTURE(i);
 
 	crypto_test_context ctx;
@@ -72,7 +72,7 @@ TEST_CASE("ssh public key", "[unit][crypto]") {
 }
 
 TEST_CASE("ssh private key", "[unit][crypto]") {
-	auto i = GENERATE(range(0ul, test_key_count));
+	auto i = GENERATE(range(std::size_t{}, test_key_count));
 	CAPTURE(i);
 
 	crypto_test_context ctx;
@@ -160,7 +160,7 @@ ZWwtZGV2AQIDBAUG
 std::size_t const openssh_test_key_count = sizeof(openssh_test_keys)/sizeof(*openssh_test_keys);
 
 TEST_CASE("load openssh private key", "[unit][crypto]") {
-	auto i = GENERATE(range(0ul, openssh_test_key_count));
+	auto i = GENERATE(range(std::size_t{}, openssh_test_key_count));
 	CAPTURE(i);
 
 	crypto_test_context ctx;
@@ -197,7 +197,7 @@ key_exchange_type const exchanges[] =
 std::size_t const exchange_count = sizeof(exchanges) / sizeof(*exchanges);
 
 TEST_CASE("key exchange", "[unit][crypto]") {
-	auto i = GENERATE(range(0ul, exchange_count));
+	auto i = GENERATE(range(std::size_t{}, exchange_count));
 	CAPTURE(i);
 
 	crypto_test_context ctx;

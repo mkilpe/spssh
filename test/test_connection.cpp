@@ -176,9 +176,9 @@ std::size_t const packet_sizes_count = sizeof(packet_sizes) / sizeof(*packet_siz
 
 
 TEST_CASE("connection test", "[unit]") {
-	auto data_i = GENERATE(range(0ul, data_sizes_count));
-	auto window_i = GENERATE(range(0ul, window_sizes_count));
-	auto packet_i = GENERATE(range(0ul, packet_sizes_count));
+	auto data_i = GENERATE(range(std::size_t{}, data_sizes_count));
+	auto window_i = GENERATE(range(std::size_t{}, window_sizes_count));
+	auto packet_i = GENERATE(range(std::size_t{}, packet_sizes_count));
 	CAPTURE(data_i);
 	CAPTURE(window_i);
 	CAPTURE(packet_i);
