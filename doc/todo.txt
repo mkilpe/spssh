@@ -4,8 +4,6 @@ for first version:
 ----------
 * sftp
 * implement test client/server configuration from command line / settings file
-* cross compile for windows and run tests
-* implement random (windows still missing)
 * test against openssh, filezilla
 * add license information
 * add version number
