@@ -1,6 +1,7 @@
 #ifndef SP_SSH_CRYPTO_KEY_EXCHANGE_HEADER
 #define SP_SSH_CRYPTO_KEY_EXCHANGE_HEADER
 
+#include "ids.hpp"
 #include "ssh/common/types.hpp"
 #include <vector>
 
@@ -35,6 +36,14 @@ struct key_exchange_data_type : key_exchange_data {
 
 	key_exchange_type type_;
 };
+
+// 2048-bit MODP Group from RFC 3526
+const_span modp_group_14_modulus();
+const_span modp_group_14_generator();
+
+// 4096-bit MODP Group from RFC 3526
+const_span modp_group_16_modulus();
+const_span modp_group_16_generator();
 
 }
 

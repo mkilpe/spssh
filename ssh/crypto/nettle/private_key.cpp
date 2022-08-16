@@ -1,4 +1,5 @@
 
+#include "nettle_helper.hpp"
 #include "util.hpp"
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/private_key.hpp"
@@ -110,9 +111,7 @@ public:
 		nettle_mpz_set_str_256_u(key_.p, d.p.data.size(), to_uint8_ptr(d.p.data));
 		nettle_mpz_set_str_256_u(key_.q, d.q.data.size(), to_uint8_ptr(d.q.data));
 
-		mpz_t p_1, q_1;
-		mpz_init(p_1);
-		mpz_init(q_1);
+		integer p_1, q_1;
 
 		// calculate missing members
 		mpz_sub_ui(p_1, key_.p, 1);
@@ -123,9 +122,6 @@ public:
 		is_valid_ = mpz_invert(key_.c, key_.q, key_.p) != 0
 			&& nettle_rsa_public_key_prepare(&public_key_) == 1
 			&& nettle_rsa_private_key_prepare(&key_) == 1;
-
-		mpz_clear(p_1);
-		mpz_clear(q_1);
 	}
 
 	rsa_private_key(private_key_info const& info, crypto_call_context const& call)
@@ -179,8 +175,7 @@ public:
 	bool sign(const_span in, span out) const override {
 		SPSSH_ASSERT(out.size() >= signature_size(), "not enough size for signature");
 
-		mpz_t sig;
-		mpz_init(sig);
+		integer sig;
 
 		sha1_ctx sha1;
 		nettle_sha1_init(&sha1);
@@ -199,7 +194,6 @@ public:
 			}
 			nettle_mpz_get_str_256(size, to_uint8_ptr(out)+padding, sig);
 		}
-		mpz_clear(sig);
 		return res;
 	}
 
@@ -242,10 +236,8 @@ public:
 		nettle_ecc_scalar_init(&key_, nettle_get_secp_256r1());
 
 		if(d.privkey.data.size() == 32 && d.ecc_point.size() == 65 && d.ecc_point[0] == std::byte{0x04}) {
-			mpz_t z;
-			nettle_mpz_init_set_str_256_u(z, 32, to_uint8_ptr(d.privkey.data));
+			integer z(d.privkey.data);
 			is_valid_ = nettle_ecc_scalar_set(&key_, z) == 1;
-			mpz_clear(z);
 		}
 	}
 
@@ -263,10 +255,7 @@ public:
 		ecc_point_.resize(65);
 		ecc_point_[0] = std::byte{0x04};
 
-		mpz_t x, y, p;
-		mpz_init(x);
-		mpz_init(y);
-		mpz_init(p);
+		integer x, y, p;
 
 		nettle_ecc_point_get(&pub, x, y);
 		nettle_mpz_get_str_256(32, to_uint8_ptr(ecc_point_)+1, x);
@@ -275,10 +264,6 @@ public:
 		nettle_ecc_scalar_get(&key_, p);
 		priv_key_.resize(32);
 		nettle_mpz_get_str_256(32, to_uint8_ptr(priv_key_), p);
-
-		mpz_clear(p);
-		mpz_clear(y);
-		mpz_clear(x);
 
 		ecc_point_clear(&pub);
 	}

@@ -10,8 +10,8 @@
 namespace securepath::ssh::test {
 
 struct crypto_test_context : crypto_context {
-	crypto_test_context(logger& log = test_log())
-	: crypto_context(default_crypto_context())
+	crypto_test_context(logger& log = test_log(), crypto_context cc = default_crypto_context())
+	: crypto_context(std::move(cc))
 	, rand(construct_random())
 	, call(log, *rand)
 	{

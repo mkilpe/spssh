@@ -1,4 +1,5 @@
 
+#include "nettle_helper.hpp"
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/public_key.hpp"
 #include "ssh/crypto/ids.hpp"
@@ -75,16 +76,13 @@ public:
 	}
 
 	bool verify(const_span in, const_span signature) const override {
-		mpz_t sig;
-		nettle_mpz_init_set_str_256_u(sig, signature.size(), to_uint8_ptr(signature));
+		integer sig(signature);
 
 		sha1_ctx sha1;
 		nettle_sha1_init(&sha1);
 		sha1_update(&sha1, in.size(), to_uint8_ptr(in));
 
-		bool res = nettle_rsa_sha1_verify(&public_key_, &sha1, sig) == 1;
-		mpz_clear(sig);
- 		return res;
+		return nettle_rsa_sha1_verify(&public_key_, &sha1, sig) == 1;
 	}
 
 	bool fill_data(public_key_data& data) const override {
@@ -114,13 +112,10 @@ public:
 		ecc_point_init(&ecc_point_, nettle_get_secp_256r1());
 		// see the size is correct and it is uncompressed ecc point, otherwise don't bother
 		if(d.ecc_point.size() == 65 && d.ecc_point[0] == std::byte{0x04}) {
-			mpz_t x, y;
-			nettle_mpz_init_set_str_256_u(x, 32, to_uint8_ptr(d.ecc_point)+1);
-			nettle_mpz_init_set_str_256_u(y, 32, to_uint8_ptr(d.ecc_point)+33);
+			integer x(safe_subspan(d.ecc_point, 1, 32));
+			integer y(safe_subspan(d.ecc_point, 33, 32));
 
 			is_valid_ = nettle_ecc_point_set(&ecc_point_, x, y) == 1;
-			mpz_clear(x);
-			mpz_clear(y);
 		}
 	}
 

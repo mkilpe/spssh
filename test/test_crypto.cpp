@@ -1,10 +1,16 @@
 
+#include "config.hpp"
 #include "crypto.hpp"
 #include "test_buffers.hpp"
 #include "ssh/crypto/public_key.hpp"
 #include "ssh/crypto/private_key.hpp"
 #include "ssh/core/ssh_public_key.hpp"
 #include "ssh/core/ssh_private_key.hpp"
+
+#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+#	include "ssh/crypto/nettle/crypto_context.hpp"
+#	include "ssh/crypto/cryptopp/crypto_context.hpp"
+#endif
 
 namespace securepath::ssh::test {
 
@@ -214,6 +220,28 @@ TEST_CASE("key exchange", "[unit][crypto]") {
 	CHECK(!secret1.empty());
 	CHECK(secret1 == secret2);
 }
+
+#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+TEST_CASE("key exchange interop", "[unit][crypto]") {
+	auto i = GENERATE(range(std::size_t{}, exchange_count));
+	CAPTURE(i);
+
+	crypto_test_context ctx1(test_log(), cryptopp::create_cryptopp_context());
+	crypto_test_context ctx2(test_log(), nettle::create_nettle_context());
+
+	auto exc1 = ctx1.construct_key_exchange(key_exchange_data_type{exchanges[i]}, ctx1.call);
+	auto exc2 = ctx2.construct_key_exchange(key_exchange_data_type{exchanges[i]}, ctx2.call);
+
+	REQUIRE(exc1);
+	REQUIRE(exc2);
+
+	auto secret1 = exc2->agree(exc1->public_key());
+	auto secret2 = exc1->agree(exc2->public_key());
+
+	CHECK(!secret1.empty());
+	CHECK(secret1 == secret2);
+}
+#endif
 
 TEST_CASE("ed25519 generate key", "[unit][crypto]") {
 	crypto_test_context ctx;
