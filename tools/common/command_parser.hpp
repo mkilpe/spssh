@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include <type_traits>
 
 namespace securepath {
 
@@ -111,12 +112,16 @@ struct vector_command : command_base {
 	virtual void parse(std::vector<std::string> const& args) {
 		value_.clear();
 		for(auto&& v : args) {
-			T temp;
-			std::istringstream in(v);
-			if(!(in >> temp)) {
-				throw invalid_argument("failed to interpret argument '" + v + "'");
+			if constexpr(std::is_same_v<std::string, T>) {
+				value_.push_back(v);
+			} else {
+				T temp;
+				std::istringstream in(v);
+				if(!(in >> temp)) {
+					throw invalid_argument("failed to interpret argument '" + v + "'");
+				}
+				value_.push_back(temp);
 			}
-			value_.push_back(temp);
 		}
 	}
 	virtual void print(std::ostream& o) const {
@@ -139,11 +144,16 @@ struct optional_command : command_base {
 			print_list(out, args, ",");
 			throw invalid_argument("invalid amount of arguments: [" + out.str() +"]");
 		}
-		value_.emplace();
+
 		if(args.size() == 1) {
-			std::istringstream in(args[0]);
-			if(!(in >> *value_)) {
-				throw invalid_argument("failed to interpret argument '" + args[0] + "'");
+			if constexpr(std::is_same_v<std::string, T>) {
+				value_ = args[0];
+			} else {
+				value_.emplace();
+				std::istringstream in(args[0]);
+				if(!(in >> *value_)) {
+					throw invalid_argument("failed to interpret argument '" + args[0] + "'");
+				}
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 
 #include "client.hpp"
 #include "ssh/common/string_buffers.hpp"
-#include "tools/common/command_parser.hpp"
+#include "tools/common/config_parser.hpp"
 #include "tools/common/util.hpp"
 
 #include <coroutine>
@@ -23,12 +23,12 @@ using namespace std::literals;
 class ssh_client_session : public std::enable_shared_from_this<ssh_client_session>
 {
 public:
-	ssh_client_session(asio::io_context& io_context, logger& log, client_config const& config)
+	ssh_client_session(asio::io_context& io_context, logger& log, crypto_context ccontext, client_config const& config)
 	: io_context_(io_context)
 	, socket_(io_context_)
 	, timer_(io_context_)
 	, log_(log)
-	, client_(config, log_, out_buf_)
+	, client_(config, log_, out_buf_, ccontext)
 	{
 		timer_.expires_at(std::chrono::steady_clock::time_point::max());
 	}
@@ -133,40 +133,29 @@ struct test_client_commands : client_config, securepath::command_parser {
 	bool help{};
 	std::string host;
 	std::uint16_t port{22};
-	std::string key_file;
+	std::string config_file;
 
-	test_client_commands() {
+	config_parser config;
+
+	test_client_commands()
+	: client_config(test_tool_default_config())
+	{
 		add(help, "help", "", "show help");
 		add(host, "host", "h", "host to connect");
 		add(port, "port", "p", "port to connect");
-		add(key_file, "key", "", "private key file to authenticate user");
 		add(username, "user", "u", "username to connect");
 		add(password, "password", "", "password");
+		add(config_file, "config", "c", "config file");
+
+		config.add_commands(*this);
 	}
 
-	void create_config(crypto_context const& crypto, crypto_call_context const& call) {
+	void create_config(logger& log) {
 
 		side = transport_side::client;
 		my_version.software = "spssh_test_client";
 
-		algorithms.host_keys = {key_type::ssh_ed25519};
-		algorithms.kexes = {kex_type::curve25519_sha256};
-		algorithms.client_server_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
-		algorithms.server_client_ciphers = {cipher_type::aes_256_gcm, cipher_type::openssh_aes_256_gcm};
-		algorithms.client_server_macs = {mac_type::aes_256_gcm};
-		algorithms.server_client_macs = {mac_type::aes_256_gcm};
-
-		random_packet_padding = false;
-
-		if(!key_file.empty()) {
-			auto pkey = load_ssh_private_key(read_file(key_file), crypto, call);
-			if(!pkey.valid()) {
-				throw std::runtime_error("could not load private key");
-			}
-			add_private_key(std::move(pkey));
-		}
-
-		//add_private_key(load_raw_base64_ssh_private_key("AAAAC3NzaC1lZDI1NTE5AAAAIKybvEDG+Tp2x91UjeDAFwmeOfitihW8fKN4rzMf2DBnAAAAQEee9Mvoputz204F1EtY51yPsLFm10kpJOw1tMVVyZT2rJu8QMb5OnbH3VSN4MAXCZ45+K2KFbx8o3ivMx/YMGcAAAARbWlrYWVsQG1pa2FlbC1kZXYBAgME", crypto, call));
+		config.parse(log, *this);
 	}
 
 };
@@ -183,14 +172,13 @@ int main(int argc, char* argv[]) {
 			test_client_commands().print_help(std::cout);
 			return 0;
 		}
+		if(!p.config_file.empty()) {
+			p.parse_file(p.config_file);
+		}
 
 		stdout_logger log;
 
-		auto crypto = default_crypto_context();
-		auto rand = crypto.construct_random();
-		crypto_call_context call(log, *rand);
-
-		p.create_config(crypto, call);
+		p.create_config(log);
 
 		asio::io_context io_context;
 
@@ -206,7 +194,7 @@ int main(int argc, char* argv[]) {
 		auto endpoint = result.begin()->endpoint();
 		endpoint.port(p.port);
 
-		auto client = std::make_shared<ssh_client_session>(io_context, log, p);
+		auto client = std::make_shared<ssh_client_session>(io_context, log, p.config.get_crypto_context(), p);
 		asio::co_spawn(io_context, client->connect(endpoint), asio::detached);
 
 		io_context.run();

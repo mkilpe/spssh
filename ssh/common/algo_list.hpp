@@ -47,6 +47,10 @@ public:
 		}
 	}
 
+	void clear() {
+		algos_.clear();
+	}
+
 	bool empty() const {
 		return algos_.empty();
 	}
