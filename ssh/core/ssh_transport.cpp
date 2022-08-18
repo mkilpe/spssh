@@ -534,6 +534,8 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		return false;
 	}
 
+	logger_.log(logger::debug_trace, "kexes={}, host keys={}", to_string(kexes), to_string(host_keys));
+
 	supported_algorithms remote_algs{
 			algo_list_from_string_list<kex_type>(kexes),
 			algo_list_from_string_list<key_type>(host_keys),

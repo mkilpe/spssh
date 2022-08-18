@@ -12,6 +12,7 @@ std::string_view to_string(kex_type t) {
 	if(t == dh_group14_sha256) return "diffie-hellman-group14-sha256";
 	if(t == dh_group16_sha512) return "diffie-hellman-group16-sha512";
 	if(t == curve25519_sha256) return "curve25519-sha256";
+	if(t == libssh_curve25519_sha256) return "curve25519-sha256@libssh.org";
 	if(t == ecdh_sha2_nistp256) return "ecdh-sha2-nistp256";
 	return "unknown";
 }
@@ -21,6 +22,7 @@ kex_type from_string(type_tag<kex_type>, std::string_view s) {
 	if(s == "diffie-hellman-group14-sha256") return dh_group14_sha256;
 	if(s == "diffie-hellman-group16-sha512") return dh_group16_sha512;
 	if(s == "curve25519-sha256") return curve25519_sha256;
+	if(s == "curve25519-sha256@libssh.org") return libssh_curve25519_sha256;
 	if(s == "ecdh-sha2-nistp256") return ecdh_sha2_nistp256;
 	return unknown;
 }
@@ -43,6 +45,7 @@ static bool is_compatible(kex_type kex, key_type key) {
 
 	switch(kex) {
 		case curve25519_sha256: [[fallthrough]];
+		case libssh_curve25519_sha256: [[fallthrough]];
 		case dh_group14_sha256: [[fallthrough]];
 		case dh_group16_sha512: [[fallthrough]];
 		case ecdh_sha2_nistp256:

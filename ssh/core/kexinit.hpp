@@ -16,6 +16,7 @@ enum class kex_type {
 	dh_group14_sha256,
 	dh_group16_sha512,
 	curve25519_sha256,
+	libssh_curve25519_sha256, // same as above, old name
 	ecdh_sha2_nistp256
 };
 
