@@ -139,6 +139,7 @@ struct test_server_commands : server_config, securepath::command_parser {
 
 	test_server_commands()
 	: server_config(test_tool_default_config())
+	, command_parser(false)
 	{
 		add(help, "help", "", "show help");
 		add(bind_address, "bind", "b", "bind address");

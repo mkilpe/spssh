@@ -33,12 +33,12 @@ private:
 	std::vector<std::string> private_keys_;
 	std::optional<std::uint64_t> rekey_data_interval_;
 	std::optional<std::uint32_t> rekey_time_interval_;
-	//std::optional<bool> random_packet_padding_;
+	std::optional<bool> random_packet_padding_;
 	std::uint32_t max_out_buffer_size_{};
 	std::uint32_t shrink_out_buffer_size_{};
 	std::uint32_t max_in_packet_size_{};
 	std::uint32_t max_out_packet_size_{};
-	//std::optional<bool> guess_kex_packet_;
+	std::optional<bool> guess_kex_packet_;
 	std::uint32_t channel_max_packet_size_{};
 	std::uint32_t channel_initial_window_size_{};
 };

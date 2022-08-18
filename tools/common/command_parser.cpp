@@ -120,13 +120,17 @@ void command_parser::print_help(std::ostream& out) {
 			if(!info.alias.empty()) {
 				alias = ", -" + info.alias;
 			}
-			std::ostringstream extract_out;
-			info.extract->print(extract_out);
-			std::string eout = extract_out.str();
 
 			(print_align(out) << "--" << info.name << alias).align(50) << " " << info.info;
-			if(!eout.empty()) {
-				out << " (" + eout + ")";
+
+			if(show_value_in_help_) {
+				std::ostringstream extract_out;
+				info.extract->print(extract_out);
+				std::string eout = extract_out.str();
+
+				if(!eout.empty()) {
+					out << " (" + eout + ")";
+				}
 			}
 			out << std::endl;
 		}
@@ -141,8 +145,47 @@ void command_parser::parse_file(std::string file_name) {
 	}
 }
 
+struct bool_command : command_base {
+	bool_command(bool& v)
+	: value_(v)
+	{}
+
+	virtual void parse(std::vector<std::string> const&) {
+		value_ = true;
+	}
+	virtual void print(std::ostream& o) const {
+		o << (value_ ? "true" : "false");
+	}
+
+	bool& value_;
+};
+
 void command_parser::add(bool& var, std::string name, std::string alias, std::string info) {
 	add_impl<bool_command>(var, std::move(name), std::move(alias), std::move(info));
+}
+
+template<bool Value>
+struct optional_bool_command : command_base {
+	optional_bool_command(std::optional<bool>& v)
+	: value_(v)
+	{}
+
+	virtual void parse(std::vector<std::string> const&) {
+		value_ = Value;
+	}
+
+	virtual void print(std::ostream& o) const {
+		if(value_) {
+			o << (*value_ ? "true" : "false");
+		}
+	}
+
+	std::optional<bool>& value_;
+};
+
+void command_parser::add(std::optional<bool>& var, std::string name, std::string alias, std::string info) {
+	add_impl<optional_bool_command<true>>(var, name, alias, info);
+	add_impl<optional_bool_command<false>>(var, "no-" + name, alias.empty() ? alias : "no-" + alias, "Unset: " + info);
 }
 
 }

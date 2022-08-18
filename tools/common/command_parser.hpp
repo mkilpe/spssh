@@ -33,6 +33,10 @@ struct command {
 
 class command_parser {
 public:
+	command_parser(bool show_value_in_help = true)
+	: show_value_in_help_(show_value_in_help)
+	{}
+
 	template<typename T>
 	void add(T& var, std::string name, std::string alias, std::string info);
 	template<typename T>
@@ -42,6 +46,7 @@ public:
 	template<typename T>
 	void add(std::optional<T>& var, std::string name, std::string alias, std::string info);
 	void add(bool& var, std::string name, std::string alias, std::string info);
+	void add(std::optional<bool>& var, std::string name, std::string alias, std::string info);
 
 	void parse(int argc, char* args[]);
 	void parse(std::istream&);
@@ -59,6 +64,7 @@ private:
 	void parse_args(std::istream& in, std::string const& name);
 private:
 	std::map<std::string, std::shared_ptr<command>> commands_;
+	bool const show_value_in_help_;
 };
 
 struct invalid_argument : std::runtime_error {
@@ -168,20 +174,6 @@ struct optional_command : command_base {
 	std::optional<T>& value_;
 };
 
-struct bool_command : command_base {
-	bool_command(bool& v)
-	: value_(v)
-	{}
-
-	virtual void parse(std::vector<std::string> const&) {
-		value_ = true;
-	}
-	virtual void print(std::ostream& o) const {
-		o << (value_ ? "true" : "false");
-	}
-
-	bool& value_;
-};
 
 template<typename Command, typename T>
 void command_parser::add_impl(T& var, std::string name, std::string alias, std::string info) {

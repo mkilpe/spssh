@@ -23,7 +23,8 @@ public:
 
 	/// output mac and reset the mac accumulation
 	void result(span out) override {
-		nettle_hmac_sha256_digest(&ctx_, out.size(), to_uint8_ptr(out));
+		std::size_t size = std::min<std::size_t>(SHA256_DIGEST_SIZE, out.size());
+		nettle_hmac_sha256_digest(&ctx_, size, to_uint8_ptr(out));
 	}
 
 private:

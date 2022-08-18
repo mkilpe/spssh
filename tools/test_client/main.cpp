@@ -139,6 +139,7 @@ struct test_client_commands : client_config, securepath::command_parser {
 
 	test_client_commands()
 	: client_config(test_tool_default_config())
+	, command_parser(false)
 	{
 		add(help, "help", "", "show help");
 		add(host, "host", "h", "host to connect");

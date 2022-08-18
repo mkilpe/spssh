@@ -26,15 +26,18 @@ void config_parser::add_commands(command_parser& p) {
 	p.add(client_server_macs_, "client-server-mac", "", "Supported client-server macs in order of preference");
 	p.add(server_client_macs_, "server-client-mac", "", "Supported server-client macs in order of preference");
 	p.add(private_keys_, "private-key", "", "Private keys");
-	p.add(rekey_data_interval_, "rekey_data_interval", "", "Rekey data interval in kilo bytes");
-	p.add(rekey_time_interval_, "rekey_time_interval", "", "Rekey time interval in seconds");
-	p.add(max_out_buffer_size_, "max_out_buffer_size", "", "Maximum size of output buffer in kilo bytes");
-	p.add(shrink_out_buffer_size_, "shrink_out_buffer_size", "", "Size to which the output buffer is shrinked");
-	p.add(max_in_packet_size_, "max_in_packet_size", "", "Maximum size of input packet size in kilo bytes");
-	p.add(max_out_packet_size_, "max_out_packet_size", "", "Maximum size of output packet size in kilo bytes");
+	p.add(rekey_data_interval_, "rekey-data-interval", "", "Rekey data interval in kilo bytes");
+	p.add(rekey_time_interval_, "rekey-time-interval", "", "Rekey time interval in seconds");
+	p.add(max_out_buffer_size_, "max-out-buffer_size", "", "Maximum size of output buffer in kilo bytes");
+	p.add(shrink_out_buffer_size_, "shrink-out-buffer-size", "", "Size to which the output buffer is shrinked");
+	p.add(max_in_packet_size_, "max-in-packet-size", "", "Maximum size of input packet size in kilo bytes");
+	p.add(max_out_packet_size_, "max-out-packet-size", "", "Maximum size of output packet size in kilo bytes");
 
-	p.add(channel_max_packet_size_, "channel_max_packet_size", "", "Maximum packet size for channels in kilo bytes");
-	p.add(channel_initial_window_size_, "channel_initial_window_size", "", "Initial window size for channels in kilo bytes");
+	p.add(channel_max_packet_size_, "channel-max-packet-size", "", "Maximum packet size for channels in kilo bytes");
+	p.add(channel_initial_window_size_, "channel-initial-window-size", "", "Initial window size for channels in kilo bytes");
+
+	p.add(random_packet_padding_, "random-packet-padding", "", "Switch on random packet padding");
+	p.add(guess_kex_packet_, "guess-kex-packet", "", "Send 'guess' kex packet before response");
 
 }
 
@@ -131,6 +134,12 @@ void config_parser::parse(logger& log, ssh_config& c) {
 	}
 	if(!version_.comment.empty()) {
 		c.my_version.comment = version_.comment;
+	}
+	if(random_packet_padding_) {
+		c.random_packet_padding = *random_packet_padding_;
+	}
+	if(guess_kex_packet_) {
+		c.guess_kex_packet = *guess_kex_packet_;
 	}
 }
 

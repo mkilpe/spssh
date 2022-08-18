@@ -22,7 +22,8 @@ public:
 
 	void digest(span out) override {
 		SPSSH_ASSERT(out.size() >= SHA256_DIGEST_SIZE, "invalid out buffer size");
-		nettle_sha256_digest(&ctx_, out.size(), to_uint8_ptr(out));
+		std::size_t size = std::min<std::size_t>(SHA256_DIGEST_SIZE, out.size());
+		nettle_sha256_digest(&ctx_, size, to_uint8_ptr(out));
 	}
 
 private:
@@ -44,7 +45,8 @@ public:
 
 	void digest(span out) override {
 		SPSSH_ASSERT(out.size() >= SHA512_DIGEST_SIZE, "invalid out buffer size");
-		nettle_sha512_digest(&ctx_, out.size(), to_uint8_ptr(out));
+		std::size_t size = std::min<std::size_t>(SHA512_DIGEST_SIZE, out.size());
+		nettle_sha512_digest(&ctx_, size, to_uint8_ptr(out));
 	}
 
 private:
