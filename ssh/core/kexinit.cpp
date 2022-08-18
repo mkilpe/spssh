@@ -163,7 +163,8 @@ bool kexinit_agreement::agree(supported_algorithms const& remote) {
 		std::swap(res.in.compress, res.out.compress);
 	}
 
-	guess_was_correct_ = client.kexes.preferred() == res.kex && server.kexes.preferred() == res.kex;
+	guess_was_correct_ = client.kexes.preferred() == res.kex && server.kexes.preferred() == res.kex
+		&& client.host_keys.preferred() == server.host_keys.preferred();
 	agreed_ = res;
 	return true;
 }

@@ -550,11 +550,13 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 		return false;
 	}
 
+	remote_algs.dump("remote", logger_);
+
 	kexinit_agreement kagree(logger_, config_.side, config_.algorithms);
 	if(kagree.agree(remote_algs)) {
 		auto crypto_conf = kagree.agreed_configuration();
 
-		logger_.log(logger::debug, "SSH kexinit agreed on configuration [{}]", crypto_conf);
+		logger_.log(logger::debug, "SSH kexinit agreed on configuration [{}, sent_first_packet={}]", crypto_conf, sent_first_packet);
 
 		if(!kagree.was_guess_correct()) {
 			// wrong guess, ignore if first packet sent and reset our kex
