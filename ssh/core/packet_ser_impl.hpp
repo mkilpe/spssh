@@ -151,28 +151,18 @@ struct ssh_packet_ser {
 
 	using members = std::tuple<TypeTags...>;
 	static constexpr std::uint8_t packet_type = Type;
-
-	static constexpr std::size_t static_size = std::apply(
-		[](auto&&... args) {
-			return ((args.static_size) + ...);
-		});
 };
 
 struct packet_ser_save_base {};
 
 template<std::uint8_t Type, typename... TypeTags>
-struct ssh_packet_ser_save : private packet_ser_save_base {
+struct packet_ser_save : private packet_ser_save_base {
 	using members = std::tuple<TypeTags...>;
 
 	template<typename... Args>
-	ssh_packet_ser_save(Args&&... args)
+	packet_ser_save(Args&&... args)
 	: m_{std::forward<Args>(args)...}
 	{
-	}
-
-	bool write(span out) {
-		ssh_bf_writer writer(out);
-		return write(writer);
 	}
 
 	bool write(ssh_bf_writer& writer) {
@@ -209,29 +199,29 @@ private:
 	std::size_t size_{};
 };
 
+template<std::uint8_t Type, typename... TypeTags>
+struct ssh_packet_ser_save : private packet_ser_save<Type, TypeTags...> {
+	using base = packet_ser_save<Type, TypeTags...>;
+	using base::base;
+	using base::write;
+	using base::size;
+	using base::serialised_size;
+
+	bool write(span out) {
+		ssh_bf_writer writer(out);
+		return write(writer);
+	}
+};
+
 struct match_type_tag {} constexpr match_type_t;
 
 template<std::uint8_t Type, typename... TypeTags>
-struct ssh_packet_ser_load {
+struct packet_ser_load {
 	using members = std::tuple<TypeTags...>;
 
-	/// expect the type tag to be in front of the given span
-	ssh_packet_ser_load(match_type_tag, const_span in_data)
+	packet_ser_load(const_span in_data)
 	: reader_(in_data)
-	{
-		std::uint8_t tag{};
-
-		if(reader_.read(tag) && tag == Type) {
-			load_data();
-		}
-	}
-
-	/// expect the type already matched, so there should not be the type tag in in_data any more
-	ssh_packet_ser_load(const_span in_data)
-	: reader_(in_data)
-	{
-		load_data();
-	}
+	{}
 
 	explicit operator bool() const {
 		return result_;
@@ -251,7 +241,7 @@ struct ssh_packet_ser_load {
 		return size_;
 	}
 
-private:
+protected:
 	void load_data() {
 		result_ = std::apply(
 			[&](auto&&... args) {
@@ -263,11 +253,44 @@ private:
 		}
 	}
 
-private:
+	void load_data_with_tag() {
+		std::uint8_t tag{};
+
+		if(reader_.read(tag) && tag == Type) {
+			load_data();
+		}
+	}
+
+public:
 	members m_;
 	ssh_bf_reader reader_;
 	bool result_{};
 	std::size_t size_{};
+};
+
+template<std::uint8_t Type, typename... TypeTags>
+struct ssh_packet_ser_load : private packet_ser_load<Type, TypeTags...> {
+	using base = packet_ser_load<Type, TypeTags...>;
+
+	/// expect the type tag to be in front of the given span
+	ssh_packet_ser_load(match_type_tag, const_span in_data)
+	: base(in_data)
+	{
+		this->load_data_with_tag();
+	}
+
+	/// expect the type already matched, so there should not be the type tag in in_data any more
+	ssh_packet_ser_load(const_span in_data)
+	: base(in_data)
+	{
+		this->load_data();
+	}
+
+	using base::base;
+	using base::operator bool;
+	using base::get;
+	using base::reader;
+	using base::size;
 };
 
 template<typename Packet>
@@ -324,7 +347,7 @@ namespace std {
 	template<size_t Index, uint8_t Type, typename... Tags>
 	struct tuple_element<Index, ::securepath::ssh::ser::ssh_packet_ser_load<Type, Tags...>> {
 		static_assert(Index < sizeof...(Tags), "Index out of bounds");
-		using type = std::tuple_element_t<Index, typename ::securepath::ssh::ser::ssh_packet_ser<Type, Tags...>::members>::type;
+		using type = std::tuple_element_t<Index, typename ::securepath::ssh::ser::packet_ser_load<Type, Tags...>::members>::type;
   };
 }
 

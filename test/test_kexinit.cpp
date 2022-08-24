@@ -23,6 +23,15 @@ supported_algorithms const t1_1
 	,{mac_type::aes_256_gcm}
 	,{mac_type::aes_256_gcm}};
 
+// same as above but the key_type swapped so that the initial guess is correct
+supported_algorithms const t1_1b
+	{{kex_type::curve25519_sha256}
+	,{key_type::ssh_ed25519, key_type::ssh_rsa}
+	,{cipher_type::aes_256_gcm}
+	,{cipher_type::aes_256_gcm}
+	,{mac_type::aes_256_gcm}
+	,{mac_type::aes_256_gcm}};
+
 supported_algorithms const t2
 	{{kex_type::dh_group14_sha256}
 	,{key_type::ssh_ed25519}
@@ -104,24 +113,28 @@ test_config const test_configs[] =
 		{transport_side::server, t1, {}, {}},
 		{transport_side::server, {}, t1, {}},
 		{transport_side::server, {}, {}, {}},
-		{transport_side::client, t1, t1_1, result1, true},
-/*9*/	{transport_side::server, t1, t1_1, result1, true},
-		{transport_side::client, t1_1, t1, result1, true},
-		{transport_side::server, t1_1, t1, result1, true},
+		{transport_side::client, t1, t1_1, result1},
+/*9*/	{transport_side::server, t1, t1_1, result1},
+		{transport_side::client, t1_1, t1, result1},
+		{transport_side::server, t1_1, t1, result1},
+		{transport_side::client, t1, t1_1b, result1, true},
+		{transport_side::server, t1, t1_1b, result1, true},
+/*14*/	{transport_side::client, t1_1b, t1, result1, true},
+		{transport_side::server, t1_1b, t1, result1, true},
 		{transport_side::client, t1, t2, {}},
 		{transport_side::server, t1, t2, {}},
-/*14*/	{transport_side::client, t2, t2_1, result2, true},
-		{transport_side::server, t2, t2_1, result2, true},
-		{transport_side::client, t2_1, t2, result2, true},
-		{transport_side::server, t2_1, t2, result2, true},
+		{transport_side::client, t2, t2_1, result2},
+/*19*/	{transport_side::server, t2, t2_1, result2},
+		{transport_side::client, t2_1, t2, result2},
+		{transport_side::server, t2_1, t2, result2},
 		{transport_side::client, t2_1, t2_1, result2_1, true},
-/*19*/	{transport_side::client, t2_1, t2_1_inv, result2_1, false},
-		{transport_side::server, t2_1, t2_1_inv, result2_inv_2, false},
+		{transport_side::client, t2_1, t2_1_inv, result2_1},
+/*24*/	{transport_side::server, t2_1, t2_1_inv, result2_inv_2},
 		{transport_side::client, t2_1_inv, t2_1_inv, result2_inv_1, true},
 		{transport_side::server, t2_1_inv, t2_1_inv, result2_inv_2, true},
 		{transport_side::client, t2, t3, {}},
-/*24*/	{transport_side::server, t2, t3, {}},
-		{transport_side::client, t3, t2, {}},
+		{transport_side::server, t2, t3, {}},
+/*29*/	{transport_side::client, t3, t2, {}},
 		{transport_side::server, t3, t2, {}}
 	};
 

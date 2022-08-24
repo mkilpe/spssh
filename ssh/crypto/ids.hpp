@@ -26,7 +26,7 @@ std::size_t cipher_key_size(cipher_type);
 
 enum class mac_type {
 	unknown = 0,
-	implicit,         // this should never be added to supported macs, it is just as place holder for openssh aead
+	implicit,         // this should never be added to supported macs, it is just a place holder for openssh aead
 	aes_256_gcm,
 	hmac_sha2_256
 };

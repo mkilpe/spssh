@@ -3,6 +3,8 @@
 #include "ssh/common/logger.hpp"
 #include "ssh/core/packet_ser.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/services/sftp/packet_ser.hpp"
+#include "ssh/services/sftp/packet_ser_impl.hpp"
 #include "ssh/core/protocol.hpp"
 #include <external/catch/catch.hpp>
 
@@ -58,9 +60,12 @@ TEST_CASE("packet serialisation", "[unit]") {
 TEST_CASE("packet serialisation simple", "[unit]") {
 	std::byte temp[256] = {};
 	ser::disconnect::save sp(1, "test 1", "test 2");
+	CHECK(sp.size() == 1+4+4+6+4+6);
 	REQUIRE(sp.write(temp));
+	CHECK(sp.serialised_size() == sp.size());
 
 	ser::disconnect::load lp(ser::match_type_t, temp);
+	CHECK(sp.size() == lp.size());
 	REQUIRE(lp);
 
 	auto & [code, m1, m2] = lp;
@@ -148,6 +153,29 @@ TEST_CASE("nested packet save", "[unit]") {
 	auto & [n, inner_str] = inner_l;
 	CHECK(n == 9);
 	CHECK(inner_str == "my test");
+}
+
+
+using sftp_test = sftp::sftp_packet_ser
+<
+	3,
+	ser::uint32,
+	ser::string
+>;
+
+TEST_CASE("sftp packet serialisation", "[unit]") {
+	std::byte temp[256] = {};
+
+	sftp_test::save sp(32, "my test string");
+	CHECK(sp.size() == 4+1+4+4+14);
+	REQUIRE(sp.write(temp));
+
+	sftp_test::load lp(ser::match_type_t, temp);
+	REQUIRE(lp);
+
+	auto & [num, str] = lp;
+	CHECK(num == 32);
+	CHECK(str == "my test string");
 }
 
 }
