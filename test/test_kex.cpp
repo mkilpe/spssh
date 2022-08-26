@@ -10,6 +10,8 @@
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/ssh_binary_packet.hpp"
 
+#include <external/catch/catch.hpp>
+
 namespace securepath::ssh::test {
 namespace {
 

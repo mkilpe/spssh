@@ -9,6 +9,8 @@
 #include "ssh/server/ssh_server.hpp"
 #include "test/util/server_auth_service.hpp"
 
+#include <external/catch/catch.hpp>
+
 /* Tested:
 	+ no auth call to get methods
  	+ basic use of password

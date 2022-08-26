@@ -12,6 +12,8 @@
 #	include "ssh/crypto/cryptopp/crypto_context.hpp"
 #endif
 
+#include <external/catch/catch.hpp>
+
 namespace securepath::ssh::test {
 
 // ssh-ed25519
