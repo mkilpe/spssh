@@ -1,6 +1,8 @@
 #ifndef SP_SSH_SFTP_PACKET_TYPES_HEADER
 #define SP_SSH_SFTP_PACKET_TYPES_HEADER
 
+#include <cstdint>
+
 namespace securepath::ssh::sftp {
 
 enum sftp_packet_type : std::uint8_t {
@@ -130,8 +132,6 @@ enum status_code : std::uint32_t {
       returned by the server if the server does not implement an
       operation).
 */
-
-
 }
 
 #endif

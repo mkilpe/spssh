@@ -5,14 +5,6 @@
 #include <external/catch/catch.hpp>
 
 namespace securepath::ssh::test {
-/*
-	BASE64("") = ""
-   BASE64("f") = "Zg=="
-   BASE64("fo") = "Zm8="
-   BASE64("foo") = "Zm9v"
-   BASE64("foob") = "Zm9vYg=="
-   BASE64("fooba") = "Zm9vYmE="
-   BASE64("foobar") = "Zm9vYmFy"*/
 
 static byte_vector to_vec(std::string_view s) {
 	return byte_vector((std::byte const*)s.data(), (std::byte const*)s.data()+s.size());
