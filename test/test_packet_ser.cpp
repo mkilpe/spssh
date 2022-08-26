@@ -178,4 +178,26 @@ TEST_CASE("sftp packet serialisation", "[unit]") {
 	CHECK(str == "my test string");
 }
 
+TEST_CASE("nested packet save with sftp", "[unit]") {
+	std::byte temp[1024] = {};
+
+	sftp_test::save inner_p{9, "my test"};
+	auto outer_p = make_packet_saver<outer>(true, inner_p, "some");
+	CHECK(outer_p.write(temp));
+
+	outer::load outer_l(ser::match_type_t, temp);
+	REQUIRE(outer_l);
+
+	auto & [b, inner_p_string, str] = outer_l;
+	CHECK(b == true);
+	CHECK(str == "some");
+
+	sftp_test::load inner_l(ser::match_type_t, to_span(inner_p_string));
+	REQUIRE(inner_l);
+
+	auto & [n, inner_str] = inner_l;
+	CHECK(n == 9);
+	CHECK(inner_str == "my test");
+}
+
 }

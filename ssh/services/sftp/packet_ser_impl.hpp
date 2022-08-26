@@ -1,7 +1,7 @@
 #ifndef SP_SSH_SFTP_PACKET_SER_IMPL_HEADER
 #define SP_SSH_SFTP_PACKET_SER_IMPL_HEADER
 
-#include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/packet_ser.hpp"
 
 namespace securepath::ssh::sftp {
 

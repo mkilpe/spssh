@@ -55,9 +55,9 @@ public:
 		}
 	}
 
-	void on_data(const_span s) override {
+	bool on_data(const_span s) override {
 		in_data.insert(in_data.end(), s.begin(), s.end());
-		channel::on_data(s);
+		return channel::on_data(s);
 	}
 
 	std::size_t out_data_size;

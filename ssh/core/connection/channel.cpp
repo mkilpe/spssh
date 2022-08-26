@@ -39,8 +39,13 @@ channel::~channel()
 	log_.log(logger::debug_trace, "channel id={} destroyed", local_info_.id);
 }
 
-std::uint32_t channel::write_to_buffer(const_span data) {
+std::uint32_t channel::write_to_buffer(const_span data, bool partial) {
 	std::size_t size = std::min(data.size(), buffer_.size() - used_);
+
+	// if partial not set, only allow to write all to the buffer
+	if(!partial && size != data.size()) {
+		return 0;
+	}
 
 	if(size) {
 		log_.log(logger::debug_trace, "adding {} bytes to buffer for channel id={} [used={}, buffer_size={}]", size, local_info_.id, used_, buffer_.size());
@@ -164,14 +169,16 @@ void channel::on_failure(std::uint32_t code, std::string_view message) {
 	log_.log(logger::info, "failed to open channel id={} (remote refuses) [code={}, msg={}]", local_info_.id, code, message);
 }
 
-void channel::on_data(const_span d) {
+bool channel::on_data(const_span d) {
 	// just call to adjust window with chosen strategy
 	adjust_in_window(std::uint32_t(d.size()));
+	return true;
 }
 
-void channel::on_extended_data(std::uint32_t data_type, const_span d) {
+bool channel::on_extended_data(std::uint32_t data_type, const_span d) {
 	// just call to adjust window with chosen strategy
 	adjust_in_window(std::uint32_t(d.size()));
+	return true;
 }
 
 void channel::on_window_adjust(std::uint32_t bytes) {
@@ -236,6 +243,32 @@ bool channel::send_data_packet() {
 	return res;
 }
 
+bool channel::send_packet(const_span s) {
+	// see if we have something to send already
+	do_flush();
+
+	if(state_ >= channel_state::close_pending) {
+		// we are closing or already closed, abort sending
+		return false;
+	}
+
+	std::uint32_t max_size = std::min(out_window_, max_out_size_);
+
+	if(used_ || max_size < s.size()) {
+		return write_to_buffer(s, false) != 0;
+	}
+
+	ser::channel_data::save p(remote_info_.id, to_string_view(s));
+	auto rec = transport_.alloc_out_packet(p.size());
+
+	if(p.write(rec->data) && transport_.write_alloced_out_packet(*rec)) {
+		out_window_ -= s.size();
+		return true;
+	}
+
+	return write_to_buffer(s, false) != 0;
+}
+
 bool channel::flush() {
 	std::uint32_t used_before = used_;
 	do_flush();
@@ -294,6 +327,11 @@ void channel::set_state(channel_state s) {
 	SPSSH_ASSERT(state_ < s, "invalid state change");
 	log_.log(logger::debug_trace, "changing state for channel id={} [{} -> {}]", local_info_.id, to_string(state_), to_string(s));
 	state_ = s;
+	on_state_change();
+}
+
+void channel::on_state_change() {
+	//nothing here
 }
 
 }

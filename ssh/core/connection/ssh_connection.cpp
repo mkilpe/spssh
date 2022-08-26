@@ -187,7 +187,10 @@ handler_result ssh_connection::handle_data(const_span payload) {
 		auto& [local_id, data] = packet;
 		auto it = channels_.find(local_id);
 		if(it != channels_.end()) {
-			it->second->on_data(to_span(data));
+			if(!it->second->on_data(to_span(data))) {
+				log_.log(logger::debug_trace, "on_data returned false [id={}]", local_id);
+				return handler_result::pending;
+			}
 		} else {
 			log_.log(logger::error, "Invalid channel id with data [id={}]", local_id);
 		}

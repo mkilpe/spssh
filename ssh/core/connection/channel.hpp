@@ -51,11 +51,11 @@ public:
 	/// if locally initiated, this is called when remote side send open failure
 	virtual void on_failure(std::uint32_t code, std::string_view message) = 0;
 
-	/// called when data packet is received
-	virtual void on_data(const_span) = 0;
+	/// called when data packet is received, return true if data handled
+	virtual bool on_data(const_span) = 0;
 
-	/// called when extended data packet is received
-	virtual void on_extended_data(std::uint32_t data_type, const_span) = 0;
+	/// called when extended data packet is received, return true if data handled
+	virtual bool on_extended_data(std::uint32_t data_type, const_span) = 0;
 
 	/// called when remote side adjusts our sending window
 	virtual void on_window_adjust(std::uint32_t bytes) = 0;
@@ -80,6 +80,9 @@ public:
 
 	// something was sent from the internal buffer or out window was adjusted, so more can be send
 	virtual void on_send_more() = 0;
+
+	// called when the internal state changes
+	virtual void on_state_change() = 0;
 
 protected:
 	channel_id const id_;
@@ -107,17 +110,20 @@ public: //out
 	/// send packet to adjust remote window by n-bytes
 	bool send_window_adjust(std::uint32_t n);
 
-	/// send data packet using Packet type and Args to serialise the data
+	/// send data packet using Packet type and Args to serialise the data, returns false if could not send/queue whole packet
 	template<typename Packet, typename... Args>
 	bool send_packet(Args&&... args);
+
+	/// send data packet, returns false if could not send/queue whole packet (unlike send_data)
+	bool send_packet(const_span);
 
 protected:
 	bool send_open(std::string_view type) override;
 	bool on_open(channel_side_info remote, const_span extra_data) override;
 	bool on_confirm(channel_side_info remote, const_span extra_data) override;
 	void on_failure(std::uint32_t code, std::string_view message) override;
-	void on_data(const_span) override;
-	void on_extended_data(std::uint32_t data_type, const_span) override;
+	bool on_data(const_span) override;
+	bool on_extended_data(std::uint32_t data_type, const_span) override;
 	void on_window_adjust(std::uint32_t bytes) override;
 	void on_eof() override;
 	void on_close() override;
@@ -126,6 +132,7 @@ protected:
 	void on_request(std::string_view name, bool reply, const_span extra_data) override;
 	void on_request_success() override;
 	void on_request_failure() override;
+	void on_state_change() override;
 
 	virtual void adjust_in_window(std::uint32_t size);
 
@@ -135,7 +142,7 @@ protected:
 	template<typename Packet>
 	bool serialise_to_buffer(Packet& p);
 
-	std::uint32_t write_to_buffer(const_span);
+	std::uint32_t write_to_buffer(const_span, bool partial = true);
 	bool send_data_packet();
 	bool do_flush();
 
