@@ -65,6 +65,10 @@ bool sftp_server::on_data(const_span s) {
 		}
 	} while(type != 0);
 
+	if(used_size) {
+		std::memmove(in_data_.data(), in_data_.data()+used_size, in_used_ - used_size);
+	}
+
 	adjust_in_window(used_size);
 	return true;
 }
