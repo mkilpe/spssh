@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
 			p.parse_file(p.config_file);
 		}
 
-		stdout_logger log;
+		securepath::stdout_logger log;
 
 		p.create_config(log);
 

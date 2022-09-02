@@ -18,6 +18,8 @@ protected:
 	virtual std::unique_ptr<auth_service> construct_auth() = 0;
 	virtual std::unique_ptr<ssh_service> construct_service(auth_info const&);
 
+	virtual void on_service_started() {}
+
 protected:
 	void init_service();
 	void start_user_auth();

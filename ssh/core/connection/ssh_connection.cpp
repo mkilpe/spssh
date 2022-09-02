@@ -241,7 +241,11 @@ handler_result ssh_connection::handle_channel_request(const_span payload) {
 		auto& [local_id, name, reply] = packet;
 		auto it = channels_.find(local_id);
 		if(it != channels_.end()) {
-			it->second->on_request(name, reply, safe_subspan(payload, packet.size()));
+			auto new_chan = it->second->on_request(name, reply, safe_subspan(payload, packet.size()));
+			if(new_chan) {
+				log_.log(logger::debug_trace, "Upgrading channel [id={}]", local_id);
+				std::swap(it->second, new_chan);
+			}
 		} else {
 			log_.log(logger::error, "Invalid channel id with channel request [id={}]", local_id);
 		}

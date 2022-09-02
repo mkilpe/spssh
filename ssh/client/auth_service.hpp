@@ -2,6 +2,7 @@
 #define SP_SHH_CLIENT_AUTH_SERVICE_HEADER
 
 #include "client_config.hpp"
+#include "ssh/common/logger.hpp"
 #include "ssh/core/service/ssh_service.hpp"
 #include "ssh/core/auth/auth.hpp"
 
@@ -25,7 +26,6 @@ enum class interactive_result {
 	data
 };
 
-class logger;
 class transport_base;
 class ssh_private_key;
 

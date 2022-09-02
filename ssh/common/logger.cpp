@@ -4,7 +4,7 @@
 #include <utility>
 #include <stdio.h>
 
-namespace securepath::ssh {
+namespace securepath {
 
 void stdout_logger::do_log_line(logger::type, std::string const& s, std::source_location&&) {
 	std::puts(s.c_str());

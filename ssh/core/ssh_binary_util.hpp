@@ -68,6 +68,15 @@ public:
 		return ret;
 	}
 
+	bool write(std::uint64_t v) {
+		bool ret = adjust_size(8);
+		if(ret) {
+			u64ton(v, out_.data()+pos_);
+			pos_ += 8;
+		}
+		return ret;
+	}
+
 	bool write(std::uint32_t v) {
 		bool ret = adjust_size(4);
 		if(ret) {
@@ -232,6 +241,15 @@ public:
 
 	std::size_t size_left() const {
 		return in_.size() - pos_;
+	}
+
+	bool read(std::uint64_t& v) {
+		bool ret = size_left() >= 8;
+		if(ret) {
+			v = ntou64(in_.data() + pos_);
+			pos_ += 8;
+		}
+		return ret;
 	}
 
 	bool read(std::uint32_t& v) {

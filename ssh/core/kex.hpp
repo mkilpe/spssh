@@ -70,7 +70,7 @@ public:
 	kex_init_data const& init_data() const { return init_data_; }
 	crypto_context const& ccontext() const { return transport_.crypto(); }
 	crypto_call_context call_context() const { return transport_.call_context(); }
-	ssh::logger& logger() const { return transport_.log(); }
+	securepath::logger& logger() const { return transport_.log(); }
 
 private:
 	transport_base& transport_;

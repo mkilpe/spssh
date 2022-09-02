@@ -66,8 +66,8 @@ public:
 	/// called when remote side closed the channel
 	virtual void on_close() = 0;
 
-	// called when received channel request, return true if handling the message (this also means replying to it)
-	virtual void on_request(std::string_view name, bool reply, const_span extra_data) = 0;
+	// called when received channel request. Request can start e.g. sftp which "upgrades" the channel, the new upgraded channel is returned.
+	virtual std::unique_ptr<channel_base> on_request(std::string_view name, bool reply, const_span extra_data) = 0;
 
 	// called for successful response to channel request. The responses for request come in the order the requests were sent.
 	virtual void on_request_success() = 0;
@@ -117,6 +117,8 @@ public: //out
 	/// send data packet, returns false if could not send/queue whole packet (unlike send_data)
 	bool send_packet(const_span);
 
+	transport_base& transport() const;
+
 protected:
 	bool send_open(std::string_view type) override;
 	bool on_open(channel_side_info remote, const_span extra_data) override;
@@ -129,10 +131,10 @@ protected:
 	void on_close() override;
 	bool flush() override;
 	void on_send_more() override;
-	void on_request(std::string_view name, bool reply, const_span extra_data) override;
 	void on_request_success() override;
 	void on_request_failure() override;
 	void on_state_change() override;
+	std::unique_ptr<channel_base> on_request(std::string_view name, bool reply, const_span extra_data) override;
 
 	virtual void adjust_in_window(std::uint32_t size);
 

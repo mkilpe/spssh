@@ -12,7 +12,7 @@ public:
 	virtual void close(std::string_view error = {}) = 0;
 
 	/// send fxp_version packet
-	virtual bool send_version(std::uint32_t version, ext_data = {}) = 0;
+	virtual bool send_version(std::uint32_t version, ext_data_view = {}) = 0;
 
 protected:
 	~sftp_server_interface() = default;
@@ -30,7 +30,7 @@ public:
 	virtual void detach();
 
 	/// fxp_init packet received, should set error or response with send_version
-	virtual void on_init(std::uint32_t version, ext_data data);
+	virtual void on_init(std::uint32_t version, ext_data_view data);
 
 protected:
 	logger& log_;

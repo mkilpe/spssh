@@ -43,8 +43,8 @@ using open_request = sftp_packet_ser
 	fxp_open,
 	ser::uint32,
 	ser::string,
-	ser::uint32,
-	ser::uint32 /*attribute flags, rest of the attributes are read/written separately based on this*/
+	ser::uint32
+	/*attribute flags, the attributes are read/written separately based on this*/
 >;
 
 /*

@@ -2,6 +2,7 @@
 #define SP_SHH_KEXINIT_HEADER
 
 #include "errors.hpp"
+#include "ssh/common/logger.hpp"
 #include "ssh/crypto/ids.hpp"
 
 #include <iosfwd>
@@ -53,7 +54,6 @@ struct crypto_configuration {
 std::ostream& operator<<(std::ostream&, crypto_configuration const&);
 
 class supported_algorithms;
-class logger;
 
 class kexinit_agreement {
 public:

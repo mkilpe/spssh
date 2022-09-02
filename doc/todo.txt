@@ -10,6 +10,13 @@ for first version:
 * add version number
 ----------
 
+sftp:
+-----------
+* consider what to use for file_handle
+
+---------
+
+
 * check that packet is not too large before sending
 * check that packet is not too large when receiving
 * check only correct packets allowed while in kex and other states

@@ -18,6 +18,7 @@ void service_handler::init_service() {
 		logger_.log(logger::error, "Failed to initialise required service");
 		set_error_and_disconnect(service_->error(), service_->error_message());
 	}
+	on_service_started();
 }
 
 void service_handler::start_service(auth_info const& info) {

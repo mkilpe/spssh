@@ -298,11 +298,12 @@ void channel::on_send_more() {
 	//nothing here
 }
 
-void channel::on_request(std::string_view name, bool reply, const_span) {
+std::unique_ptr<channel_base> channel::on_request(std::string_view name, bool reply, const_span) {
 	log_.log(logger::debug_trace, "received channel request [name={}, reply={}]", name, reply);
 	if(reply) {
 		transport_.send_packet<ser::channel_failure>(remote_info_.id);
 	}
+	return nullptr;
 }
 
 void channel::on_request_success() {
@@ -332,6 +333,10 @@ void channel::set_state(channel_state s) {
 
 void channel::on_state_change() {
 	//nothing here
+}
+
+transport_base& channel::transport() const {
+	return transport_;
 }
 
 }

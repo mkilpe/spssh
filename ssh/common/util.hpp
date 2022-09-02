@@ -98,14 +98,16 @@ inline const_span safe_subspan(byte_vector const& s, std::size_t offset, std::si
 	return safe_subspan(const_span(s), offset, count);
 }
 
-std::ostream& operator<<(std::ostream&, const_span);
-
 bool same_source_or_non_overlapping(const_span s1, const_span s2);
 bool compare_equal(const_span s1, const_span s2);
 bool is_zero(const_span s);
 
 std::string to_string(std::vector<std::string_view> const&);
 
+}
+
+namespace securepath {
+	std::ostream& operator<<(std::ostream&, ssh::const_span);
 }
 
 #endif

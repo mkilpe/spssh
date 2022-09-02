@@ -8,7 +8,7 @@
 #include <sstream>
 #include <source_location>
 
-namespace securepath::ssh {
+namespace securepath {
 
 // very simple formatting to replace std::format until gcc supports it
 template<typename... Args>

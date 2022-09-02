@@ -4,7 +4,7 @@
 #define CATCH_CONFIG_RUNNER
 #include <external/catch/catch.hpp>
 
-using namespace securepath::ssh;
+using namespace securepath;
 
 stdout_logger& securepath::ssh::test::test_log() {
     static stdout_logger log(stdout_logger::log_none);
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
         return ret;
     }
     if(show_logging) {
-    	test::test_log().set_level(stdout_logger::log_all);
+    	ssh::test::test_log().set_level(stdout_logger::log_all);
     }
 
     return session.run();
