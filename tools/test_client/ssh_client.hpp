@@ -16,7 +16,6 @@ public:
 
 protected:
 	handler_result handle_kex_done(kex const&) override;
-	std::unique_ptr<ssh_service> construct_service(auth_info const&) override;
 
 	void on_service_started() override;
 
@@ -26,6 +25,9 @@ protected:
 	void on_read_file(sftp_result<sftp::read_file_data> result) override;
 	void on_write_file(sftp_result<sftp::write_file_data> result) override;
 	void on_close_file(sftp_result<sftp::close_file_data> result) override;
+	void on_open_dir(sftp_result<sftp::open_file_data> result) override;
+	void on_read_dir(sftp_result<sftp::read_dir_data> result) override;
+	void on_close_dir(sftp_result<sftp::close_dir_data> result) override;
 
 private:
 	event_handler& handler_;

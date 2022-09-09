@@ -12,7 +12,7 @@ namespace securepath::ssh {
 
 class transport_base;
 
-using channel_constructor = std::function<std::unique_ptr<channel>(transport_base&, channel_side_info)>;
+using channel_constructor = std::function<std::unique_ptr<channel_base>(transport_base&, channel_side_info)>;
 
 /// Implements the core of SSH connection protocol (RFC4254)
 class ssh_connection : public ssh_service {
@@ -22,8 +22,8 @@ public:
 	// add channel type that can be used by the connection
 	void add_channel_type(std::string_view type, channel_constructor ctor);
 
-	// initiate open channel
-	channel_base* open_channel(std::string_view type);
+	// initiate open channel, if channel ctor not given, use the registered channels to construct the wanted channel type
+	channel_base* open_channel(std::string_view type, channel_constructor channel_ctor = {});
 
 	// find channel
 	channel_base* find_channel(channel_id) const;
@@ -36,7 +36,7 @@ public:
 protected:
 	bool init() override;
 	handler_result process(ssh_packet_type, const_span payload) override;
-	std::unique_ptr<channel_base> construct_channel(std::string_view type);
+	std::unique_ptr<channel_base> construct_channel(std::string_view type, channel_constructor channel_ctor);
 	void add_channel(std::unique_ptr<channel_base> ch);
 
 

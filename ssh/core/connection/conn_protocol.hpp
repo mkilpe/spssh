@@ -172,6 +172,22 @@ using channel_request = ssh_packet_ser
 >;
 
 /*
+	byte      SSH_MSG_CHANNEL_REQUEST
+	uint32    recipient channel
+	string    "subsystem"
+	boolean   want reply
+	string    subsystem name
+*/
+using channel_subsystem_request = ssh_packet_ser
+<
+	ssh_channel_request,
+	uint32,
+	string,
+	boolean,
+	string
+>;
+
+/*
 	byte     SSH_MSG_CHANNEL_SUCCESS
 	uint32   recipient channel
 */

@@ -25,12 +25,17 @@ bool ssh_connection::init() {
 	return true;
 }
 
-std::unique_ptr<channel_base> ssh_connection::construct_channel(std::string_view type) {
+std::unique_ptr<channel_base> ssh_connection::construct_channel(std::string_view type, channel_constructor channel_ctor) {
 	std::unique_ptr<channel_base> res;
-	auto it = channel_ctors_.find(type);
-	if(it != channel_ctors_.end()) {
+	if(!channel_ctor) {
+		auto it = channel_ctors_.find(type);
+		if(it != channel_ctors_.end()) {
+			channel_ctor = it->second;
+		}
+	}
+	if(channel_ctor) {
 		channel_side_info local{++current_id_, config_.channel.initial_window_size, config_.channel.max_packet_size};
-		res = it->second(transport_, std::move(local));
+		res = channel_ctor(transport_, std::move(local));
 		if(!res) {
 			log_.log(logger::info, "failed to construct channel [type={}]", type);
 		}
@@ -50,7 +55,7 @@ handler_result ssh_connection::handle_open(const_span payload) {
 	if(packet) {
 		auto& [type, sender_channel, initial_window, max_packet] = packet;
 
-		auto ch = construct_channel(type);
+		auto ch = construct_channel(type, {});
 		if(ch) {
 			channel_side_info remote{sender_channel, initial_window, max_packet};
 			if(ch->on_open(std::move(remote), safe_subspan(payload, packet.size()))) {
@@ -335,9 +340,9 @@ void ssh_connection::add_channel_type(std::string_view type, channel_constructor
 	channel_ctors_[std::string(type)] = std::move(ctor);
 }
 
-channel_base* ssh_connection::open_channel(std::string_view type) {
+channel_base* ssh_connection::open_channel(std::string_view type, channel_constructor channel_ctor) {
 	channel_base* res{};
-	auto ch = construct_channel(type);
+	auto ch = construct_channel(type, std::move(channel_ctor));
 	if(ch) {
 		if(ch->send_open(type)) {
 			res = ch.get();

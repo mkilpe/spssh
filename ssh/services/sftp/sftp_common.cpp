@@ -40,6 +40,7 @@ bool sftp_common::on_data(const_span s) {
 		type = decode_sftp_type(span, length);
 		if(type && length) {
 			handle_sftp_packet(type, safe_subspan(in_data_, used_size+sftp_header_size, length-1));
+			type = {};
 		}
 	} while(type != 0);
 

@@ -7,11 +7,12 @@ for first version:
 * implement test client/server configuration from command line / settings file
 * test against openssh, filezilla
 * add license information
-* add version number
 ----------
 
 sftp:
 -----------
+* implement
+* unit tests
 * consider what to use for file_handle
 
 ---------

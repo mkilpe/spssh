@@ -10,7 +10,7 @@ namespace securepath::ssh::sftp {
 
 // https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02
 std::uint32_t const sftp_version{3};
-inline std::string_view sftp_service_name{"sftp"};
+inline std::string_view sftp_subsystem_name{"sftp"};
 
 struct ext_data_view {
 	std::string_view type;
@@ -30,8 +30,16 @@ using call_handle = std::uint32_t;
 using file_handle = std::string;
 using file_handle_view = std::string_view;
 
+using dir_handle = std::string;
+using dir_handle_view = std::string_view;
+
 class sftp_error {
 public:
+	sftp_error() = default;
+	sftp_error(std::uint32_t code, std::string_view msg)
+	: code_((status_code)code)
+	, message_(msg)
+	{}
 private:
 	status_code code_{};
 	std::string message_;
@@ -43,7 +51,7 @@ class sftp_result {
 public:
 	using data_type = Data;
 
-	sftp_result(call_handle h, data_type d)
+	sftp_result(call_handle h, data_type d = {})
 	: handle_(h)
 	, data_(std::move(d))
 	{}

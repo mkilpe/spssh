@@ -101,6 +101,10 @@ std::uint32_t channel::send_data(const_span s) {
 	return pos;
 }
 
+bool channel::send_subsystem_request(std::string_view subsystem) {
+	return transport_.send_packet<ser::channel_subsystem_request>(remote_info_.id, "subsystem", true, subsystem);
+}
+
 bool channel::send_eof() {
 	return transport_.send_packet<ser::channel_eof>(remote_info_.id);
 }
@@ -156,7 +160,7 @@ bool channel::on_open(channel_side_info remote, const_span /*extra_data*/) {
 }
 
 bool channel::on_confirm(channel_side_info remote, const_span /*extra_data*/) {
-	log_.log(logger::info, "channel open confirmed id={} ({})", local_info_.id, remote.id);
+	log_.log(logger::info, "channel open confirmed id={} ({}) [out window={}]", local_info_.id, remote.id, remote.window_size);
 	remote_info_ = remote;
 	out_window_ = remote_info_.window_size;
 	max_out_size_ = std::min(remote_info_.max_packet_size, transport_.max_out_packet_size()-packet_overhead);

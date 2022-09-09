@@ -6,6 +6,7 @@
 namespace securepath::ssh {
 
 struct test_client_config : client_config {
+	std::string channel = "session";
 	std::string subsystem = "sftp";
 };
 

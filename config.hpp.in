@@ -1,10 +1,14 @@
 #ifndef SPSSH_CONFIG_HEADER
 #define SPSSH_CONFIG_HEADER
 
+#include <string_view>
+
 #cmakedefine USE_NETTLE
 #cmakedefine USE_CRYPTOPP
 
 #cmakedefine HAVE_GETENTROPY
 #cmakedefine HAVE_GETRANDOM
+
+std::string_view constexpr spssh_version{"@PROJECT_VERSION@"};
 
 #endif

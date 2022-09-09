@@ -105,7 +105,8 @@ public: //out
 	/// send close packet and initiate closing of the channel
 	bool send_close();
 
-	//bool send_request(...);
+	/// send subsystem request (and request response)
+	bool send_subsystem_request(std::string_view subsystem);
 
 	/// send packet to adjust remote window by n-bytes
 	bool send_window_adjust(std::uint32_t n);
