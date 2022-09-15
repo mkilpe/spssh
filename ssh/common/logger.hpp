@@ -3,14 +3,14 @@
 
 #include "types.hpp"
 
-//not yet supported by gcc
+//not yet supported by libstdc++
 //#include <format>
 #include <sstream>
 #include <source_location>
 
 namespace securepath {
 
-// very simple formatting to replace std::format until gcc supports it
+// very simple formatting to replace std::format until libstdc++ supports it
 template<typename... Args>
 std::string my_simple_format(std::string_view fmt, Args const&...);
 
@@ -56,7 +56,7 @@ public:
 
 	template<typename... Args>
 	std::string format(std::string_view fmt, Args&&... args) const {
-		//todo: change this to std::format when supported by gcc
+		//todo: change this to std::format when supported by libstdc++
 		return my_simple_format(fmt, std::forward<Args>(args)...);
 	}
 
