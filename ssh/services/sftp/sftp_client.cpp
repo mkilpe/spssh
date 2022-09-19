@@ -55,13 +55,12 @@ void sftp_client::handle_status(const_span s) {
 		auto& [id, code, message, lang] = packet;
 /*
 		if(code == 0) {
-
+			sftp_result res{id};
+			do_callback(res);
 		} else {
-			sftp_error err{code, message};
-			sftp_result res{id, };
-			callback_->on_version(version, ed)
-		}
-*/
+			sftp_result res{id, sftp_error{code, message}};
+			do_callback(res);
+		}*/
 	} else {
 		log_.log(logger::error, "Invalid sftp status packet");
 		transport_.set_error_and_disconnect(ssh_protocol_error);
@@ -103,6 +102,16 @@ void sftp_client::close(std::string_view error) {
 	sftp_common::close(error);
 }
 
+template<typename PacketType, sftp_packet_type Type, typename... Args>
+call_handle sftp_client::send_sftp_packet(Args&&... args) {
+	auto handle = ++sequence_;
+	bool ret = send_packet<PacketType>(handle, std::forward<Args>(args)...);
+	if(ret) {
+		remote_calls_[handle] = call_data{fxp_open};
+	}
+	return ret ? handle : 0;
+}
+
 call_handle sftp_client::open_file(std::string_view path, open_mode mode, file_attributes attr) {
 	byte_vector p;
 
@@ -113,6 +122,7 @@ call_handle sftp_client::open_file(std::string_view path, open_mode mode, file_a
 		ssh_bf_writer res_w(p, p.size());
 		attr.write(res_w);
 		res = send_packet(p);
+		remote_calls_[handle] = call_data{fxp_open};
 	}
 	return res ? handle : 0;
 }
@@ -126,23 +136,19 @@ call_handle sftp_client::write_file(file_handle_view, std::uint64_t pos, const_s
 }
 
 call_handle sftp_client::close_file(file_handle_view file_handle) {
-	auto handle = ++sequence_;
-	return send_packet<close_request>(handle, file_handle) ? handle : 0;
+	return send_sftp_packet<close_request, fxp_close>(file_handle);
 }
 
 call_handle sftp_client::open_dir(std::string_view path) {
-	auto handle = ++sequence_;
-	return send_packet<opendir_request>(handle, path) ? handle : 0;
+	return send_sftp_packet<opendir_request, fxp_opendir>(path);
 }
 
 call_handle sftp_client::read_dir(dir_handle_view dir_handle) {
-	auto handle = ++sequence_;
-	return send_packet<readdir_request>(handle, dir_handle) ? handle : 0;
+	return send_sftp_packet<readdir_request, fxp_readdir>(dir_handle);
 }
 
 call_handle sftp_client::close_dir(dir_handle_view dir_handle) {
-	auto handle = ++sequence_;
-	return send_packet<close_request>(handle, dir_handle) ? handle : 0;
+	return send_sftp_packet<close_request, fxp_close>(dir_handle);
 }
 
 }

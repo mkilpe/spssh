@@ -37,7 +37,7 @@ class sftp_client_callback {
 public:
 	virtual ~sftp_client_callback() = default;
 
-	/// fxp_version packet received, return false if cannot accept the version.
+	/// fxp_version packet received, return false if the connection should not be accepted.
 	virtual bool on_version(std::uint32_t version, ext_data_view data) = 0;
 
 	virtual void on_open_file(sftp_result<open_file_data> result) = 0;
@@ -52,24 +52,40 @@ public:
 
 struct open_file_data {
 	file_handle handle;
+	std::string file;
 };
 
 struct read_file_data {
+	file_handle handle;
 	const_span data;
 };
 
-struct write_file_data {};
-struct close_file_data {};
+struct write_file_data {
+	file_handle handle;
+};
+
+struct close_file_data {
+	file_handle handle;
+};
+
+struct dir_info {
+	dir_handle handle;
+	std::string path;
+};
 
 struct open_dir_data {
 	dir_handle handle;
+	std::string path;
 };
 
 struct read_dir_data {
+	dir_handle handle;
 	std::vector<std::string_view> files;
 };
 
-struct close_dir_data {};
+struct close_dir_data {
+	dir_handle handle;
+};
 
 }
 

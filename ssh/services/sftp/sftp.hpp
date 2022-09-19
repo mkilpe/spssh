@@ -40,6 +40,10 @@ public:
 	: code_((status_code)code)
 	, message_(msg)
 	{}
+
+	status_code code() const { return code_; }
+	std::string_view message() const { return message_; }
+
 private:
 	status_code code_{};
 	std::string message_;
@@ -67,12 +71,12 @@ public:
 		return static_cast<bool>(data_);
 	}
 
-	sftp_error error() const {
+	sftp_error const& error() const {
 		SPSSH_ASSERT(error_, "error not set");
 		return *error_;
 	}
 
-	data_type data() const {
+	data_type const& data() const {
 		SPSSH_ASSERT(data_, "data not set");
 		return *data_;
 	}

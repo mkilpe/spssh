@@ -4,12 +4,15 @@
 #include "client_config.hpp"
 #include "tools/common/config_parser.hpp"
 #include "tools/common/event_loop.hpp"
+#include "tools/common/util.hpp"
 #include "ssh/client/client_config.hpp"
 
 namespace securepath::ssh {
 
 struct test_client_commands : test_client_config, securepath::command_parser {
 	bool help{};
+	bool verbose{};
+	bool very_verbose{};
 	std::string host;
 	std::uint16_t port{22};
 	std::string config_file;
@@ -28,7 +31,7 @@ public:
 	int run();
 
 private:
-	securepath::stdout_logger log_;
+	sync_cout_logger log_;
 	single_thread_event_loop main_loop_;
 
 	class impl;

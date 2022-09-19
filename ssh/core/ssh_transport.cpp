@@ -233,7 +233,7 @@ handler_result ssh_transport::do_handle_transport_packet(ssh_packet_type type, c
 handler_result ssh_transport::process_transport_payload(span payload) {
 	SPSSH_ASSERT(payload.size() >= 1, "invalid payload size");
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
-	logger_.log(logger::debug, "SSH process_transport_payload [state={}, type={}]", to_string(state()), type);
+	logger_.log(logger::debug_trace, "SSH process_transport_payload [state={}, type={}]", to_string(state()), type);
 
 	// first see if it is basic packet, we handle these at all states
 	bool res = handle_basic_packets(type, payload.subspan(1));

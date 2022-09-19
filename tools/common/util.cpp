@@ -1,6 +1,10 @@
 #include "util.hpp"
 
 #include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <iostream>
+#include <syncstream>
 
 namespace securepath::ssh {
 
@@ -30,6 +34,25 @@ ssh_config test_tool_default_config() {
 	c.random_packet_padding = false;
 
 	return c;
+}
+
+std::string tokenise_command(std::string const& line, std::vector<std::string>& args) {
+	std::string cmd;
+	std::string str;
+	std::istringstream in(line);
+	while(in >> std::quoted(str)) {
+		if(cmd.empty()) {
+			cmd = str;
+		} else {
+			args.push_back(str);
+		}
+	}
+	return cmd;
+}
+
+void sync_cout_logger::do_log_line(type, std::string const& line, std::source_location&&) {
+	std::osyncstream out(std::cout);
+	out << line << std::endl;
 }
 
 }

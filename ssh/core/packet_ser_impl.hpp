@@ -339,7 +339,7 @@ auto make_packet_saver(Args&&... args) {
 }
 
 namespace std {
-	template<uint8_t  Type, typename... Tags>
+	template<uint8_t Type, typename... Tags>
 	struct tuple_size<::securepath::ssh::ser::ssh_packet_ser_load<Type, Tags...>> {
 		static constexpr std::size_t value = sizeof...(Tags);
 	};

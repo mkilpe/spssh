@@ -4,6 +4,8 @@
 #include "sftp_common.hpp"
 #include "sftp_client_interface.hpp"
 
+#include <map>
+
 namespace securepath::ssh::sftp {
 
 class sftp_client : public sftp_common, public sftp_client_interface {
@@ -37,9 +39,19 @@ protected:
 	void handle_extended_reply(const_span);
 
 protected:
+	template<typename PacketType, sftp_packet_type Type, typename... Args>
+	call_handle send_sftp_packet(Args&&... args);
+
+protected:
 	// previous packet id
 	std::uint32_t sequence_{};
 	std::shared_ptr<sftp_client_callback> callback_;
+
+	struct call_data {
+		sftp_packet_type type{};
+	};
+
+	std::map<call_handle, call_data> remote_calls_;
 };
 
 }

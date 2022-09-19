@@ -67,7 +67,7 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 	//t: check the total size is not longer than allowed
 
 	stream_in_.current_packet.status = in_packet_status::waiting_data;
-	logger_.log(logger::debug, "SSH try_decode_header [size={}]", stream_in_.current_packet.packet_size);
+	logger_.log(logger::debug_trace, "SSH try_decode_header [size={}]", stream_in_.current_packet.packet_size);
 
 	return true;
 }

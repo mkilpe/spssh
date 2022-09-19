@@ -86,7 +86,7 @@ private:
 					co_await timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec));
 				} else {
 					std::string buf = out_buf_.extract_committed();
-					log_.log(logger::debug, "writing out: {}", to_span(buf));
+					log_.log(logger::debug_trace, "writing out: {}", to_span(buf));
 					co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
 				}
 			}

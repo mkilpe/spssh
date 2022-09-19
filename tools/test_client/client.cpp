@@ -1,5 +1,6 @@
 
 #include "client.hpp"
+#include "events.hpp"
 #include "ssh_client.hpp"
 #include "ssh/common/string_buffers.hpp"
 #include "tools/common/config_parser.hpp"
@@ -15,6 +16,7 @@
 #include <string>
 #include <tuple>
 #include <stdexcept>
+#include <syncstream>
 
 namespace securepath::ssh {
 
@@ -23,6 +25,8 @@ test_client_commands::test_client_commands()
 , command_parser(false)
 {
 	add(help, "help", "", "show help");
+	add(verbose, "verbose", "v", "verbose logging");
+	add(very_verbose, "very-verbose", "vv", "very verbose logging");
 	add(host, "host", "h", "host to connect");
 	add(port, "port", "p", "port to connect");
 	add(username, "user", "u", "username to connect");
@@ -80,6 +84,25 @@ public:
 
 	}
 
+	void list_files(std::string path) {
+		post([&]
+			{
+				auto sftp = client_.sftp();
+				if(sftp) {
+					sftp->open_dir(path);
+				}
+			});
+	}
+
+	void post(std::function<void()> func) {
+		// make sure we have mutually exclusive execution with the network handling
+		asio::post(socket_.get_executor(), std::move(func));
+	}
+
+	ssh_test_client& ssh_client() {
+		return client_;
+	}
+
 private:
 	void client_process() {
 		transport_op res;
@@ -122,7 +145,7 @@ private:
 					co_await timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec));
 				} else {
 					std::string buf = out_buf_.extract_committed();
-					log_.log(logger::debug, "writing out: {}", to_span(buf));
+					log_.log(logger::debug_trace, "writing out: {}", to_span(buf));
 					co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
 				}
 			}
@@ -152,12 +175,6 @@ private:
 	ssh_test_client client_;
 };
 
-namespace events {
-	struct input {
-		typedef void type();
-	};
-}
-
 struct test_client::impl : public event_handler {
 	impl(test_client_commands const& c, logger& log, single_thread_event_loop& loop)
 	: event_handler(loop)
@@ -172,6 +189,17 @@ struct test_client::impl : public event_handler {
 			[&](auto, auto){
 				io_context_.stop();
 			});
+
+		commands_["ls"] = [&](auto args)
+			{
+				return true;
+			};
+
+		commands_["exit"] = [&](auto)
+			{
+				io_context_.stop();
+				return true;
+			};
 	}
 
 	~impl() {
@@ -181,7 +209,7 @@ struct test_client::impl : public event_handler {
 		}
 	}
 
-	bool start() {
+	bool run() {
 		auto result = tcp::resolver(io_context_).resolve(config_.host, "ssh");
 		if(result.begin() == result.end()) {
 			std::cerr << "Failed to resolve address\n";
@@ -191,8 +219,8 @@ struct test_client::impl : public event_handler {
 		auto endpoint = result.begin()->endpoint();
 		endpoint.port(config_.port);
 
-		auto client = std::make_shared<ssh_client_session>(*this, io_context_, log_, config_.config.get_crypto_context(), config_);
-		asio::co_spawn(io_context_, client->connect(endpoint), asio::detached);
+		session_ = std::make_shared<ssh_client_session>(*this, io_context_, log_, config_.config.get_crypto_context(), config_);
+		asio::co_spawn(io_context_, session_->connect(endpoint), asio::detached);
 
 		thread_ = std::thread{
 			[&]{
@@ -207,23 +235,64 @@ struct test_client::impl : public event_handler {
 
 	void handle_event(std::unique_ptr<event_base> ev) {
 		dispatch(*ev
-			, event_dest<events::input>(&impl::get_input));
+			, event_dest<events::command_prompt>(&impl::get_input));
 	}
 
 	void get_input() {
-
+		bool in_progress = false;
+		std::string line;
+		{
+			std::osyncstream out(std::cout);
+			out << "?> " << std::flush;
+		}
+		if(std::getline(std::cin, line)) {
+			in_progress = handle_command_line(line);
+		}
+		if(!in_progress) {
+			this->emit<events::command_prompt>();
+		}
 	}
 
+	bool handle_command_line(std::string const& line) {
+		bool res = false;
+		std::vector<std::string> arguments;
+		std::string cmd = tokenise_command(line, arguments);
+		if(!cmd.empty()) {
+			auto it = commands_.find(cmd);
+			if(it != commands_.end()) {
+				res = it->second(std::move(arguments));
+			} else {
+				std::osyncstream out(std::cout);
+				out << "Unknown command" << std::endl;
+			}
+		}
+		return res;
+	}
+
+private:
 	single_thread_event_loop& main_loop_;
 	asio::io_context io_context_;
 	logger& log_;
 	asio::signal_set signals_;
 	test_client_commands config_;
+	std::map<std::string, std::function<bool(std::vector<std::string>)>> commands_;
 	std::thread thread_;
+	std::shared_ptr<ssh_client_session> session_;
 };
 
+static logger::type make_log_level(test_client_commands const& c) {
+	if(c.very_verbose) {
+		return logger::log_all;
+	}
+	if(c.verbose) {
+		return logger::type(logger::error | logger::info | logger::debug);
+	}
+	return logger::error;
+}
+
 test_client::test_client(test_client_commands const& c)
-: main_loop_(log_)
+: log_(make_log_level(c))
+, main_loop_(log_)
 , impl_(std::make_unique<impl>(c, log_, main_loop_))
 {
 }
@@ -233,8 +302,7 @@ test_client::~test_client()
 }
 
 int test_client::run() {
-	impl_->start();
-	return 0;
+	return impl_->run() ? 0 : 1;
 }
 
 }
