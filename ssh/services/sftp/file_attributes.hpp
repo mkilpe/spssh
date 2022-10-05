@@ -25,7 +25,10 @@ struct file_attributes {
 	/// return the flags for attributes hold here
 	attribute_flags flags() const;
 
+	/// deserialise attributes
 	bool read(ssh_bf_reader&);
+	/// deserialise attributes without reading the flags in front
+	bool read(ssh_bf_reader&, std::uint32_t flags);
 	bool write(ssh_bf_writer&);
 };
 

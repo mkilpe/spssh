@@ -85,8 +85,10 @@ public:
 	}
 
 	void list_files(std::string path) {
-		post([&]
+		log_.log(logger::debug_trace, "posting list files");
+		post([=, this]
 			{
+				log_.log(logger::debug_trace, "list files");
 				auto sftp = client_.sftp();
 				if(sftp) {
 					sftp->open_dir(path);
@@ -96,7 +98,12 @@ public:
 
 	void post(std::function<void()> func) {
 		// make sure we have mutually exclusive execution with the network handling
-		asio::post(socket_.get_executor(), std::move(func));
+		asio::post(socket_.get_executor(), [this, func = std::move(func)]
+			{
+				func();
+				// release the write wait to make sure the buffer gets flushed
+				timer_.cancel_one();
+			});
 	}
 
 	ssh_test_client& ssh_client() {
@@ -125,22 +132,22 @@ private:
 
 			std::string read_data;
 			read_data.resize(1024);
-			for (; socket_.is_open();) {
+			while(socket_.is_open()) {
 				std::size_t n = co_await socket_.async_read_some(
 					asio::buffer(read_data.data(), read_data.size()), asio::use_awaitable);
 
 				in_buf_.add(read_data.substr(0, n));
 				client_process();
 			}
-		} catch (std::exception&) {
+		} catch(std::exception&) {
 			stop();
 		}
 	}
 
 	asio::awaitable<void> writer() {
 		try {
-			while (socket_.is_open()) {
-				if (out_buf_.empty()) {
+			while(socket_.is_open()) {
+				if(out_buf_.empty()) {
 					asio::error_code ec;
 					co_await timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec));
 				} else {
@@ -149,7 +156,7 @@ private:
 					co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
 				}
 			}
-		} catch (std::exception&) {
+		} catch(std::exception&) {
 			stop();
 		}
 	}
@@ -192,6 +199,7 @@ struct test_client::impl : public event_handler {
 
 		commands_["ls"] = [&](auto args)
 			{
+				session_->list_files(args.empty() ? "" : args[0]);
 				return true;
 			};
 

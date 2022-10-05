@@ -24,12 +24,15 @@ sftp_common::~sftp_common()
 }
 
 bool sftp_common::on_data(const_span s) {
+	log_.log(logger::debug_trace, "sftp on data [used={}]", in_used_);
+
 	if(in_data_.size() - in_used_ < s.size()) {
+		log_.log(logger::debug_trace, "buffer full");
 		// cannot handle, buffer full
 		return false;
 	}
 
-	copy(s, safe_subspan(in_data_, in_used_, s.size()));
+	copy(s, safe_subspan(in_data_, in_used_));
 	in_used_ += s.size();
 
 	std::size_t used_size{};
@@ -38,17 +41,21 @@ bool sftp_common::on_data(const_span s) {
 		std::uint32_t length{};
 		auto span = safe_subspan(in_data_, used_size, in_used_ - used_size);
 		type = decode_sftp_type(span, length);
+		log_.log(logger::debug_trace, "sftp decode packet [type={}, length={}, data size={}]", int(type), length, in_used_ - used_size);
 		if(type && length) {
 			handle_sftp_packet(type, safe_subspan(in_data_, used_size+sftp_header_size, length-1));
+			used_size += sftp_header_size + length - 1;
 			type = {};
 		}
 	} while(type != 0);
 
 	if(used_size) {
 		std::memmove(in_data_.data(), in_data_.data()+used_size, in_used_ - used_size);
+		in_used_ -= used_size;
+		log_.log(logger::debug_trace, "sftp packet(s) handled [size={}, used={}]", used_size, in_used_);
+		adjust_in_window(used_size);
 	}
 
-	adjust_in_window(used_size);
 	return true;
 }
 

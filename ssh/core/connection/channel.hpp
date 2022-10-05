@@ -190,6 +190,7 @@ bool channel::send_packet(Args&&... args) {
 	do_flush();
 
 	if(state_ >= channel_state::close_pending) {
+		log_.log(logger::debug_trace, "bad state [state={}]", to_string(state_));
 		// we are closing or already closed, abort sending
 		return false;
 	}

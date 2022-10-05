@@ -39,8 +39,16 @@ protected:
 	void handle_extended_reply(const_span);
 
 protected:
-	template<typename PacketType, sftp_packet_type Type, typename... Args>
+	template<typename PacketType, std::uint16_t Type, typename... Args>
 	call_handle send_sftp_packet(Args&&... args);
+
+	void call_status_result(call_handle id, sftp_error err);
+	void call_handle_result(call_handle id, std::string_view handle);
+	void call_data_result(call_handle id, std::string_view data);
+	void call_name_result(call_handle id, std::vector<file_info> files);
+	void call_attr_result(call_handle id, file_attributes attrs);
+
+	virtual void on_extended_reply(call_handle id, ssh_bf_reader&);
 
 protected:
 	// previous packet id
@@ -48,7 +56,7 @@ protected:
 	std::shared_ptr<sftp_client_callback> callback_;
 
 	struct call_data {
-		sftp_packet_type type{};
+		std::uint16_t type{};
 	};
 
 	std::map<call_handle, call_data> remote_calls_;

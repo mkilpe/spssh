@@ -64,56 +64,76 @@ bool ssh_test_client::on_version(std::uint32_t version, sftp::ext_data_view data
 	return true;
 }
 
-void ssh_test_client::on_open_file(sftp_result<sftp::open_file_data> result) {
-
-}
-
-void ssh_test_client::on_read_file(sftp_result<sftp::read_file_data> result) {
-
-}
-
-void ssh_test_client::on_write_file(sftp_result<sftp::write_file_data> result) {
-
-}
-
-void ssh_test_client::on_close_file(sftp_result<sftp::close_file_data> result) {
-
-}
-
-void ssh_test_client::on_open_dir(sftp_result<sftp::open_file_data> result) {
-	if(!result) {
-		auto err = result.error();
-		logger_.log(logger::error, "failed to open dir [code={}, msg={}]", err.code(), err.message());
+void ssh_test_client::on_failure(sftp::call_handle, sftp::sftp_error err) {
+	logger_.log(logger::debug_trace, "command on_failure");
+	success_cb_ = nullptr;
+	if(fail_cb_) {
+		logger_.log(logger::debug_trace, "fail cb set");
+		fail_cb_();
+		fail_cb_ = nullptr;
+	} else {
+		std::osyncstream out(std::cout);
+		out << "Failure = " << err.code() << ", " << err.message() << std::endl;
 		handler_.emit<events::command_prompt>();
 	}
 }
 
-void ssh_test_client::on_read_dir(sftp_result<sftp::read_dir_data> result) {
-	if(result) {
-		// lets try to read more
-		auto s = sftp();
-		if(s) {
-			s->read_dir(result.data().handle);
-		}
+void ssh_test_client::on_open_file(sftp::call_handle id, sftp::open_file_data result) {
 
-		std::osyncstream out(std::cout);
-		for(auto&& v : result.data().files) {
-			out << v << "\n";
-		}
-		out << std::flush;
-	} else {
-		auto s = sftp();
-		if(s) {
-			s->close_dir(result.data().handle);
-		}
-	}
 }
 
-void ssh_test_client::on_close_dir(sftp_result<sftp::close_dir_data> result) {
-	if(!result) {
-		sftp::sftp_error const& err = result.error();
-		logger_.log(logger::error, "failed to close dir [code={}, msg={}]", err.code(), err.message());
+void ssh_test_client::on_read_file(sftp::call_handle id, sftp::read_file_data result) {
+
+}
+
+void ssh_test_client::on_write_file(sftp::call_handle id, sftp::write_file_data result) {
+
+}
+
+void ssh_test_client::on_close_file(sftp::call_handle id, sftp::close_file_data result) {
+
+}
+
+void ssh_test_client::on_open_dir(sftp::call_handle id, sftp::open_dir_data result) {
+	fail_cb_ = [&, handle = result.handle]
+		{
+			logger_.log(logger::debug_trace, "close dir1");
+
+			auto s = sftp();
+			if(s) {
+				logger_.log(logger::debug_trace, "close dir");
+				s->close_dir(handle);
+			}
+		};
+
+	success_cb_ = [&, handle = result.handle]
+		{
+			auto s = sftp();
+			if(s) {
+				s->read_dir(handle);
+			}
+		};
+
+	success_cb_();
+}
+
+void ssh_test_client::on_read_dir(sftp::call_handle id, sftp::read_dir_data result) {
+	logger_.log(logger::debug_trace, "on read dir");
+
+	// lets try to read more
+	if(success_cb_) {
+		success_cb_();
 	}
+
+	std::osyncstream out(std::cout);
+	for(auto&& v : result.files) {
+		out << v.longname << "\n";
+	}
+	out << std::flush;
+}
+
+void ssh_test_client::on_close_dir(sftp::call_handle id, sftp::close_dir_data result) {
+	logger_.log(logger::debug_trace, "on close dir");
 	handler_.emit<events::command_prompt>();
 }
 

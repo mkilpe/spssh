@@ -40,51 +40,48 @@ public:
 	/// fxp_version packet received, return false if the connection should not be accepted.
 	virtual bool on_version(std::uint32_t version, ext_data_view data) = 0;
 
-	virtual void on_open_file(sftp_result<open_file_data> result) = 0;
-	virtual void on_read_file(sftp_result<read_file_data> result) = 0;
-	virtual void on_write_file(sftp_result<write_file_data> result) = 0;
-	virtual void on_close_file(sftp_result<close_file_data> result) = 0;
+	/// called if any of the commands after agreeing on version fails
+	virtual void on_failure(call_handle, sftp_error) = 0;
 
-	virtual void on_open_dir(sftp_result<open_file_data> result) = 0;
-	virtual void on_read_dir(sftp_result<read_dir_data> result) = 0;
-	virtual void on_close_dir(sftp_result<close_dir_data> result) = 0;
+	virtual void on_open_file(call_handle, open_file_data result) = 0;
+	virtual void on_read_file(call_handle, read_file_data result) = 0;
+	virtual void on_write_file(call_handle, write_file_data result) = 0;
+	virtual void on_close_file(call_handle, close_file_data result) = 0;
+
+	virtual void on_open_dir(call_handle, open_dir_data result) = 0;
+	virtual void on_read_dir(call_handle, read_dir_data result) = 0;
+	virtual void on_close_dir(call_handle, close_dir_data result) = 0;
 };
 
 struct open_file_data {
 	file_handle handle;
-	std::string file;
 };
 
 struct read_file_data {
-	file_handle handle;
 	const_span data;
 };
 
 struct write_file_data {
-	file_handle handle;
 };
 
 struct close_file_data {
-	file_handle handle;
-};
-
-struct dir_info {
-	dir_handle handle;
-	std::string path;
 };
 
 struct open_dir_data {
 	dir_handle handle;
-	std::string path;
+};
+
+struct file_info {
+	std::string_view filename;
+	std::string_view longname;
+	file_attributes attrs;
 };
 
 struct read_dir_data {
-	dir_handle handle;
-	std::vector<std::string_view> files;
+	std::vector<file_info> files;
 };
 
 struct close_dir_data {
-	dir_handle handle;
 };
 
 }

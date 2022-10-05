@@ -44,47 +44,14 @@ public:
 	status_code code() const { return code_; }
 	std::string_view message() const { return message_; }
 
+	/// this is an error if error code is not zero
+	explicit operator bool() const {
+		return code_ != 0;
+	}
+
 private:
 	status_code code_{};
 	std::string message_;
-};
-
-/// Result type for client side sftp calls
-template<typename Data>
-class sftp_result {
-public:
-	using data_type = Data;
-
-	sftp_result(call_handle h, data_type d = {})
-	: handle_(h)
-	, data_(std::move(d))
-	{}
-
-	sftp_result(call_handle h, sftp_error e)
-	: handle_(h)
-	, error_(std::move(e))
-	{}
-
-	call_handle handle() const { return handle_; }
-
-	explicit operator bool() const {
-		return static_cast<bool>(data_);
-	}
-
-	sftp_error const& error() const {
-		SPSSH_ASSERT(error_, "error not set");
-		return *error_;
-	}
-
-	data_type const& data() const {
-		SPSSH_ASSERT(data_, "data not set");
-		return *data_;
-	}
-
-private:
-	call_handle handle_;
-	std::optional<data_type> data_;
-	std::optional<sftp_error> error_;
 };
 
 }

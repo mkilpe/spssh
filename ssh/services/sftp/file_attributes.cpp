@@ -34,37 +34,39 @@ static void read_value(bool& res, ssh_bf_reader& r, std::optional<Type>& v) {
 	}
 }
 
-bool file_attributes::read(ssh_bf_reader& r) {
-	std::uint32_t flags{};
-	bool res = r.read(flags);
-	if(res) {
-		if(flags & size_attribute) {
-			read_value(res, r, size);
-		}
-		if(flags & uidgid_attribute) {
-			read_value(res, r, uid);
-			read_value(res, r, gid);
-		}
-		if(flags & permissions_attribute) {
-			read_value(res, r, permissions);
-		}
-		if(flags & acmodtime_attribute) {
-			read_value(res, r, atime);
-			read_value(res, r, mtime);
-		}
-		if(flags & extended_attribute) {
-			std::uint32_t count{};
-			res = r.read(count);
-			for(std::uint32_t i = 0; res && i != count; ++i) {
-				ext_data_view d;
-				res = r.read(d.type) && r.read(d.data);
-				if(res) {
-					extended.push_back(ext_data{std::string(d.type), std::string(d.data)});
-				}
+bool file_attributes::read(ssh_bf_reader& r, std::uint32_t flags) {
+	bool res = true;
+	if(flags & size_attribute) {
+		read_value(res, r, size);
+	}
+	if(flags & uidgid_attribute) {
+		read_value(res, r, uid);
+		read_value(res, r, gid);
+	}
+	if(flags & permissions_attribute) {
+		read_value(res, r, permissions);
+	}
+	if(flags & acmodtime_attribute) {
+		read_value(res, r, atime);
+		read_value(res, r, mtime);
+	}
+	if(flags & extended_attribute) {
+		std::uint32_t count{};
+		res = r.read(count);
+		for(std::uint32_t i = 0; res && i != count; ++i) {
+			ext_data_view d;
+			res = r.read(d.type) && r.read(d.data);
+			if(res) {
+				extended.push_back(ext_data{std::string(d.type), std::string(d.data)});
 			}
 		}
 	}
 	return res;
+}
+
+bool file_attributes::read(ssh_bf_reader& r) {
+	std::uint32_t flags{};
+	return r.read(flags) && read(r, flags);
 }
 
 bool file_attributes::write(ssh_bf_writer& w) {

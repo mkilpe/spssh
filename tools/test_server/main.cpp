@@ -66,22 +66,22 @@ private:
 
 			std::string read_data;
 			read_data.resize(1024);
-			for (; socket_.is_open();) {
+			while(socket_.is_open()) {
 				std::size_t n = co_await socket_.async_read_some(
 					asio::buffer(read_data.data(), 1024), asio::use_awaitable);
 
 				in_buf_.add(read_data.substr(0, n));
 				server_process();
 			}
-		} catch (std::exception&) {
+		} catch(std::exception&) {
 			stop();
 		}
 	}
 
 	asio::awaitable<void> writer() {
 		try {
-			while (socket_.is_open()) {
-				if (out_buf_.empty()) {
+			while(socket_.is_open()) {
+				if(out_buf_.empty()) {
 					asio::error_code ec;
 					co_await timer_.async_wait(asio::redirect_error(asio::use_awaitable, ec));
 				} else {
@@ -90,7 +90,7 @@ private:
 					co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
 				}
 			}
-		} catch (std::exception&) {
+		} catch(std::exception&) {
 			stop();
 		}
 	}
@@ -115,7 +115,7 @@ asio::awaitable<void> listen(tcp::acceptor& acceptor, server_config const& confi
 {
 	log.log(logger::info, "Ready to accept connections");
 
-	for (;;) {
+	for(;;) {
 		auto [e, conn] = co_await acceptor.async_accept(asio::experimental::as_tuple(asio::use_awaitable));
 		if(!e) {
 			std::make_shared<ssh_session>(std::move(conn), config, log, crypto)->start();
