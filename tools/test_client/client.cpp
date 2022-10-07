@@ -85,24 +85,23 @@ public:
 	}
 
 	void list_files(std::string path) {
-		log_.log(logger::debug_trace, "posting list files");
-		post([=, this]
+		post_command([=](auto& sftp)
 			{
-				log_.log(logger::debug_trace, "list files");
-				auto sftp = client_.sftp();
-				if(sftp) {
-					sftp->open_dir(path);
-				}
+				sftp.open_dir(path);
 			});
 	}
 
-	void post(std::function<void()> func) {
-		// make sure we have mutually exclusive execution with the network handling
-		asio::post(socket_.get_executor(), [this, func = std::move(func)]
+	void realpath(std::string path) {
+		post_command([=](auto& sftp)
 			{
-				func();
-				// release the write wait to make sure the buffer gets flushed
-				timer_.cancel_one();
+				sftp.realpath(path);
+			});
+	}
+
+	void stat(std::string path) {
+		post_command([=](auto& sftp)
+			{
+				sftp.stat(path);
 			});
 	}
 
@@ -111,6 +110,19 @@ public:
 	}
 
 private:
+	void post_command(std::function<void(sftp::sftp_client&)> func) {
+		// make sure we have mutually exclusive execution with the network handling
+		asio::post(socket_.get_executor(), [this, func = std::move(func)]
+			{
+				auto sftp = client_.sftp();
+				if(sftp) {
+					func(*sftp);
+					// release the write wait to make sure the buffer gets flushed
+					timer_.cancel_one();
+				}
+			});
+	}
+
 	void client_process() {
 		transport_op res;
 		std::size_t bsize;
@@ -182,6 +194,12 @@ private:
 	ssh_test_client client_;
 };
 
+static void ensure_args(auto const& args, std::size_t amount) {
+	if(args.size() != amount) {
+		throw std::runtime_error("wrong amount of arguments");
+	}
+}
+
 struct test_client::impl : public event_handler {
 	impl(test_client_commands const& c, logger& log, single_thread_event_loop& loop)
 	: event_handler(loop)
@@ -200,6 +218,20 @@ struct test_client::impl : public event_handler {
 		commands_["ls"] = [&](auto args)
 			{
 				session_->list_files(args.empty() ? "" : args[0]);
+				return true;
+			};
+
+		commands_["realpath"] = [&](auto args)
+			{
+				ensure_args(args, 1);
+				session_->realpath(args[0]);
+				return true;
+			};
+
+		commands_["stat"] = [&](auto args)
+			{
+				ensure_args(args, 1);
+				session_->stat(args[0]);
 				return true;
 			};
 
@@ -263,16 +295,21 @@ struct test_client::impl : public event_handler {
 
 	bool handle_command_line(std::string const& line) {
 		bool res = false;
-		std::vector<std::string> arguments;
-		std::string cmd = tokenise_command(line, arguments);
-		if(!cmd.empty()) {
-			auto it = commands_.find(cmd);
-			if(it != commands_.end()) {
-				res = it->second(std::move(arguments));
-			} else {
-				std::osyncstream out(std::cout);
-				out << "Unknown command" << std::endl;
+		try {
+			std::vector<std::string> arguments;
+			std::string cmd = tokenise_command(line, arguments);
+			if(!cmd.empty()) {
+				auto it = commands_.find(cmd);
+				if(it != commands_.end()) {
+					res = it->second(std::move(arguments));
+				} else {
+					std::osyncstream out(std::cout);
+					out << "Unknown command" << std::endl;
+				}
 			}
+		} catch(std::exception const& e) {
+			std::osyncstream out(std::cout);
+			out << e.what() << std::endl;
 		}
 		return res;
 	}

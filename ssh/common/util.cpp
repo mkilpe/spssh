@@ -153,6 +153,16 @@ std::string to_string(std::vector<std::string_view> const& names) {
 	return res;
 }
 
+std::string to_hex(const_span span) {
+	char const values[] = "0123456789ABCDEF";
+	std::string s;
+	for(auto&& e : span) {
+		s += values[std::to_integer<std::uint8_t>(e) >> 4];
+		s += values[std::to_integer<std::uint8_t>(e) & 0x0F];
+	}
+	return s;
+}
+
 }
 
 namespace securepath {

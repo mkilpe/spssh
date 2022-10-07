@@ -95,21 +95,22 @@ void ssh_test_client::on_close_file(sftp::call_handle id, sftp::close_file_data 
 }
 
 void ssh_test_client::on_stat_file(sftp::call_handle, sftp::state_file_data result) {
-
+	logger_.log(logger::debug_trace, "on_stat_file");
+	std::osyncstream out(std::cout);
+	out << "fstat = " << to_string(result.attrs) << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_setstat_file(sftp::call_handle, sftp::setstate_file_data result) {
-
+	logger_.log(logger::debug_trace, "on_setstat_file");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_open_dir(sftp::call_handle id, sftp::open_dir_data result) {
 	fail_cb_ = [&, handle = result.handle]
 		{
-			logger_.log(logger::debug_trace, "close dir1");
-
 			auto s = sftp();
 			if(s) {
-				logger_.log(logger::debug_trace, "close dir");
 				s->close_dir(handle);
 			}
 		};
@@ -126,7 +127,7 @@ void ssh_test_client::on_open_dir(sftp::call_handle id, sftp::open_dir_data resu
 }
 
 void ssh_test_client::on_read_dir(sftp::call_handle id, sftp::read_dir_data result) {
-	logger_.log(logger::debug_trace, "on read dir");
+	logger_.log(logger::debug_trace, "on_read_dir");
 
 	// lets try to read more
 	if(success_cb_) {
@@ -141,48 +142,64 @@ void ssh_test_client::on_read_dir(sftp::call_handle id, sftp::read_dir_data resu
 }
 
 void ssh_test_client::on_close_dir(sftp::call_handle id, sftp::close_dir_data result) {
-	logger_.log(logger::debug_trace, "on close dir");
+	logger_.log(logger::debug_trace, "on_close_dir");
 	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_remove_file(sftp::call_handle, sftp::remove_file_data result) {
-
+	logger_.log(logger::debug_trace, "on_remove_file");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_rename(sftp::call_handle, sftp::rename_data result) {
-
+	logger_.log(logger::debug_trace, "on_rename");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_mkdir(sftp::call_handle, sftp::mkdir_data result) {
-
+	logger_.log(logger::debug_trace, "on_mkdir");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_remove_dir(sftp::call_handle, sftp::remove_dir_data result) {
-
+	logger_.log(logger::debug_trace, "on_remove_dir");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_stat(sftp::call_handle, sftp::stat_data result) {
-
+	logger_.log(logger::debug_trace, "on_stat");
+	std::osyncstream out(std::cout);
+	out << "stat = " << to_string(result.attrs) << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_setstat(sftp::call_handle, sftp::setstat_data result) {
-
+	logger_.log(logger::debug_trace, "on_setstat");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_readlink(sftp::call_handle, sftp::readlink_data result) {
-
+	logger_.log(logger::debug_trace, "on_readlink");
+	std::osyncstream out(std::cout);
+	out << "link = " << result.path << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_symlink(sftp::call_handle, sftp::symlink_data result) {
-
+	logger_.log(logger::debug_trace, "on_symlink");
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_realpath(sftp::call_handle, sftp::realpath_data result) {
-
+	logger_.log(logger::debug_trace, "on_realpath");
+	std::osyncstream out(std::cout);
+	out << "path = " << result.path << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_extended(sftp::call_handle, sftp::extended_data result) {
-
+	logger_.log(logger::debug_trace, "on_extended");
+	handler_.emit<events::command_prompt>();
 }
 
 }

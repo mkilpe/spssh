@@ -103,6 +103,7 @@ bool compare_equal(const_span s1, const_span s2);
 bool is_zero(const_span s);
 
 std::string to_string(std::vector<std::string_view> const&);
+std::string to_hex(const_span span);
 
 }
 

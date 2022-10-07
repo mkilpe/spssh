@@ -24,6 +24,25 @@ public: //sftp_server_interface
 protected:
 	void handle_sftp_packet(sftp_packet_type, const_span data) override;
 	void handle_init(const_span);
+	void handle_open(const_span);
+	void handle_close(const_span);
+	void handle_read(const_span);
+	void handle_write(const_span);
+	void handle_lstat(const_span);
+	void handle_fstat(const_span);
+	void handle_setstat(const_span);
+	void handle_fsetstat(const_span);
+	void handle_opendir(const_span);
+	void handle_readdir(const_span);
+	void handle_remove(const_span);
+	void handle_mkdir(const_span);
+	void handle_rmdir(const_span);
+	void handle_realpath(const_span);
+	void handle_stat(const_span);
+	void handle_rename(const_span);
+	void handle_readlink(const_span);
+	void handle_symlink(const_span);
+	void handle_extended(const_span);
 
 protected:
 	std::shared_ptr<sftp_server_backend> backend_;

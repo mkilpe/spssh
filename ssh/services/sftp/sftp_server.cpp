@@ -45,12 +45,107 @@ void sftp_server::handle_init(const_span s) {
 	}
 }
 
+void sftp_server::handle_open(const_span) {
+
+}
+
+void sftp_server::handle_close(const_span) {
+
+}
+
+void sftp_server::handle_read(const_span) {
+
+}
+
+void sftp_server::handle_write(const_span) {
+
+}
+
+void sftp_server::handle_lstat(const_span) {
+
+}
+
+void sftp_server::handle_fstat(const_span) {
+
+}
+
+void sftp_server::handle_setstat(const_span) {
+
+}
+
+void sftp_server::handle_fsetstat(const_span) {
+
+}
+
+void sftp_server::handle_opendir(const_span) {
+
+}
+
+void sftp_server::handle_readdir(const_span) {
+
+}
+
+void sftp_server::handle_remove(const_span) {
+
+}
+
+void sftp_server::handle_mkdir(const_span) {
+
+}
+
+void sftp_server::handle_rmdir(const_span) {
+
+}
+
+void sftp_server::handle_realpath(const_span) {
+
+}
+
+void sftp_server::handle_stat(const_span) {
+
+}
+
+void sftp_server::handle_rename(const_span) {
+
+}
+
+void sftp_server::handle_readlink(const_span) {
+
+}
+
+void sftp_server::handle_symlink(const_span) {
+
+}
+
+void sftp_server::handle_extended(const_span) {
+
+}
+
+
 void sftp_server::handle_sftp_packet(sftp_packet_type type, const_span data) {
 	// if we don't have backend attached any more, don't bother
 	if(backend_) {
 		switch(type) {
-			case fxp_init: handle_init(data); break;
-
+			case fxp_init    : handle_init(data);     break;
+			case fxp_open    : handle_open(data);     break;
+			case fxp_close   : handle_close(data);    break;
+			case fxp_read    : handle_read(data);     break;
+			case fxp_write   : handle_write(data);    break;
+			case fxp_lstat   : handle_lstat(data);    break;
+			case fxp_fstat   : handle_fstat(data);    break;
+			case fxp_setstat : handle_setstat(data);  break;
+			case fxp_fsetstat: handle_fsetstat(data); break;
+			case fxp_opendir : handle_opendir(data);  break;
+			case fxp_readdir : handle_readdir(data);  break;
+			case fxp_remove  : handle_remove(data);   break;
+			case fxp_mkdir   : handle_mkdir(data);    break;
+			case fxp_rmdir   : handle_rmdir(data);    break;
+			case fxp_realpath: handle_realpath(data); break;
+			case fxp_stat    : handle_stat(data);     break;
+			case fxp_rename  : handle_rename(data);   break;
+			case fxp_readlink: handle_readlink(data); break;
+			case fxp_symlink : handle_symlink(data);  break;
+			case fxp_extended: handle_extended(data); break;
 			default: break;
 		};
 	}

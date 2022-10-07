@@ -1,6 +1,10 @@
 
 #include "file_attributes.hpp"
 
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
 namespace securepath::ssh::sftp {
 
 attribute_flags file_attributes::flags() const {
@@ -95,6 +99,46 @@ bool file_attributes::write(ssh_bf_writer& w) const {
 		}
 	}
 	return res;
+}
+
+std::string to_string(file_attributes const& a) {
+	bool first = true;
+	std::ostringstream out;
+	out << "{";
+	if(a.size) {
+		out << "size=" << *a.size;
+		first = false;
+	}
+	if(a.uid && a.gid) {
+		out << (first ? "" : ", ") << "uid=" << *a.uid << ", gid=" << *a.gid;
+		first = false;
+	}
+	if(a.permissions) {
+		out << (first ? "" : ", ") << "perm=" << std::oct << *a.permissions;
+		first = false;
+	}
+	if(a.atime && a.mtime) {
+		std::time_t atime = *a.atime;
+		std::time_t mtime = *a.mtime;
+
+		out << (first ? "" : ", ") << "atime=" << std::put_time(std::gmtime(&atime), "%c") << ", "
+									<< "mtime=" << std::put_time(std::gmtime(&mtime), "%c");
+		first = false;
+	}
+	if(!a.extended.empty()) {
+		out << (first ? "" : ", ") << "[";
+		bool first_v = true;
+		for(auto v : a.extended) {
+			if(!first_v) {
+				out << ", ";
+			}
+			first_v = false;
+			out << v.type << "=" << to_hex(to_span(v.data));
+		}
+		out << "]";
+	}
+	out << "}";
+	return out.str();
 }
 
 }

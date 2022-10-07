@@ -33,6 +33,8 @@ struct file_attributes {
 	bool write(ssh_bf_writer&) const;
 };
 
+std::string to_string(file_attributes const&);
+
 }
 
 #endif
