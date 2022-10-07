@@ -29,7 +29,8 @@ struct file_attributes {
 	bool read(ssh_bf_reader&);
 	/// deserialise attributes without reading the flags in front
 	bool read(ssh_bf_reader&, std::uint32_t flags);
-	bool write(ssh_bf_writer&);
+	/// serialise
+	bool write(ssh_bf_writer&) const;
 };
 
 }

@@ -58,9 +58,16 @@ void sftp_client::call_status_result(call_handle id, sftp_error err) {
 		if(it != remote_calls_.end()) {
 			switch(it->second.type) {
 				// these types don't get any data as response and hence the status packet is used
-				case fxp_write: callback_->on_write_file(id, write_file_data{}); break;
-				case fxp_close: callback_->on_close_file(id, close_file_data{}); break;
+				case fxp_write:    callback_->on_write_file(id, write_file_data{}); break;
+				case fxp_close:    callback_->on_close_file(id, close_file_data{}); break;
 				case fxp_closedir: callback_->on_close_dir(id, close_dir_data{}); break;
+				case fxp_fsetstat: callback_->on_setstat_file(id, setstate_file_data{}); break;
+				case fxp_remove:   callback_->on_remove_file(id, remove_file_data{}); break;
+				case fxp_rename:   callback_->on_rename(id, rename_data{}); break;
+				case fxp_mkdir:    callback_->on_mkdir(id, mkdir_data{}); break;
+				case fxp_rmdir:    callback_->on_remove_dir(id, remove_dir_data{}); break;
+				case fxp_setstat:  callback_->on_setstat(id, setstat_data{}); break;
+				case fxp_symlink:  callback_->on_symlink(id, symlink_data{}); break;
 				default: log_.log(logger::debug_trace, "Invalid status packet with no error for {} [call={}]", it->second.type, id); break;
 			}
 			remote_calls_.erase(it);
@@ -93,7 +100,12 @@ void sftp_client::call_handle_result(call_handle id, std::string_view handle) {
 		switch(it->second.type) {
 			case fxp_open: callback_->on_open_file(id, open_file_data{file_handle{handle}}); break;
 			case fxp_opendir: callback_->on_open_dir(id, open_dir_data{dir_handle{handle}}); break;
-			default: log_.log(logger::debug_trace, "Invalid handle packet for {} [call={}]", it->second.type, id); break;
+			default:
+			{
+				log_.log(logger::debug_trace, "Invalid handle packet for {} [call={}]", it->second.type, id);
+				callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				break;
+			}
 		}
 		remote_calls_.erase(it);
 	} else {
@@ -117,7 +129,12 @@ void sftp_client::call_data_result(call_handle id, std::string_view data) {
 	if(it != remote_calls_.end()) {
 		switch(it->second.type) {
 			case fxp_read: callback_->on_read_file(id, read_file_data{to_span(data)}); break;
-			default: log_.log(logger::debug_trace, "Invalid data packet for {} [call={}]", it->second.type, id); break;
+			default:
+			{
+				log_.log(logger::debug_trace, "Invalid data packet for {} [call={}]", it->second.type, id);
+				callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				break;
+			}
 		}
 		remote_calls_.erase(it);
 	} else {
@@ -141,7 +158,30 @@ void sftp_client::call_name_result(call_handle id, std::vector<file_info> files)
 	if(it != remote_calls_.end()) {
 		switch(it->second.type) {
 			case fxp_readdir: callback_->on_read_dir(id, read_dir_data{std::move(files)}); break;
-			default: log_.log(logger::debug_trace, "Invalid name packet for {} [call={}]", it->second.type, id); break;
+			case fxp_readlink:
+			{
+				if(files.size() == 1) {
+					callback_->on_readlink(id, readlink_data{files.front().filename});
+				} else {
+					callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				}
+				break;
+			}
+			case fxp_realpath:
+			{
+				if(files.size() == 1) {
+					callback_->on_realpath(id, realpath_data{files.front().filename});
+				} else {
+					callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				}
+				break;
+			}
+			default:
+			{
+				log_.log(logger::debug_trace, "Invalid name packet for {} [call={}]", it->second.type, id);
+				callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				break;
+			}
 		}
 		remote_calls_.erase(it);
 	} else {
@@ -186,7 +226,15 @@ void sftp_client::call_attr_result(call_handle id, file_attributes attrs) {
 	if(it != remote_calls_.end()) {
 		switch(it->second.type) {
 			// stats
-			default: log_.log(logger::debug_trace, "Invalid attrs packet for {} [call={}]", it->second.type, id); break;
+			case fxp_stat: [[fallthrough]];
+			case fxp_lstat: callback_->on_stat(id, stat_data{std::move(attrs)}); break;
+			case fxp_fstat: callback_->on_stat_file(id, state_file_data{std::move(attrs)}); break;
+			default:
+			{
+				log_.log(logger::debug_trace, "Invalid attrs packet for {} [call={}]", it->second.type, id);
+				callback_->on_failure(id, sftp_error{status_code::fx_failure, "Wrong result packet type"});
+				break;
+			}
 		}
 		remote_calls_.erase(it);
 	} else {
@@ -197,9 +245,9 @@ void sftp_client::call_attr_result(call_handle id, file_attributes attrs) {
 void sftp_client::handle_attrs(const_span s) {
 	attrs_response::load packet(s);
 	if(packet) {
-		auto& [id, flags] = packet;
+		auto& [id] = packet;
 		file_attributes attr;
-		if(attr.read(packet.reader(), flags)) {
+		if(attr.read(packet.reader())) {
 			call_attr_result(id, std::move(attr));
 		} else {
 			log_.log(logger::error, "Invalid sftp attrs packet");
@@ -232,8 +280,9 @@ void sftp_client::handle_extended_reply(const_span s) {
 	}
 }
 
-void sftp_client::on_extended_reply(call_handle id, ssh_bf_reader&) {
-	// do nothing.. one needs to override this if implementing extensions
+void sftp_client::on_extended_reply(call_handle id, ssh_bf_reader& r) {
+	// one can override this if implementing extensions
+	callback_->on_extended(id, extended_data{r.rest_of_span()});
 }
 
 void sftp_client::handle_sftp_packet(sftp_packet_type type, const_span data) {
@@ -268,21 +317,25 @@ call_handle sftp_client::send_sftp_packet(Args&&... args) {
 	return ret ? handle : 0;
 }
 
-call_handle sftp_client::open_file(std::string_view path, open_mode mode, file_attributes attr) {
-	log_.log(logger::debug_trace, "open_file");
-
+template<typename PacketType, std::uint16_t fxp_type, typename... Args>
+call_handle sftp_client::send_packet_attr_helper(file_attributes const& attrs, Args&&... args) {
 	byte_vector p;
 
 	auto handle = ++sequence_;
-	bool res = ser::serialise_to_vector<open_request>(p, handle, path, mode);
+	bool res = ser::serialise_to_vector<PacketType>(p, handle, std::forward<Args>(args)...);
 
 	if(res) {
 		ssh_bf_writer res_w(p, p.size());
-		attr.write(res_w);
+		attrs.write(res_w);
 		res = send_packet(p);
-		remote_calls_[handle] = call_data{fxp_open};
+		remote_calls_[handle] = call_data{fxp_type};
 	}
 	return res ? handle : 0;
+}
+
+call_handle sftp_client::open_file(std::string_view path, open_mode mode, file_attributes const& attr) {
+	log_.log(logger::debug_trace, "open_file");
+	return send_packet_attr_helper<open_request, fxp_open>(attr, path, mode);
 }
 
 call_handle sftp_client::read_file(file_handle_view handle, std::uint64_t pos, std::uint32_t size) {
@@ -300,6 +353,16 @@ call_handle sftp_client::close_file(file_handle_view handle) {
 	return send_sftp_packet<close_request, fxp_close>(handle);
 }
 
+call_handle sftp_client::stat_file(file_handle_view handle) {
+	log_.log(logger::debug_trace, "stat_file");
+	return send_sftp_packet<fstat_request, fxp_fstat>(handle);
+}
+
+call_handle sftp_client::setstat_file(file_handle_view file_handle, file_attributes const& attrs) {
+	log_.log(logger::debug_trace, "setstat_file");
+	return send_packet_attr_helper<fsetstat_request, fxp_fsetstat>(attrs, file_handle);
+}
+
 call_handle sftp_client::open_dir(std::string_view path) {
 	log_.log(logger::debug_trace, "open_dir: {}", path);
 	return send_sftp_packet<opendir_request, fxp_opendir>(path);
@@ -313,6 +376,68 @@ call_handle sftp_client::read_dir(dir_handle_view dir_handle) {
 call_handle sftp_client::close_dir(dir_handle_view dir_handle) {
 	log_.log(logger::debug_trace, "close_dir");
 	return send_sftp_packet<close_request, fxp_closedir>(dir_handle);
+}
+
+call_handle sftp_client::remove_file(std::string_view path) {
+	log_.log(logger::debug_trace, "remove_file");
+	return send_sftp_packet<remove_request, fxp_remove>(path);
+}
+
+call_handle sftp_client::rename(std::string_view old_path, std::string_view new_path) {
+	log_.log(logger::debug_trace, "rename");
+	return send_sftp_packet<rename_request, fxp_rename>(old_path, new_path);
+}
+
+call_handle sftp_client::mkdir(std::string_view path, file_attributes const& attrs) {
+	log_.log(logger::debug_trace, "mkdir");
+	return send_packet_attr_helper<mkdir_request, fxp_mkdir>(attrs, path);
+}
+
+call_handle sftp_client::remove_dir(std::string_view path) {
+	log_.log(logger::debug_trace, "remove_dir");
+	return send_sftp_packet<rmdir_request, fxp_rmdir>(path);
+}
+
+call_handle sftp_client::stat(std::string_view path, bool follow_symlinks) {
+	log_.log(logger::debug_trace, "stat [follow_symlinks={}]", follow_symlinks);
+	return follow_symlinks ?
+		send_sftp_packet<stat_request, fxp_stat>(path) :
+		send_sftp_packet<lstat_request, fxp_lstat>(path);
+}
+
+call_handle sftp_client::setstat(std::string_view path, file_attributes const& attrs) {
+	log_.log(logger::debug_trace, "setstat");
+	return send_packet_attr_helper<setstat_request, fxp_setstat>(attrs, path);
+}
+
+call_handle sftp_client::readlink(std::string_view path) {
+	log_.log(logger::debug_trace, "readlink");
+	return send_sftp_packet<readlink_request, fxp_readlink>(path);
+}
+
+call_handle sftp_client::symlink(std::string_view link, std::string_view path) {
+	log_.log(logger::debug_trace, "symlink");
+	return send_sftp_packet<symlink_request, fxp_symlink>(link, path);
+}
+
+call_handle sftp_client::realpath(std::string_view path) {
+	log_.log(logger::debug_trace, "realpath");
+	return send_sftp_packet<realpath_request, fxp_realpath>(path);
+}
+
+call_handle sftp_client::extended(std::string_view ext_request, const_span data) {
+	byte_vector p;
+
+	auto handle = ++sequence_;
+	bool res = ser::serialise_to_vector<extended_request>(p, handle, ext_request);
+
+	if(res) {
+		ssh_bf_writer res_w(p, p.size());
+		res_w.write(to_string_view(data));
+		res = send_packet(p);
+		remote_calls_[handle] = call_data{fxp_extended};
+	}
+	return res ? handle : 0;
 }
 
 }

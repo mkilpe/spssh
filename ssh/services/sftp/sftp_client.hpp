@@ -14,14 +14,32 @@ public:
 
 public: // sftp_client_interface
 	void close(std::string_view error) override;
-	call_handle open_file(std::string_view path, open_mode mode, file_attributes = {}) override;
+
+	call_handle open_file(std::string_view path, open_mode mode, file_attributes const& = {}) override;
 	call_handle read_file(file_handle_view, std::uint64_t pos, std::uint32_t size) override;
 	call_handle write_file(file_handle_view, std::uint64_t pos, const_span data) override;
 	call_handle close_file(file_handle_view) override;
+	call_handle stat_file(file_handle_view) override;
+	call_handle setstat_file(file_handle_view, file_attributes const&) override;
 
 	call_handle open_dir(std::string_view path) override;
 	call_handle read_dir(dir_handle_view) override;
 	call_handle close_dir(dir_handle_view) override;
+
+	call_handle remove_file(std::string_view path) override;
+	call_handle rename(std::string_view old_path, std::string_view new_path) override;
+	call_handle mkdir(std::string_view path, file_attributes const& = {}) override;
+	call_handle remove_dir(std::string_view path) override;
+
+	call_handle stat(std::string_view path, bool follow_symlinks = true) override;
+	call_handle setstat(std::string_view path, file_attributes const&) override;
+
+	call_handle readlink(std::string_view path) override;
+	call_handle symlink(std::string_view link, std::string_view path) override;
+
+	call_handle realpath(std::string_view path) override;
+
+	call_handle extended(std::string_view ext_request, const_span data) override;
 
 protected: // sftp_common
 	bool on_confirm(channel_side_info remote, const_span extra_data) override;
@@ -41,6 +59,9 @@ protected:
 protected:
 	template<typename PacketType, std::uint16_t Type, typename... Args>
 	call_handle send_sftp_packet(Args&&... args);
+
+	template<typename PacketType, std::uint16_t fxp_type, typename... Args>
+	call_handle send_packet_attr_helper(file_attributes const& attrs, Args&&... args);
 
 	void call_status_result(call_handle id, sftp_error err);
 	void call_handle_result(call_handle id, std::string_view handle);

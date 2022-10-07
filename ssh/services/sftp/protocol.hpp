@@ -44,7 +44,7 @@ using open_request = sftp_packet_ser
 	ser::uint32,
 	ser::string,
 	ser::uint32
-	/*attribute flags, the attributes are read/written separately based on this*/
+	/*attribute read/written separately*/
 >;
 
 /*
@@ -127,8 +127,8 @@ using mkdir_request = sftp_packet_ser
 <
 	fxp_mkdir,
 	ser::uint32,
-	ser::string,
-	ser::uint32 /*attribute flags, rest of the attributes are read/written separately based on this*/
+	ser::string
+	/*attribute read/written separately*/
 >;
 
 /*
@@ -213,8 +213,8 @@ using setstat_request = sftp_packet_ser
 <
 	fxp_setstat,
 	ser::uint32,
-	ser::string,
-	ser::uint32 /*attribute flags, rest of the attributes are read/written separately based on this*/
+	ser::string
+	/*attribute read/written separately*/
 >;
 
 /*
@@ -227,8 +227,8 @@ using fsetstat_request = sftp_packet_ser
 <
 	fxp_fsetstat,
 	ser::uint32,
-	ser::string,
-	ser::uint32 /*attribute flags, rest of the attributes are read/written separately based on this*/
+	ser::string
+	/*attribute read/written separately*/
 >;
 
 /*
@@ -351,8 +351,8 @@ using name_response = sftp_packet_ser
 using attrs_response = sftp_packet_ser
 <
 	fxp_attrs,
-	ser::uint32,
-	ser::uint32 /*attribute flags, rest of the attributes are read/written separately based on this*/
+	ser::uint32
+	/*attribute read/written separately*/
 >;
 
 /*

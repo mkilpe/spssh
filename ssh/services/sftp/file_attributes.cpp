@@ -69,7 +69,7 @@ bool file_attributes::read(ssh_bf_reader& r) {
 	return r.read(flags) && read(r, flags);
 }
 
-bool file_attributes::write(ssh_bf_writer& w) {
+bool file_attributes::write(ssh_bf_writer& w) const {
 	std::uint32_t f = flags();
 	bool res = w.write(f);
 	if(res && size) {

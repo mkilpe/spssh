@@ -27,9 +27,21 @@ protected:
 	void on_read_file(sftp::call_handle, sftp::read_file_data result) override;
 	void on_write_file(sftp::call_handle, sftp::write_file_data result) override;
 	void on_close_file(sftp::call_handle, sftp::close_file_data result) override;
+	void on_stat_file(sftp::call_handle, sftp::state_file_data result) override;
+	void on_setstat_file(sftp::call_handle, sftp::setstate_file_data result) override;
 	void on_open_dir(sftp::call_handle, sftp::open_dir_data result) override;
 	void on_read_dir(sftp::call_handle, sftp::read_dir_data result) override;
 	void on_close_dir(sftp::call_handle, sftp::close_dir_data result) override;
+	void on_remove_file(sftp::call_handle, sftp::remove_file_data result) override;
+	void on_rename(sftp::call_handle, sftp::rename_data result) override;
+	void on_mkdir(sftp::call_handle, sftp::mkdir_data result) override;
+	void on_remove_dir(sftp::call_handle, sftp::remove_dir_data result) override;
+	void on_stat(sftp::call_handle, sftp::stat_data result) override;
+	void on_setstat(sftp::call_handle, sftp::setstat_data result) override;
+	void on_readlink(sftp::call_handle, sftp::readlink_data result) override;
+	void on_symlink(sftp::call_handle, sftp::symlink_data result) override;
+	void on_realpath(sftp::call_handle, sftp::realpath_data result) override;
+	void on_extended(sftp::call_handle, sftp::extended_data result) override;
 
 private:
 	event_handler& handler_;

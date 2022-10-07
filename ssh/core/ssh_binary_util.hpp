@@ -235,6 +235,10 @@ public:
 		return in_;
 	}
 
+	const_span rest_of_span() const {
+		return in_.subspan(pos_);
+	}
+
 	std::size_t used_size() const {
 		return pos_;
 	}

@@ -94,6 +94,14 @@ void ssh_test_client::on_close_file(sftp::call_handle id, sftp::close_file_data 
 
 }
 
+void ssh_test_client::on_stat_file(sftp::call_handle, sftp::state_file_data result) {
+
+}
+
+void ssh_test_client::on_setstat_file(sftp::call_handle, sftp::setstate_file_data result) {
+
+}
+
 void ssh_test_client::on_open_dir(sftp::call_handle id, sftp::open_dir_data result) {
 	fail_cb_ = [&, handle = result.handle]
 		{
@@ -135,6 +143,46 @@ void ssh_test_client::on_read_dir(sftp::call_handle id, sftp::read_dir_data resu
 void ssh_test_client::on_close_dir(sftp::call_handle id, sftp::close_dir_data result) {
 	logger_.log(logger::debug_trace, "on close dir");
 	handler_.emit<events::command_prompt>();
+}
+
+void ssh_test_client::on_remove_file(sftp::call_handle, sftp::remove_file_data result) {
+
+}
+
+void ssh_test_client::on_rename(sftp::call_handle, sftp::rename_data result) {
+
+}
+
+void ssh_test_client::on_mkdir(sftp::call_handle, sftp::mkdir_data result) {
+
+}
+
+void ssh_test_client::on_remove_dir(sftp::call_handle, sftp::remove_dir_data result) {
+
+}
+
+void ssh_test_client::on_stat(sftp::call_handle, sftp::stat_data result) {
+
+}
+
+void ssh_test_client::on_setstat(sftp::call_handle, sftp::setstat_data result) {
+
+}
+
+void ssh_test_client::on_readlink(sftp::call_handle, sftp::readlink_data result) {
+
+}
+
+void ssh_test_client::on_symlink(sftp::call_handle, sftp::symlink_data result) {
+
+}
+
+void ssh_test_client::on_realpath(sftp::call_handle, sftp::realpath_data result) {
+
+}
+
+void ssh_test_client::on_extended(sftp::call_handle, sftp::extended_data result) {
+
 }
 
 }
