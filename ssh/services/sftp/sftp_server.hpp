@@ -20,6 +20,14 @@ public:
 public: //sftp_server_interface
 	void close(std::string_view error) override;
 	bool send_version(std::uint32_t version, ext_data_view data) override;
+	bool send_error(call_context, status_code code, std::string_view message) override;
+	bool send_ok(call_context) override;
+	bool send_open_file(call_context, file_handle_view) override;
+	bool send_open_dir(call_context, dir_handle_view) override;
+	bool send_read_dir(call_context, std::vector<file_info> const&) override;
+	bool send_stat(call_context, file_attributes const&) override;
+	bool send_path(call_context, std::string_view path) override;
+	bool send_extended(call_context, const_span data) override;
 
 protected:
 	void handle_sftp_packet(sftp_packet_type, const_span data) override;
@@ -43,6 +51,9 @@ protected:
 	void handle_readlink(const_span);
 	void handle_symlink(const_span);
 	void handle_extended(const_span);
+private:
+	template<typename Packet, typename Func>
+	void handle_packet_helper(Func, const_span);
 
 protected:
 	std::shared_ptr<sftp_server_backend> backend_;

@@ -153,7 +153,7 @@ void sftp_client::handle_data(const_span s) {
 	}
 }
 
-void sftp_client::call_name_result(call_handle id, std::vector<file_info> files) {
+void sftp_client::call_name_result(call_handle id, std::vector<file_info_view> files) {
 	auto it = remote_calls_.find(id);
 	if(it != remote_calls_.end()) {
 		switch(it->second.type) {
@@ -195,17 +195,16 @@ void sftp_client::handle_name(const_span s) {
 		auto& [id, count] = packet;
 		auto& reader = packet.reader();
 
-		std::vector<file_info> files;
+		std::vector<file_info_view> files;
 		files.reserve(count);
 
 		for(std::uint32_t i = 0; i != count; ++i) {
-			std::string_view filename, longname;
-			file_attributes attr;
-			if(reader.read(filename)
-				&& reader.read(longname)
-				&& attr.read(reader))
+			file_info_view fi;
+			if(reader.read(fi.filename)
+				&& reader.read(fi.longname)
+				&& fi.attrs.read(reader))
 			{
-				files.push_back(file_info{filename, longname, std::move(attr)});
+				files.push_back(std::move(fi));
 			} else {
 				log_.log(logger::error, "Invalid sftp name packet");
 				transport_.set_error_and_disconnect(ssh_protocol_error);

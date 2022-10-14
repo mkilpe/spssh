@@ -66,7 +66,7 @@ protected:
 	void call_status_result(call_handle id, sftp_error err);
 	void call_handle_result(call_handle id, std::string_view handle);
 	void call_data_result(call_handle id, std::string_view data);
-	void call_name_result(call_handle id, std::vector<file_info> files);
+	void call_name_result(call_handle id, std::vector<file_info_view> files);
 	void call_attr_result(call_handle id, file_attributes attrs);
 
 	virtual void on_extended_reply(call_handle id, ssh_bf_reader&);

@@ -9,6 +9,12 @@ namespace securepath::ssh::sftp {
 
 using call_context = std::uint64_t;
 
+struct file_info {
+	std::string filename;
+	std::string longname;
+	file_attributes attrs;
+};
+
 /// Interface to callback for server backend (the interface is separated to allow async handling of the server backend)
 class sftp_server_interface {
 public:
@@ -30,8 +36,11 @@ public:
 	/// send response to open_dir
 	virtual bool send_open_dir(call_context, dir_handle_view) = 0;
 
+	/// send response to read_dir
+	virtual bool send_read_dir(call_context, std::vector<file_info> const&) = 0;
+
 	/// send response to stat and stat_file
-	virtual bool send_stat(call_context, file_attributes) = 0;
+	virtual bool send_stat(call_context, file_attributes const&) = 0;
 
 	/// send response to readlink and realpath
 	virtual bool send_path(call_context, std::string_view path) = 0;

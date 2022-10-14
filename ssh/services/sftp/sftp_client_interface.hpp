@@ -124,14 +124,14 @@ struct open_dir_data {
 	dir_handle handle;
 };
 
-struct file_info {
+struct file_info_view {
 	std::string_view filename;
 	std::string_view longname;
 	file_attributes attrs;
 };
 
 struct read_dir_data {
-	std::vector<file_info> files;
+	std::vector<file_info_view> files;
 };
 
 struct close_dir_data {
