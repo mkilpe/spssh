@@ -1,7 +1,6 @@
 
 Overview:
 * SSH/SFTP server side
-  * Primary use case is FileZilla server
 * SSH/SFTP client side
 * other SSH subsystems (scp, forwarding, shell)?
 * Analyzing/Correctness/Stress testing client and/or server?
