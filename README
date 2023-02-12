@@ -1,0 +1,1 @@
+SSH client/server library for building SSH based protocols with modern C++. Implements most of SFTP but some things are still missing and not tested well enough.s
