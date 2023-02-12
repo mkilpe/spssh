@@ -6,7 +6,6 @@ for first version:
 * think what should happen in cases of full input/output buffers
 * implement test client/server configuration from command line / settings file
 * test against openssh, filezilla
-* add license information
 ----------
 
 sftp:
