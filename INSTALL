@@ -1,0 +1,5 @@
+
+Dependencies:
+ * Nettle or Crypto++
+ * asio network for test client/server
+ * Catch for testing (should be under directory external)
