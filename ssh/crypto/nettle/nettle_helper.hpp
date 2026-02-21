@@ -24,6 +24,13 @@ struct integer {
 	}
 
 	~integer() {
+		// zero limbs before freeing to prevent sensitive values lingering in freed memory.
+		if(handle->_mp_alloc > 0 && handle->_mp_d) {
+			volatile mp_limb_t* p = handle->_mp_d;
+			for(mp_size_t i = 0; i < handle->_mp_alloc; ++i) {
+				p[i] = 0;
+			}
+		}
 		mpz_clear(handle);
 	}
 

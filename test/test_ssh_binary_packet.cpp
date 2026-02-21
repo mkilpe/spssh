@@ -4,10 +4,12 @@
 #include "random.hpp"
 #include "test_buffers.hpp"
 #include "ssh/common/logger.hpp"
+#include "ssh/common/util.hpp"
 #include "ssh/core/packet_ser.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/ssh_binary_packet.hpp"
 #include "ssh/core/ssh_config.hpp"
+#include "ssh/core/ssh_constants.hpp"
 #include "ssh/core/protocol.hpp"
 #include <external/catch/catch.hpp>
 
@@ -157,6 +159,49 @@ TEST_CASE("ssh_binary_packet crypto", "[unit]") {
 	CHECK(code == 1);
 	CHECK(desc == "test 1");
 	CHECK(ignore == "test 2");
+}
+
+TEST_CASE("ssh_binary_packet oversized packet rejected", "[unit]") {
+	ssh_config config;
+	config.max_in_packet_size = 64;
+
+	ssh_binary_packet bp(config, test_log());
+	bp.set_random(test_rand);
+
+	// craft a header whose packet_length field encodes a size exceeding the limit:
+	// packet_size = packet_lenght_size(4) + packet_length_field + integrity_size(0)
+	// so packet_length_field = max_in_packet_size - 4 = 60 -> use 61 to exceed
+	std::byte hdr[8] = {};
+	std::uint32_t big = 61; // results in packet_size = 65 > 64
+	hdr[0] = std::byte((big >> 24) & 0xFF);
+	hdr[1] = std::byte((big >> 16) & 0xFF);
+	hdr[2] = std::byte((big >>  8) & 0xFF);
+	hdr[3] = std::byte( big        & 0xFF);
+
+	CHECK(!bp.try_decode_header(span{hdr, sizeof(hdr)}));
+	CHECK(bp.error() == spssh_invalid_packet);
+}
+
+TEST_CASE("ssh_binary_packet padding overflow rejected", "[unit]") {
+	ssh_config config;
+	config.random_packet_padding = false;
+	string_io_buffer buf;
+	std::byte temp_buf[1024] = {};
+
+	ssh_binary_packet bp_send(config, test_log());
+	bp_send.set_random(test_rand);
+	REQUIRE(send_packet<ser::disconnect>(bp_send, buf, 1, "test", ""));
+
+	// tamper with the padding byte to be absurdly large
+	// byte 4 (index 4) is the padding_length field
+	buf.data[4] = '\xFF';
+
+	ssh_binary_packet bp_recv(config, test_log());
+	bp_recv.set_random(test_rand);
+	REQUIRE(bp_recv.try_decode_header(buf.get()));
+	auto payload = bp_recv.decrypt_packet(buf.get(), temp_buf);
+	CHECK(payload.empty());
+	CHECK(bp_recv.error() == spssh_invalid_packet);
 }
 
 TEST_CASE("ssh_binary_packet crypto 2", "[unit]") {

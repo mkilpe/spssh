@@ -102,6 +102,16 @@ bool same_source_or_non_overlapping(const_span s1, const_span s2);
 bool compare_equal(const_span s1, const_span s2);
 bool is_zero(const_span s);
 
+/// Overwrite a byte_vector with zeros before clearing it to prevent key
+/// material from lingering in freed memory.
+inline void secure_zero(byte_vector& v) {
+	volatile std::byte* p = v.data();
+	for(std::size_t i = 0; i < v.size(); ++i) {
+		p[i] = std::byte{0};
+	}
+	v.clear();
+}
+
 std::string to_string(std::vector<std::string_view> const&);
 std::string to_hex(const_span span);
 

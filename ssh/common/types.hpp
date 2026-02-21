@@ -58,6 +58,8 @@ inline std::uint8_t* to_uint8_ptr(span s) {
 
 #if !defined(SPSSH_ASSERT) && !defined(NDEBUG)
 #	define SPSSH_ASSERT(cond, message) assert((cond) && (message))
+#elif !defined(SPSSH_ASSERT)
+#	define SPSSH_ASSERT(cond, message) ((void)(cond))
 #endif
 
 }

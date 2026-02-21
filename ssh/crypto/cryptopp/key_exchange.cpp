@@ -3,6 +3,7 @@
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/ids.hpp"
 #include "ssh/crypto/key_exchange.hpp"
+#include "ssh/common/util.hpp"
 
 #include <cryptopp/dh.h>
 #include <cryptopp/xed25519.h>
@@ -20,6 +21,10 @@ public:
 		privkey_.resize(exchange_.PrivateKeyLength());
 		pubkey_.resize(exchange_.PublicKeyLength());
 		exchange_.GenerateKeyPair(random_generator(), to_uint8_ptr(privkey_), to_uint8_ptr(pubkey_));
+	}
+
+	~X25519_key_exchange() {
+		secure_zero(privkey_);
 	}
 
 	key_exchange_type type() const override {
@@ -71,6 +76,10 @@ public:
 	dh_key_exchange(key_exchange_type t, crypto_call_context const& c, Modp const& m)
 	: dh_key_exchange(t, c, m.modulus(), m.generator())
 	{
+	}
+
+	~dh_key_exchange() {
+		secure_zero(privkey_);
 	}
 
 	bool is_valid() const {

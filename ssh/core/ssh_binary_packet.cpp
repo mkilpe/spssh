@@ -64,7 +64,10 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 	}
 
 	stream_in_.current_packet.packet_size = packet_lenght_size + ntou32(in_data.data()) + stream_in_.integrity_size;
-	//t: check the total size is not longer than allowed
+	if(stream_in_.current_packet.packet_size > config_.max_in_packet_size) {
+		set_error(spssh_invalid_packet, "Incoming packet exceeds maximum allowed size");
+		return false;
+	}
 
 	stream_in_.current_packet.status = in_packet_status::waiting_data;
 	logger_.log(logger::debug_trace, "SSH try_decode_header [size={}]", stream_in_.current_packet.packet_size);
@@ -87,18 +90,22 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 		}
 	} else {
 		std::uint8_t padding = std::to_integer<std::uint8_t>(in_data[packet_lenght_size]);
-		std::size_t size = stream_in_.current_packet.packet_size - packet_header_size - padding;
-		if(in_data.size() >= size + packet_header_size) {
-			if(in_data.data() != out_data.data()) {
-				SPSSH_ASSERT(out_data.size() >= size, "invalid out buffer size");
-				std::memcpy(out_data.data(), in_data.data() + packet_header_size, size);
-				payload = safe_subspan(out_data, 0, size);
-			} else {
-				payload = safe_subspan(out_data, packet_header_size, size);
-			}
+		if(packet_header_size + padding + stream_in_.integrity_size > stream_in_.current_packet.packet_size) {
+			set_error(spssh_invalid_packet, "Invalid packet");
 		} else {
-			// invalid packet
-			set_error(spssh_invalid_packet, "trying to decrypt invalid packet");
+			std::size_t size = stream_in_.current_packet.packet_size - packet_header_size - padding;
+			if(in_data.size() >= size + packet_header_size) {
+				if(in_data.data() != out_data.data()) {
+					SPSSH_ASSERT(out_data.size() >= size, "invalid out buffer size");
+					std::memcpy(out_data.data(), in_data.data() + packet_header_size, size);
+					payload = safe_subspan(out_data, 0, size);
+				} else {
+					payload = safe_subspan(out_data, packet_header_size, size);
+				}
+			} else {
+				// invalid packet
+				set_error(spssh_invalid_packet, "trying to decrypt invalid packet");
+			}
 		}
 	}
 

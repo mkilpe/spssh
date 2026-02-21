@@ -4,6 +4,7 @@
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/ids.hpp"
 #include "ssh/crypto/key_exchange.hpp"
+#include "ssh/common/util.hpp"
 
 #include <nettle/curve25519.h>
 
@@ -22,6 +23,10 @@ public:
 
 		pub_.resize(CURVE25519_SIZE);
 		curve25519_mul_g(to_uint8_ptr(pub_), to_uint8_ptr(priv_));
+	}
+
+	~X25519_key_exchange() {
+		secure_zero(priv_);
 	}
 
 	key_exchange_type type() const override {
