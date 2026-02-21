@@ -121,11 +121,10 @@ bool same_source_or_non_overlapping(const_span s1, const_span s2) {
 }
 
 bool compare_equal(const_span s1, const_span s2) {
-	if(s1.size() != s2.size()) {
-		return false;
-	}
-	std::byte d{0};
-	for(std::size_t i = 0; i != s1.size(); ++i) {
+	// Fold a size mismatch into d so we don't short-circuit and reveal timing.
+	std::byte d = s1.size() == s2.size() ? std::byte{0} : std::byte{1};
+	std::size_t len = std::min(s1.size(), s2.size());
+	for(std::size_t i = 0; i != len; ++i) {
 		d |= s1[i] ^ s2[i];
 	}
 	return d == std::byte{0};
