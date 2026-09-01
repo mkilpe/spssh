@@ -21,6 +21,7 @@ public: //sftp_server_interface
 	bool send_error(call_context, status_code code, std::string_view message) override;
 	bool send_ok(call_context) override;
 	bool send_open_file(call_context, file_handle_view) override;
+	bool send_read_file(call_context, const_span data) override;
 	bool send_open_dir(call_context, dir_handle_view) override;
 	bool send_read_dir(call_context, std::vector<file_info> const&) override;
 	bool send_stat(call_context, file_attributes const&) override;

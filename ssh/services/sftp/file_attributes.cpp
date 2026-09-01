@@ -101,6 +101,45 @@ bool file_attributes::write(ssh_bf_writer& w) const {
 	return res;
 }
 
+static char type_char(std::uint32_t mode) {
+	char res = '-';
+	std::uint32_t const type_mask = 0170000;
+	if((mode & type_mask) == 0040000) {
+		res = 'd';
+	} else if((mode & type_mask) == 0120000) {
+		res = 'l';
+	}
+	return res;
+}
+
+static std::string mode_string(std::uint32_t mode) {
+	std::string_view const rwx = "rwxrwxrwx";
+	std::string res(rwx.size(), '-');
+	for(std::size_t i = 0; i != rwx.size(); ++i) {
+		if(mode & (std::uint32_t(1) << (rwx.size() - 1 - i))) {
+			res[i] = rwx[i];
+		}
+	}
+	return res;
+}
+
+std::string to_longname(file_attributes const& a, std::string_view filename) {
+	std::uint32_t mode = a.permissions ? *a.permissions : 0;
+	std::time_t mtime = a.mtime ? std::time_t(*a.mtime) : 0;
+	char time_buf[32] = {};
+	std::strftime(time_buf, sizeof(time_buf), "%b %e %H:%M", std::gmtime(&mtime));
+
+	std::ostringstream out;
+	out << type_char(mode) << mode_string(mode)
+		<< " " << std::setw(3) << 1 // link count, not tracked
+		<< " " << std::setw(8) << (a.uid ? *a.uid : 0)
+		<< " " << std::setw(8) << (a.gid ? *a.gid : 0)
+		<< " " << std::setw(10) << (a.size ? *a.size : 0)
+		<< " " << time_buf
+		<< " " << filename;
+	return out.str();
+}
+
 std::string to_string(file_attributes const& a) {
 	bool first = true;
 	std::ostringstream out;

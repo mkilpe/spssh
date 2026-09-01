@@ -327,6 +327,10 @@ bool sftp_server::send_open_file(call_context ctx, file_handle_view handle) {
 	return send_packet<handle_response>(call_id(ctx), handle);
 }
 
+bool sftp_server::send_read_file(call_context ctx, const_span data) {
+	return send_packet<data_response>(call_id(ctx), to_string_view(data));
+}
+
 bool sftp_server::send_open_dir(call_context ctx, dir_handle_view handle) {
 	bool res = send_packet<handle_response>(call_id(ctx), handle);
 	if(res) {

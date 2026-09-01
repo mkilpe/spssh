@@ -33,6 +33,9 @@ public:
 	/// send response to open file with file handle
 	virtual bool send_open_file(call_context, file_handle_view) = 0;
 
+	/// send response to read_file
+	virtual bool send_read_file(call_context, const_span data) = 0;
+
 	/// send response to open_dir
 	virtual bool send_open_dir(call_context, dir_handle_view) = 0;
 

@@ -35,6 +35,9 @@ struct file_attributes {
 
 std::string to_string(file_attributes const&);
 
+/// format "ls -l" style long name for the given attributes and file name (used for fxp_name packets)
+std::string to_longname(file_attributes const&, std::string_view filename);
+
 }
 
 #endif
