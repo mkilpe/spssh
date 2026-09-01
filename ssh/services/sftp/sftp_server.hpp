@@ -14,6 +14,7 @@ public:
 	~sftp_server();
 
 	void on_state_change() override;
+	void on_eof() override;
 
 public: //sftp_server_interface
 	void close(std::string_view error) override;

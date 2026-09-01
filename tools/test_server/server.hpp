@@ -6,16 +6,21 @@
 
 namespace securepath::ssh {
 
+struct test_server_config : server_config {
+	// directory served over sftp
+	std::string sftp_root{"."};
+};
+
 class ssh_test_server : public ssh_server {
 public:
-	ssh_test_server(server_config const&, logger& log, out_buffer&, crypto_context&);
+	ssh_test_server(test_server_config const&, logger& log, out_buffer&, crypto_context&);
 
 protected:
 	std::unique_ptr<auth_service> construct_auth() override;
 	std::unique_ptr<ssh_service> construct_service(auth_info const&) override;
 
 protected:
-	server_config const& config_;
+	test_server_config const& config_;
 };
 
 }

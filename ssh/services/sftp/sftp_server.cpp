@@ -284,6 +284,12 @@ void sftp_server::send_unsupported(sftp_packet_type type, const_span data) {
 	}
 }
 
+void sftp_server::on_eof() {
+	// the client is done with the subsystem, initiate closing of the channel
+	log_.log(logger::debug_trace, "sftp client sent eof, closing channel");
+	send_close();
+}
+
 void sftp_server::on_state_change() {
 	if(state() == channel_state::closed && backend_) {
 		backend_->detach();

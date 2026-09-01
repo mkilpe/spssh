@@ -281,19 +281,23 @@ bool channel::send_packet(const_span s) {
 
 	std::uint32_t max_size = std::min(out_window_, max_out_size_);
 
-	if(used_ || max_size < s.size()) {
-		return write_to_buffer(s, false) != 0;
+	bool res{};
+	if(!used_ && max_size >= s.size()) {
+		ser::channel_data::save p(remote_info_.id, to_string_view(s));
+		auto rec = transport_.alloc_out_packet(p.size());
+		res = rec && p.write(rec->data) && transport_.write_alloced_out_packet(*rec);
+		if(res) {
+			out_window_ -= s.size();
+		}
 	}
-
-	ser::channel_data::save p(remote_info_.id, to_string_view(s));
-	auto rec = transport_.alloc_out_packet(p.size());
-
-	if(p.write(rec->data) && transport_.write_alloced_out_packet(*rec)) {
-		out_window_ -= s.size();
-		return true;
+	if(!res) {
+		res = write_to_buffer(s, false) != 0;
+		if(res) {
+			// try to send right away as there might be no other trigger to flush the buffer
+			do_flush();
+		}
 	}
-
-	return write_to_buffer(s, false) != 0;
+	return res;
 }
 
 bool channel::flush() {

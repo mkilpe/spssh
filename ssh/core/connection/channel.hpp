@@ -211,25 +211,24 @@ bool channel::send_packet(Args&&... args) {
 
 	typename Packet::save p(std::forward<Args>(args)...);
 
-	if(used_) {
-		return serialise_to_buffer(p);
-	}
-
 	std::uint32_t max_size = std::min(out_window_, max_out_size_);
-
 	std::uint32_t p_size = p.size();
-	if(max_size < p_size) {
-		return serialise_to_buffer(p);
+
+	bool res{};
+	if(!used_ && max_size >= p_size) {
+		auto out = make_packet_saver<ser::channel_data>(remote_info_.id, p);
+		auto rec = transport_.alloc_out_packet(out.size());
+		res = rec && out.write(rec->data) && transport_.write_alloced_out_packet(*rec);
+		if(res) {
+			out_window_ -= p_size;
+		}
 	}
-
-	auto out = make_packet_saver<ser::channel_data>(remote_info_.id, p);
-	auto rec = transport_.alloc_out_packet(out.size());
-
-	bool res = out.write(rec->data) && transport_.write_alloced_out_packet(*rec);
-	if(res) {
-		out_window_ -= p_size;
-	} else {
+	if(!res) {
 		res = serialise_to_buffer(p);
+		if(res) {
+			// try to send right away as there might be no other trigger to flush the buffer
+			do_flush();
+		}
 	}
 	return res;
 }

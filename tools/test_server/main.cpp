@@ -24,7 +24,7 @@ using namespace std::literals;
 class ssh_session : public std::enable_shared_from_this<ssh_session>
 {
 public:
-	ssh_session(tcp::socket socket, server_config const& config, logger& log, crypto_context& context)
+	ssh_session(tcp::socket socket, test_server_config const& config, logger& log, crypto_context& context)
 	: socket_(std::move(socket))
 	, timer_(socket_.get_executor())
 	, log_(log)
@@ -111,7 +111,7 @@ private:
 	ssh_test_server server_;
 };
 
-asio::awaitable<void> listen(tcp::acceptor& acceptor, server_config const& config, logger& log, crypto_context crypto)
+asio::awaitable<void> listen(tcp::acceptor& acceptor, test_server_config const& config, logger& log, crypto_context crypto)
 {
 	log.log(logger::info, "Ready to accept connections");
 
@@ -129,7 +129,7 @@ asio::awaitable<void> listen(tcp::acceptor& acceptor, server_config const& confi
 }
 
 
-struct test_server_commands : server_config, securepath::command_parser {
+struct test_server_commands : test_server_config, securepath::command_parser {
 	bool help{};
 	std::string bind_address;
 	std::uint16_t port{22};
@@ -138,13 +138,15 @@ struct test_server_commands : server_config, securepath::command_parser {
 	config_parser config;
 
 	test_server_commands()
-	: server_config(test_tool_default_config())
+	: test_server_config{{test_tool_default_config()}}
 	, command_parser(false)
 	{
 		add(help, "help", "", "show help");
 		add(bind_address, "bind", "b", "bind address");
 		add(port, "port", "p", "port to listen");
 		add(config_file, "config", "c", "config file");
+		add(sftp_root, "sftp-root", "r", "directory served over sftp");
+		config.add_commands(*this);
 	}
 
 	void create_config(logger& log) {
