@@ -34,6 +34,28 @@ channel::channel(transport_base& transport, channel_side_info local, std::size_t
 		std::min(local_info_.max_packet_size, transport_.max_in_packet_size())-packet_overhead;
 }
 
+channel::channel(channel&& predecessor)
+: channel_base(std::move(predecessor))
+, transport_(predecessor.transport_)
+, log_(predecessor.log_)
+, local_info_(predecessor.local_info_)
+, remote_info_(predecessor.remote_info_)
+, sent_close_(predecessor.sent_close_)
+, received_close_(predecessor.received_close_)
+, max_out_size_(predecessor.max_out_size_)
+, out_window_(predecessor.out_window_)
+, in_window_(predecessor.in_window_)
+, buffer_(std::move(predecessor.buffer_))
+, used_(predecessor.used_)
+{
+	log_.log(logger::debug_trace, "channel id={} upgraded", local_info_.id);
+
+	// the predecessor is in closed state after this, make sure it cannot send anything any more
+	predecessor.used_ = 0;
+	predecessor.sent_close_ = true;
+	predecessor.received_close_ = true;
+}
+
 channel::~channel()
 {
 	log_.log(logger::debug_trace, "channel id={} destroyed", local_info_.id);

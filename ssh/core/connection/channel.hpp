@@ -85,6 +85,18 @@ public:
 	virtual void on_state_change() = 0;
 
 protected:
+	/// used for upgrading the channel type, the moved-from object is left in closed state
+	channel_base(channel_base&& other)
+	: id_(other.id_)
+	, state_(other.state_)
+	{
+		other.state_ = channel_state::closed;
+	}
+
+	channel_base(channel_base const&) = delete;
+	channel_base& operator=(channel_base const&) = delete;
+
+protected:
 	channel_id const id_;
 	channel_state state_{};
 };
@@ -93,6 +105,8 @@ protected:
 class channel : public channel_base {
 public:
 	channel(transport_base& transport, channel_side_info local, std::size_t buffer_size = default_buffer_size);
+	/// used for upgrading the channel type, the predecessor must not be used for anything after this
+	channel(channel&& predecessor);
 	~channel();
 
 public: //out

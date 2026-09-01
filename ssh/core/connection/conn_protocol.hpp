@@ -203,7 +203,7 @@ using channel_success = ssh_packet_ser
 */
 using channel_failure = ssh_packet_ser
 <
-	ssh_request_failure,
+	ssh_channel_failure,
 	uint32
 >;
 
