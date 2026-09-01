@@ -58,7 +58,7 @@ handler_result ssh_test_client::handle_kex_done(kex const& k) {
 	return ssh_client::handle_kex_done(k);
 }
 
-bool ssh_test_client::on_version(std::uint32_t version, sftp::ext_data_view data) {
+bool ssh_test_client::on_version(std::uint32_t version, std::vector<sftp::ext_data_view> const& extensions) {
 	// we have sftp connection, start interactive mode
 	handler_.emit<events::command_prompt>();
 	return true;

@@ -4,22 +4,20 @@
 #include "sftp_common.hpp"
 #include "sftp_server_backend.hpp"
 
-namespace securepath::ssh::sftp {
+#include <set>
 
-//t: check max packet size
+namespace securepath::ssh::sftp {
 
 class sftp_server : public sftp_common, public sftp_server_interface {
 public:
-	//sftp_server(std::shared_ptr<sftp_server_backend>, transport_base& transport, channel_side_info local, std::size_t buffer_size = default_buffer_size);
 	sftp_server(channel&& predecessor, std::shared_ptr<sftp_server_backend>);
 	~sftp_server();
 
-	bool on_data(const_span) override;
 	void on_state_change() override;
 
 public: //sftp_server_interface
 	void close(std::string_view error) override;
-	bool send_version(std::uint32_t version, ext_data_view data) override;
+	bool send_version(std::uint32_t version, std::vector<ext_data_view> const& data) override;
 	bool send_error(call_context, status_code code, std::string_view message) override;
 	bool send_ok(call_context) override;
 	bool send_open_file(call_context, file_handle_view) override;
@@ -51,14 +49,15 @@ protected:
 	void handle_readlink(const_span);
 	void handle_symlink(const_span);
 	void handle_extended(const_span);
+	void send_unsupported(sftp_packet_type, const_span data);
 private:
 	template<typename Packet, typename Func>
 	void handle_packet_helper(Func, const_span);
 
 protected:
 	std::shared_ptr<sftp_server_backend> backend_;
-	byte_vector in_data_;
-	std::size_t in_used_{};
+	// handles given out for open directories, so that fxp_close can be routed correctly
+	std::set<std::string, std::less<>> dir_handles_;
 };
 
 }

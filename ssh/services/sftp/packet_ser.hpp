@@ -13,6 +13,9 @@ class sftp_packet_ser;
 /// returns the packet type if there is enough data for the whole packet, zero otherwise
 sftp_packet_type decode_sftp_type(const_span, std::uint32_t& length);
 
+/// re-writes the sftp packet length in front of the given packet, use after appending data to a serialised packet
+void patch_sftp_length(byte_vector&);
+
 }
 
 #endif

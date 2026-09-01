@@ -36,12 +36,11 @@ void sftp_client::handle_version(const_span s) {
 	version::load packet(s);
 	if(packet) {
 		auto& [version] = packet;
-		ext_data_view ed{};
-		if(s.size() > packet.size()) {
-			packet.reader().read(ed.type);
-			packet.reader().read(ed.data);
-		}
-		if(callback_->on_version(version, ed)) {
+		std::vector<ext_data_view> ed;
+		if(!read_extension_data(packet.reader(), ed)) {
+			log_.log(logger::error, "Invalid sftp version packet");
+			transport_.set_error_and_disconnect(ssh_protocol_error);
+		} else if(callback_->on_version(version, ed)) {
 			log_.log(logger::info, "Successfully connected to SFTP server");
 		} else {
 			close("sftp version is not acceptable");
@@ -325,8 +324,13 @@ call_handle sftp_client::send_packet_attr_helper(file_attributes const& attrs, A
 
 	if(res) {
 		ssh_bf_writer res_w(p, p.size());
-		attrs.write(res_w);
+		res = attrs.write(res_w);
+	}
+	if(res) {
+		patch_sftp_length(p);
 		res = send_packet(p);
+	}
+	if(res) {
 		remote_calls_[handle] = call_data{fxp_type};
 	}
 	return res ? handle : 0;
@@ -431,9 +435,12 @@ call_handle sftp_client::extended(std::string_view ext_request, const_span data)
 	bool res = ser::serialise_to_vector<extended_request>(p, handle, ext_request);
 
 	if(res) {
-		ssh_bf_writer res_w(p, p.size());
-		res_w.write(to_string_view(data));
+		// the extension specific data is appended as-is, without string framing
+		p.insert(p.end(), data.begin(), data.end());
+		patch_sftp_length(p);
 		res = send_packet(p);
+	}
+	if(res) {
 		remote_calls_[handle] = call_data{fxp_extended};
 	}
 	return res ? handle : 0;

@@ -21,7 +21,7 @@ protected:
 	void on_service_started() override;
 
 protected:
-	bool on_version(std::uint32_t version, sftp::ext_data_view data) override;
+	bool on_version(std::uint32_t version, std::vector<sftp::ext_data_view> const& extensions) override;
 	void on_failure(sftp::call_handle, sftp::sftp_error err) override;
 	void on_open_file(sftp::call_handle, sftp::open_file_data result) override;
 	void on_read_file(sftp::call_handle, sftp::read_file_data result) override;

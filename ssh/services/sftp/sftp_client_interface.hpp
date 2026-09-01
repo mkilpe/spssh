@@ -67,7 +67,7 @@ public:
 	virtual ~sftp_client_callback() = default;
 
 	/// fxp_version packet received, return false if the connection should not be accepted.
-	virtual bool on_version(std::uint32_t version, ext_data_view data) = 0;
+	virtual bool on_version(std::uint32_t version, std::vector<ext_data_view> const& extensions) = 0;
 
 	/// called if any of the commands after agreeing on version fails
 	virtual void on_failure(call_handle, sftp_error) = 0;

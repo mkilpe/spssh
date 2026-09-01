@@ -22,13 +22,13 @@ public:
 	virtual void close(std::string_view error = {}) = 0;
 
 	/// send an error, can be a response to any command that has call context
-	virtual bool send_error(call_context, status_code code, std::string_view message);
+	virtual bool send_error(call_context, status_code code, std::string_view message) = 0;
 
 	/// send operation succeeded, this can be used with all commands that do not return any data
-	virtual bool send_ok(call_context);
+	virtual bool send_ok(call_context) = 0;
 
 	/// send fxp_version packet
-	virtual bool send_version(std::uint32_t version, ext_data_view = {}) = 0;
+	virtual bool send_version(std::uint32_t version, std::vector<ext_data_view> const& = {}) = 0;
 
 	/// send response to open file with file handle
 	virtual bool send_open_file(call_context, file_handle_view) = 0;
@@ -65,7 +65,7 @@ public:
 	virtual void detach();
 
 	/// fxp_init packet received, should set error or response with send_version
-	virtual void on_init(std::uint32_t version, ext_data_view data);
+	virtual void on_init(std::uint32_t version, std::vector<ext_data_view> const& data);
 
 	virtual void on_open_file(call_context, std::string_view path, open_mode mode, file_attributes attrs) = 0;
 	virtual void on_close_file(call_context, file_handle_view) = 0;

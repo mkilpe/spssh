@@ -363,7 +363,7 @@ using attrs_response = sftp_packet_ser
 */
 using extended_reply_response = sftp_packet_ser
 <
-	fxp_attrs,
+	fxp_extended_reply,
 	ser::uint32
 >;
 

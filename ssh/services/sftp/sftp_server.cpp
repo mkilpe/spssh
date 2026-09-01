@@ -14,16 +14,6 @@ static call_context to_call_context(std::uint32_t id) {
 	return call_context{id};
 }
 
-/*sftp_server::sftp_server(std::shared_ptr<sftp_server_backend> backend, transport_base& transport, channel_side_info local, std::size_t buffer_size)
-: sftp_common(transport, local, buffer_size)
-, backend_(std::move(backend))
-{
-
-	SPSSH_ASSERT(backend_, "sftp backend not set");
-	backend_->attach(this);
-}
-*/
-
 sftp_server::sftp_server(channel&& predecessor, std::shared_ptr<sftp_server_backend> backend)
 : sftp_common(std::move(predecessor))
 , backend_(std::move(backend))
@@ -54,13 +44,13 @@ void sftp_server::handle_init(const_span s) {
 	handle_packet_helper<init>([this](auto& p)
 		{
 			auto& [version] = p;
-			ext_data_view ed{};
-			auto& reader = p.reader();
-			if(!reader.rest_of_span().empty()) {
-				reader.read(ed.type);
-				reader.read(ed.data);
+			std::vector<ext_data_view> ed;
+			if(read_extension_data(p.reader(), ed)) {
+				backend_->on_init(version, ed);
+			} else {
+				log_.log(logger::error, "Invalid sftp init packet");
+				transport_.set_error_and_disconnect(ssh_protocol_error);
 			}
-			backend_->on_init(version, ed);
 		}, s);
 }
 
@@ -83,7 +73,15 @@ void sftp_server::handle_close(const_span s) {
 	handle_packet_helper<close_request>([this](auto& p)
 		{
 			auto& [id, handle] = p;
-			backend_->on_close_file(to_call_context(id), handle);
+			// the wire protocol uses the same packet for closing files and directories,
+			// use the recorded dir handles to route the call correctly
+			auto it = dir_handles_.find(handle);
+			if(it != dir_handles_.end()) {
+				dir_handles_.erase(it);
+				backend_->on_close_dir(to_call_context(id), handle);
+			} else {
+				backend_->on_close_file(to_call_context(id), handle);
+			}
 		}, s);
 }
 
@@ -126,7 +124,7 @@ void sftp_server::handle_setstat(const_span s) {
 			auto& r = p.reader();
 			file_attributes attrs;
 			if(attrs.read(r)) {
-				backend_->on_setstat_file(to_call_context(id), path, std::move(attrs));
+				backend_->on_setstat(to_call_context(id), path, std::move(attrs));
 			} else {
 				log_.log(logger::error, "Invalid sftp setstat packet");
 				transport_.set_error_and_disconnect(ssh_protocol_error);
@@ -269,8 +267,20 @@ void sftp_server::handle_sftp_packet(sftp_packet_type type, const_span data) {
 			case fxp_readlink: handle_readlink(data); break;
 			case fxp_symlink : handle_symlink(data);  break;
 			case fxp_extended: handle_extended(data); break;
-			default: break;
+			default: send_unsupported(type, data);    break;
 		};
+	}
+}
+
+void sftp_server::send_unsupported(sftp_packet_type type, const_span data) {
+	// all requests start with the request id, parse it so we can respond with an error
+	ssh_bf_reader r(data);
+	std::uint32_t id{};
+	if(r.read(id)) {
+		log_.log(logger::debug, "unsupported sftp packet type {}, sending error", int(type));
+		send_error(to_call_context(id), fx_op_unsupported, "Unsupported request type");
+	} else {
+		log_.log(logger::debug, "unsupported sftp packet type {} without request id, ignoring", int(type));
 	}
 }
 
@@ -285,17 +295,21 @@ void sftp_server::close(std::string_view error) {
 	sftp_common::close(error);
 }
 
-bool sftp_server::send_version(std::uint32_t v, ext_data_view data) {
+bool sftp_server::send_version(std::uint32_t v, std::vector<ext_data_view> const& data) {
 	byte_vector p;
 
 	bool res = ser::serialise_to_vector<version>(p, v);
 
 	if(res) {
-		if(!data.type.empty()) {
-			ssh_bf_writer res_w(p, p.size());
-			res_w.write(data.type);
-			res_w.write(data.data);
+		ssh_bf_writer res_w(p, p.size());
+		for(auto&& e : data) {
+			if(res) {
+				res = res_w.write(e.type) && res_w.write(e.data);
+			}
 		}
+	}
+	if(res) {
+		patch_sftp_length(p);
 		res = send_packet(p);
 	}
 	return res;
@@ -314,24 +328,31 @@ bool sftp_server::send_open_file(call_context ctx, file_handle_view handle) {
 }
 
 bool sftp_server::send_open_dir(call_context ctx, dir_handle_view handle) {
-	return send_packet<handle_response>(call_id(ctx), handle);
+	bool res = send_packet<handle_response>(call_id(ctx), handle);
+	if(res) {
+		dir_handles_.emplace(handle);
+	}
+	return res;
 }
 
 bool sftp_server::send_read_dir(call_context ctx, std::vector<file_info> const& files) {
 	byte_vector p;
 
-	bool res = ser::serialise_to_vector<name_response>(p, call_id(ctx), files.size());
+	bool res = ser::serialise_to_vector<name_response>(p, call_id(ctx), std::uint32_t(files.size()));
 
 	if(res) {
 		ssh_bf_writer res_w(p, p.size());
 		for(auto&& v : files) {
-			if(!res_w.write(v.filename) ||
-				!res_w.write(v.longname) ||
-				!v.attrs.write(res_w))
-			{
-				return false;
+			if(res) {
+				res = res_w.write(v.filename)
+					&& res_w.write(v.longname)
+					&& v.attrs.write(res_w);
 			}
 		}
+	}
+	if(res) {
+		patch_sftp_length(p);
+		res = send_packet(p);
 	}
 	return res;
 }
@@ -343,7 +364,11 @@ bool sftp_server::send_stat(call_context ctx, file_attributes const& attrs) {
 
 	if(res) {
 		ssh_bf_writer res_w(p, p.size());
-		res = attrs.write(res_w) && send_packet(p);
+		res = attrs.write(res_w);
+	}
+	if(res) {
+		patch_sftp_length(p);
+		res = send_packet(p);
 	}
 	return res;
 }
@@ -359,8 +384,10 @@ bool sftp_server::send_extended(call_context ctx, const_span data) {
 	bool res = ser::serialise_to_vector<extended_reply_response>(p, call_id(ctx));
 
 	if(res) {
-		ssh_bf_writer res_w(p, p.size());
-		res = res_w.write(to_string_view(data)) && send_packet(p);
+		// the extension specific data is appended as-is, without string framing
+		p.insert(p.end(), data.begin(), data.end());
+		patch_sftp_length(p);
+		res = send_packet(p);
 	}
 	return res;
 }

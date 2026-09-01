@@ -17,9 +17,9 @@ void sftp_server_backend::detach() {
 	s_ = nullptr;
 }
 
-void sftp_server_backend::on_init(std::uint32_t version, ext_data_view data) {
+void sftp_server_backend::on_init(std::uint32_t version, std::vector<ext_data_view> const& data) {
 	SPSSH_ASSERT(s_, "invalid state");
-	log_.log(logger::debug_trace, "sftp on_init [version={}, ext type={}]", version, data.type);
+	log_.log(logger::debug_trace, "sftp on_init [version={}, ext count={}]", version, data.size());
 	if(!s_->send_version(std::min(version, sftp_version))) {
 		s_->close("failed to send sftp version");
 	}
