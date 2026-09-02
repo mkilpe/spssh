@@ -5,6 +5,7 @@
 #include <memory>
 
 #include <nettle/hmac.h>
+#include <algorithm>
 
 namespace securepath::ssh::nettle {
 

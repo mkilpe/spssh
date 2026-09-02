@@ -4,6 +4,7 @@
 #include "ssh/core/ssh_binary_util.hpp"
 
 #include <limits>
+#include <algorithm>
 
 namespace securepath::ssh {
 

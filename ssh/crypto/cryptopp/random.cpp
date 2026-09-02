@@ -3,7 +3,12 @@
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/ids.hpp"
 #include "ssh/crypto/random.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <memory>
+#include <random>
 
 namespace securepath::ssh::cryptopp {
 

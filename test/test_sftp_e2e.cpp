@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <algorithm>
+#include <iterator>
 
 namespace securepath::ssh::test {
 namespace {

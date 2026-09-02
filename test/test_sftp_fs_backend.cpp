@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <iterator>
 
 namespace securepath::ssh::test {
 namespace {

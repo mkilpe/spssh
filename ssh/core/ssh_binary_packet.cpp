@@ -4,6 +4,8 @@
 #include "ssh_binary_util.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/common/types.hpp"
+#include <algorithm>
+#include <cstring>
 
 namespace securepath::ssh {
 

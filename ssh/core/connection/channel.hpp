@@ -6,6 +6,7 @@
 #include "ssh/common/types.hpp"
 #include "ssh/core/transport_base.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
+#include <algorithm>
 
 namespace securepath::ssh {
 

@@ -34,8 +34,9 @@ find_package(Asio)
 find_package(Doxygen)
 
 include_directories(${my_root_directory})
-# for the generated config.hpp when building out of source
-include_directories(${CMAKE_BINARY_DIR})
+# for the generated config.hpp when building out of source, takes precedence
+# over a possible stale in-source copy
+include_directories(BEFORE ${CMAKE_BINARY_DIR})
 link_directories(${my_root_directory}/lib)
 
 if(MSVC)

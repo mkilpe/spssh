@@ -11,6 +11,8 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/xed25519.h>
+#include <algorithm>
+#include <cstring>
 
 namespace securepath::ssh::cryptopp {
 

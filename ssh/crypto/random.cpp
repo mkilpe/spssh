@@ -2,6 +2,7 @@
 
 #include "config.hpp"
 #include "ssh/common/util.hpp"
+#include <algorithm>
 
 #ifdef HAVE_GETENTROPY
 #include <unistd.h>

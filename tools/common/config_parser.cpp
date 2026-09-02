@@ -3,12 +3,15 @@
 
 #include "config.hpp"
 
-#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+#ifdef USE_NETTLE
 #	include "ssh/crypto/nettle/crypto_context.hpp"
+#endif
+#ifdef USE_CRYPTOPP
 #	include "ssh/crypto/cryptopp/crypto_context.hpp"
 #endif
 
 #include <iostream>
+#include <stdexcept>
 
 namespace securepath::ssh {
 

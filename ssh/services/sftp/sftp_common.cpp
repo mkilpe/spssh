@@ -1,6 +1,7 @@
 #include "sftp_common.hpp"
 #include "packet_ser.hpp"
 #include "packet_ser_impl.hpp"
+#include <cstring>
 
 namespace securepath::ssh::sftp {
 
