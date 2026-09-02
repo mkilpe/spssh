@@ -15,6 +15,7 @@
 #include <nettle/rsa.h>
 #include <nettle/sha1.h>
 #include <nettle/ecc-curve.h>
+#include <cstring>
 
 namespace securepath::ssh::nettle {
 

@@ -15,8 +15,9 @@
 
 #include <filesystem>
 #include <fstream>
-
-#include <unistd.h>
+#include <random>
+#include <algorithm>
+#include <iterator>
 
 namespace securepath::ssh::test {
 namespace {
@@ -28,13 +29,18 @@ struct temp_dir {
 	fs::path path;
 
 	temp_dir() {
-		path = fs::temp_directory_path() / ("spssh_sftp_e2e_" + std::to_string(::getpid()) + "_" + std::to_string(counter++));
+		path = fs::temp_directory_path() / ("spssh_sftp_e2e_" + std::to_string(run_id()) + "_" + std::to_string(counter++));
 		fs::create_directories(path);
 	}
 
 	~temp_dir() {
 		std::error_code ec;
 		fs::remove_all(path, ec);
+	}
+
+	static unsigned run_id() {
+		static unsigned const id = std::random_device{}();
+		return id;
 	}
 
 	inline static int counter{};
@@ -276,12 +282,14 @@ TEST_CASE("sftp e2e stat and setstat", "[unit][sftp]") {
 	REQUIRE(t.cb().last_attrs.permissions);
 	CHECK((*t.cb().last_attrs.permissions & 0170000) == 0100000);
 
+#ifndef _WIN32
 	file_attributes attrs;
 	attrs.permissions = 0600;
 	t.call([&]{ return t.client.sftp().setstat("/f.txt", attrs); }, "setstat");
 
 	t.call([&]{ return t.client.sftp().stat("/f.txt"); }, "stat");
 	CHECK((*t.cb().last_attrs.permissions & 0777) == 0600);
+#endif
 
 	// stat and setstat through an open handle
 	t.call([&]{ return t.client.sftp().open_file("/f.txt", fxf_read, {}); }, "open_file");
@@ -299,6 +307,7 @@ TEST_CASE("sftp e2e links and realpath", "[unit][sftp]") {
 	e2e t;
 	spit(t.dir.path / "target.txt", "data");
 
+#ifndef _WIN32
 	t.call([&]{ return t.client.sftp().symlink("/lnk", "target.txt"); }, "symlink");
 	CHECK(fs::is_symlink(t.dir.path / "lnk"));
 
@@ -310,6 +319,7 @@ TEST_CASE("sftp e2e links and realpath", "[unit][sftp]") {
 	CHECK((*t.cb().last_attrs.permissions & 0170000) == 0120000);
 	t.call([&]{ return t.client.sftp().stat("/lnk", true); }, "stat");
 	CHECK((*t.cb().last_attrs.permissions & 0170000) == 0100000);
+#endif
 
 	t.call([&]{ return t.client.sftp().realpath("/x/../target.txt"); }, "realpath");
 	CHECK(t.cb().last_path == "/target.txt");

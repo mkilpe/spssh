@@ -8,6 +8,7 @@
 #include <nettle/gcm.h>
 #include <nettle/aes.h>
 #include <nettle/ctr.h>
+#include <cstring>
 
 namespace securepath::ssh::nettle {
 

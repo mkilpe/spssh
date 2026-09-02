@@ -1,4 +1,5 @@
 #include "sftp_server_backend.hpp"
+#include <algorithm>
 
 namespace securepath::ssh::sftp {
 

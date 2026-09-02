@@ -17,6 +17,7 @@
 #include <tuple>
 #include <stdexcept>
 #include <syncstream>
+#include <functional>
 
 namespace securepath::ssh {
 

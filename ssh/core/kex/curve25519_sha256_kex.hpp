@@ -3,6 +3,7 @@
 
 #include "ecdh.hpp"
 #include "kex_common.hpp"
+#include <algorithm>
 
 namespace securepath::ssh {
 

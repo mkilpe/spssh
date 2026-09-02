@@ -4,6 +4,7 @@
 #include "ssh/core/ssh_binary_util.hpp"
 
 #include <limits>
+#include <algorithm>
 
 namespace securepath::ssh {
 
@@ -247,7 +248,7 @@ bool openssh_private_key::construct_info(ssh_private_key const& key) {
 
 	byte_vector priv;
 	ssh_bf_writer priv_w(priv);
-	std::uint32_t rand_int = call_.rand.random_uint(0, std::numeric_limits<std::uint32_t>::max());
+	std::uint32_t rand_int = std::uint32_t(call_.rand.random_uint(0, std::numeric_limits<std::uint32_t>::max()));
 
 	if(!priv_w.write(rand_int) ||
 		!priv_w.write(rand_int) ||

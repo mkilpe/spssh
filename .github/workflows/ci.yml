@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    name: linux ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nettle-dev libgmp-dev libcrypto++-dev libasio-dev
+
+      - name: fetch catch2 header
+        run: |
+          mkdir -p external/catch
+          curl -fsSL -o external/catch/catch.hpp https://github.com/catchorg/Catch2/releases/download/v2.13.8/catch.hpp
+
+      - name: configure
+        run: >
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+          -DUSE_NETTLE=on
+          -DUSE_CRYPTOPP=on
+
+      - name: build
+        run: cmake --build build --parallel
+
+      - name: test
+        run: ./bin/test_spssh "[unit]"
+
+  windows:
+    name: windows msvc
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install crypto++
+        run: vcpkg install cryptopp:x64-windows
+
+      - name: fetch catch2 header
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force external/catch | Out-Null
+          curl.exe -fsSL -o external/catch/catch.hpp https://github.com/catchorg/Catch2/releases/download/v2.13.8/catch.hpp
+
+      - name: configure
+        shell: pwsh
+        # CMAKE_BUILD_TYPE has no effect on the multi-config build itself, but the
+        # vcpkg toolchain uses it to pick release instead of debug libraries
+        run: >
+          cmake -B build -S .
+          -DUSE_CRYPTOPP=on
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+
+      - name: build
+        run: cmake --build build --config Release --parallel
+
+      - name: test
+        shell: pwsh
+        run: ./bin/Release/test_spssh.exe "[unit]"

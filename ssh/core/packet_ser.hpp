@@ -22,7 +22,7 @@ template<std::size_t size>
 struct bytes;
 
 template<std::uint8_t PacketType, typename... TypeTags>
-class ssh_packet_ser;
+struct ssh_packet_ser;
 
 template<typename Packet, typename... Args>
 bool serialise_to_vector(byte_vector& out, Args&&... args) {

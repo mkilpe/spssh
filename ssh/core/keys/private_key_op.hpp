@@ -9,8 +9,8 @@ class ssh_private_key;
 class private_key;
 class ssh_bf_reader;
 class ssh_bf_binout_writer;
-class crypto_context;
-class crypto_call_context;
+struct crypto_context;
+struct crypto_call_context;
 
 std::string to_ecdsa_signature_blob(const_span s);
 bool ser_ed25519_private_key(ssh_bf_binout_writer& w, private_key const& key, std::string_view comment);

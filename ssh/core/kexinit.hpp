@@ -53,7 +53,7 @@ struct crypto_configuration {
 
 std::ostream& operator<<(std::ostream&, crypto_configuration const&);
 
-class supported_algorithms;
+struct supported_algorithms;
 
 class kexinit_agreement {
 public:

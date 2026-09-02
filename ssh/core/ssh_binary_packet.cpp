@@ -4,6 +4,8 @@
 #include "ssh_binary_util.hpp"
 #include "ssh/common/logger.hpp"
 #include "ssh/common/types.hpp"
+#include <algorithm>
+#include <cstring>
 
 namespace securepath::ssh {
 
@@ -26,15 +28,15 @@ void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher
 	s.mac = std::move(mac);
 
 	if(s.cipher->is_aead()) {
-		s.integrity_size = static_cast<aead_cipher const&>(*s.cipher).tag_size();
+		s.integrity_size = std::uint32_t(static_cast<aead_cipher const&>(*s.cipher).tag_size());
 	} else {
 		SPSSH_ASSERT(s.mac, "Invalid mac");
-		s.integrity_size = s.mac->size();
+		s.integrity_size = std::uint32_t(s.mac->size());
 	}
 
 	// reset the transfered bytes as we set new crypto
 	s.transferred_bytes = 0;
-	s.block_size = std::max(minimum_block_size, s.cipher->block_size());
+	s.block_size = std::uint32_t(std::max(minimum_block_size, s.cipher->block_size()));
 	SPSSH_ASSERT(s.block_size < maximum_padding_size, "too big cipher block size");
 }
 

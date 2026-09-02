@@ -6,6 +6,7 @@
 #include "ssh/common/types.hpp"
 #include "ssh/core/transport_base.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
+#include <algorithm>
 
 namespace securepath::ssh {
 
@@ -187,7 +188,7 @@ protected:
 
 template<typename Packet>
 bool channel::serialise_to_buffer(Packet& p) {
-	std::uint32_t p_size = p.size();
+	std::uint32_t p_size = std::uint32_t(p.size());
 	bool res = buffer_.size() - used_ >= p_size;
 	if(res) {
 		res = p.write(safe_subspan(buffer_, used_, p_size));
@@ -212,7 +213,7 @@ bool channel::send_packet(Args&&... args) {
 	typename Packet::save p(std::forward<Args>(args)...);
 
 	std::uint32_t max_size = std::min(out_window_, max_out_size_);
-	std::uint32_t p_size = p.size();
+	std::uint32_t p_size = std::uint32_t(p.size());
 
 	bool res{};
 	if(!used_ && max_size >= p_size) {

@@ -284,7 +284,7 @@ handler_result server_auth_service::handle_hostbased_request(const_span payload)
 void server_auth_service::send_interactive_request(interactive_request const& req) {
 	byte_vector request;
 
-	bool ret = ser::serialise_to_vector<ser::userauth_info_request>(request, req.name, req.instruction, "", req.prompts.size());
+	bool ret = ser::serialise_to_vector<ser::userauth_info_request>(request, req.name, req.instruction, "", std::uint32_t(req.prompts.size()));
 
 	if(ret) {
 		// add the requests

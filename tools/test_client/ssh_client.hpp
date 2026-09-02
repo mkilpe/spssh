@@ -6,6 +6,7 @@
 #include "ssh/services/sftp/sftp_client.hpp"
 #include "ssh/services/sftp/sftp_client_interface.hpp"
 #include "tools/common/event_handler.hpp"
+#include <functional>
 
 namespace securepath::ssh {
 

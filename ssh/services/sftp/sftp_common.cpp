@@ -1,6 +1,7 @@
 #include "sftp_common.hpp"
 #include "packet_ser.hpp"
 #include "packet_ser_impl.hpp"
+#include <cstring>
 
 namespace securepath::ssh::sftp {
 
@@ -77,7 +78,7 @@ bool sftp_common::on_data(const_span s) {
 		std::memmove(in_data_.data(), in_data_.data()+used_size, in_used_ - used_size);
 		in_used_ -= used_size;
 		log_.log(logger::debug_trace, "sftp packet(s) handled [size={}, used={}]", used_size, in_used_);
-		adjust_in_window(used_size);
+		adjust_in_window(std::uint32_t(used_size));
 	}
 
 	return true;

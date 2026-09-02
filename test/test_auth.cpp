@@ -10,6 +10,7 @@
 #include "test/util/server_auth_service.hpp"
 
 #include <external/catch/catch.hpp>
+#include <algorithm>
 
 /* Tested:
 	+ no auth call to get methods

@@ -8,6 +8,7 @@
 #include <cryptopp/aes.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/modes.h>
+#include <cstring>
 
 namespace securepath::ssh::cryptopp {
 

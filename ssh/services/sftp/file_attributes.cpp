@@ -127,7 +127,13 @@ std::string to_longname(file_attributes const& a, std::string_view filename) {
 	std::uint32_t mode = a.permissions ? *a.permissions : 0;
 	std::time_t mtime = a.mtime ? std::time_t(*a.mtime) : 0;
 	char time_buf[32] = {};
-	std::strftime(time_buf, sizeof(time_buf), "%b %e %H:%M", std::gmtime(&mtime));
+#ifndef _WIN32
+	char const* const time_format = "%b %e %H:%M";
+#else
+	// the windows runtime does not support %e
+	char const* const time_format = "%b %d %H:%M";
+#endif
+	std::strftime(time_buf, sizeof(time_buf), time_format, std::gmtime(&mtime));
 
 	std::ostringstream out;
 	out << type_char(mode) << mode_string(mode)

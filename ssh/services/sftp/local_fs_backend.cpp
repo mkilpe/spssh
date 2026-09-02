@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#ifndef _WIN32
+#	include <fcntl.h>
+#	include <sys/stat.h>
+#	include <sys/types.h>
+#	include <unistd.h>
+#endif
 
 namespace securepath::ssh::sftp {
 
@@ -57,6 +60,7 @@ std::string to_virtual_path(fs::path const& rel) {
 	return "/" + rel.generic_string();
 }
 
+#ifndef _WIN32
 static bool read_attributes(fs::path const& p, bool follow_symlinks, file_attributes& out, std::error_code& ec) {
 	struct ::stat st{};
 	int res = follow_symlinks ? ::stat(p.c_str(), &st) : ::lstat(p.c_str(), &st);
@@ -72,6 +76,45 @@ static bool read_attributes(fs::path const& p, bool follow_symlinks, file_attrib
 	out.mtime = std::uint32_t(st.st_mtime);
 	return true;
 }
+#else
+static std::uint32_t to_type_bits(fs::file_status const& st) {
+	std::uint32_t res{};
+	if(fs::is_directory(st)) {
+		res = 0040000;
+	} else if(fs::is_symlink(st)) {
+		res = 0120000;
+	} else if(fs::is_regular_file(st)) {
+		res = 0100000;
+	}
+	return res;
+}
+
+static bool read_attributes(fs::path const& p, bool follow_symlinks, file_attributes& out, std::error_code& ec) {
+	auto st = follow_symlinks ? fs::status(p, ec) : fs::symlink_status(p, ec);
+	if(ec || st.type() == fs::file_type::not_found) {
+		if(!ec) {
+			ec = std::make_error_code(std::errc::no_such_file_or_directory);
+		}
+		return false;
+	}
+	out.permissions = to_type_bits(st) | (std::uint32_t(st.permissions()) & 07777);
+	std::error_code iec; // failures of the individual attributes just leave them out
+	if(fs::is_regular_file(st)) {
+		auto size = fs::file_size(p, iec);
+		if(!iec) {
+			out.size = size;
+		}
+	}
+	auto mtime = fs::last_write_time(p, iec);
+	if(!iec) {
+		auto sys = std::chrono::clock_cast<std::chrono::system_clock>(mtime);
+		auto secs = std::chrono::duration_cast<std::chrono::seconds>(sys.time_since_epoch()).count();
+		out.mtime = std::uint32_t(secs);
+		out.atime = out.mtime; // no separate access time available here
+	}
+	return true;
+}
+#endif
 
 static std::ios::openmode to_openmode(open_mode mode) {
 	std::ios::openmode m = std::ios::binary;
@@ -241,6 +284,7 @@ bool local_fs_server_backend::apply_attributes(fs::path const& p, file_attribute
 	if(!ec && attrs.permissions) {
 		fs::permissions(p, fs::perms(*attrs.permissions & 07777), ec);
 	}
+#ifndef _WIN32
 	if(!ec && attrs.uid && attrs.gid) {
 		if(::chown(p.c_str(), *attrs.uid, *attrs.gid) != 0) {
 			ec = std::error_code(errno, std::generic_category());
@@ -252,6 +296,15 @@ bool local_fs_server_backend::apply_attributes(fs::path const& p, file_attribute
 			ec = std::error_code(errno, std::generic_category());
 		}
 	}
+#else
+	if(!ec && attrs.uid && attrs.gid) {
+		ec = std::make_error_code(std::errc::not_supported);
+	}
+	if(!ec && attrs.atime && attrs.mtime) {
+		auto t = std::chrono::system_clock::time_point(std::chrono::seconds(*attrs.mtime));
+		fs::last_write_time(p, std::chrono::clock_cast<std::chrono::file_clock>(t), ec);
+	}
+#endif
 	return !ec;
 }
 

@@ -11,6 +11,8 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/xed25519.h>
+#include <algorithm>
+#include <cstring>
 
 namespace securepath::ssh::cryptopp {
 
@@ -126,7 +128,7 @@ public:
 	, is_valid_(true)
 	{
 		// we use fixed 65537 as e
-		rsa_privkey_.Initialize(random_generator(), info.size, 65537);
+		rsa_privkey_.Initialize(random_generator(), unsigned(info.size), 65537);
 
 		CryptoPP::Integer const& e = rsa_privkey_.GetPublicExponent();
 		e_.resize(e.MinEncodedSize());

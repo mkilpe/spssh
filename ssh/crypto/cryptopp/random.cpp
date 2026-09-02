@@ -3,7 +3,12 @@
 #include "ssh/crypto/crypto_call_context.hpp"
 #include "ssh/crypto/ids.hpp"
 #include "ssh/crypto/random.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <memory>
+#include <random>
 
 namespace securepath::ssh::cryptopp {
 
@@ -36,10 +41,10 @@ public:
 	}
 };
 
-std::unique_ptr<random> create_random() {
+std::unique_ptr<ssh::random> create_random() {
 	try {
 		return std::make_unique<random>();
-	} catch(CryptoPP::Exception const& ex) {
+	} catch(CryptoPP::Exception const&) {
 		// cannot get random, nothing we can do...
 		fprintf( stderr, "Could not construct cryptopp random, aborting...");
 		std::abort();
