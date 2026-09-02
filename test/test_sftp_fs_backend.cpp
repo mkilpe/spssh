@@ -7,8 +7,7 @@
 
 #include <filesystem>
 #include <fstream>
-
-#include <unistd.h>
+#include <random>
 
 namespace securepath::ssh::test {
 namespace {
@@ -20,13 +19,18 @@ struct temp_dir {
 	fs::path path;
 
 	temp_dir() {
-		path = fs::temp_directory_path() / ("spssh_sftp_test_" + std::to_string(::getpid()) + "_" + std::to_string(counter++));
+		path = fs::temp_directory_path() / ("spssh_sftp_test_" + std::to_string(run_id()) + "_" + std::to_string(counter++));
 		fs::create_directories(path);
 	}
 
 	~temp_dir() {
 		std::error_code ec;
 		fs::remove_all(path, ec);
+	}
+
+	static unsigned run_id() {
+		static unsigned const id = std::random_device{}();
+		return id;
 	}
 
 	inline static int counter{};
@@ -138,6 +142,7 @@ TEST_CASE("sftp confine_path", "[unit][sftp]") {
 	CHECK(!confine_path(dir.path, "/../etc/passwd"));
 	CHECK(!confine_path(dir.path, "a/../../b"));
 
+#ifndef _WIN32
 	// symlink pointing outside the root is refused
 	fs::create_symlink("/etc", dir.path / "escape");
 	CHECK(!confine_path(dir.path, "/escape"));
@@ -146,6 +151,7 @@ TEST_CASE("sftp confine_path", "[unit][sftp]") {
 	// symlink pointing inside the root is fine
 	fs::create_symlink("sub", dir.path / "good");
 	CHECK(confine_path(dir.path, "/good"));
+#endif
 
 	// nonexistent root fails
 	CHECK(!confine_path(dir.path / "nonexistent", "/"));
@@ -220,6 +226,7 @@ TEST_CASE("sftp fs backend file io", "[unit][sftp]") {
 		CHECK(fx.iface.last == "error");
 		CHECK(fx.iface.code == fx_no_such_file);
 	}
+#ifndef _WIN32
 	SECTION("create with permissions") {
 		file_attributes attrs;
 		attrs.permissions = 0600;
@@ -228,6 +235,7 @@ TEST_CASE("sftp fs backend file io", "[unit][sftp]") {
 		auto st = fs::status(fx.dir.path / "f.txt");
 		CHECK((std::uint32_t(st.permissions()) & 0777) == 0600);
 	}
+#endif
 	SECTION("invalid handle") {
 		fx.backend.on_read_file(1, "bogus", 0, 10);
 		CHECK(fx.iface.last == "error");
@@ -248,7 +256,9 @@ TEST_CASE("sftp fs backend stat and setstat", "[unit][sftp]") {
 		CHECK(fx.iface.attrs.size == 10);
 		REQUIRE(fx.iface.attrs.permissions);
 		CHECK((*fx.iface.attrs.permissions & 0170000) == 0100000); // regular file bits
+#ifndef _WIN32
 		CHECK(fx.iface.attrs.uid);
+#endif
 		CHECK(fx.iface.attrs.mtime);
 	}
 	SECTION("stat missing file") {
@@ -271,8 +281,10 @@ TEST_CASE("sftp fs backend stat and setstat", "[unit][sftp]") {
 		fx.backend.on_setstat(1, "/f.txt", attrs);
 		CHECK(fx.iface.last == "ok");
 		CHECK(fs::file_size(fx.dir.path / "f.txt") == 4);
+#ifndef _WIN32
 		auto st = fs::status(fx.dir.path / "f.txt");
 		CHECK((std::uint32_t(st.permissions()) & 0777) == 0640);
+#endif
 	}
 	SECTION("fsetstat via handle") {
 		fx.make_file("f.txt", "0123456789");
@@ -293,7 +305,9 @@ TEST_CASE("sftp fs backend stat and setstat", "[unit][sftp]") {
 		fx.backend.on_stat(2, "/f.txt", true);
 		REQUIRE(fx.iface.last == "stat");
 		CHECK(fx.iface.attrs.mtime == 2000000);
+#ifndef _WIN32
 		CHECK(fx.iface.attrs.atime == 1000000);
+#endif
 	}
 }
 
@@ -397,6 +411,7 @@ TEST_CASE("sftp fs backend remove and rename", "[unit][sftp]") {
 		CHECK(fx.iface.last == "error");
 		CHECK(fs::exists(fx.dir.path / "d"));
 	}
+#ifndef _WIN32
 	SECTION("remove symlink removes the link only") {
 		fx.make_file("target.txt");
 		fx.backend.on_symlink(1, "/link", "target.txt");
@@ -406,6 +421,7 @@ TEST_CASE("sftp fs backend remove and rename", "[unit][sftp]") {
 		CHECK(!fs::exists(fx.dir.path / "link"));
 		CHECK(fs::exists(fx.dir.path / "target.txt"));
 	}
+#endif
 	SECTION("rename") {
 		fx.make_file("a.txt", "data");
 		fx.backend.on_rename(1, "/a.txt", "/b.txt");
@@ -427,6 +443,7 @@ TEST_CASE("sftp fs backend remove and rename", "[unit][sftp]") {
 TEST_CASE("sftp fs backend links and paths", "[unit][sftp]") {
 	backend_fixture fx;
 
+#ifndef _WIN32
 	SECTION("symlink and readlink") {
 		fx.make_file("target.txt");
 		fx.backend.on_symlink(1, "/link", "target.txt");
@@ -445,6 +462,7 @@ TEST_CASE("sftp fs backend links and paths", "[unit][sftp]") {
 		REQUIRE(fx.iface.last == "stat");
 		CHECK((*fx.iface.attrs.permissions & 0170000) == 0120000); // the link itself
 	}
+#endif
 	SECTION("realpath") {
 		fx.backend.on_realpath(1, ".");
 		REQUIRE(fx.iface.last == "path");
@@ -473,6 +491,7 @@ TEST_CASE("sftp fs backend path confinement", "[unit][sftp]") {
 		CHECK(fx.iface.last == "error");
 		CHECK(fx.iface.code == fx_permission_denied);
 	}
+#ifndef _WIN32
 	SECTION("access through escaping symlink is refused") {
 		fs::create_symlink("/etc", fx.dir.path / "escape");
 		fx.backend.on_open_file(1, "/escape/passwd", open_mode(fxf_read), {});
@@ -482,6 +501,7 @@ TEST_CASE("sftp fs backend path confinement", "[unit][sftp]") {
 		CHECK(fx.iface.last == "error");
 		CHECK(fx.iface.code == fx_permission_denied);
 	}
+#endif
 	SECTION("operations inside the root still work") {
 		fx.backend.on_open_file(1, "/secret.txt", open_mode(fxf_read), {});
 		CHECK(fx.iface.last == "open_file");

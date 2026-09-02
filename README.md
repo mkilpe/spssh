@@ -1,12 +1,15 @@
 # spssh
 
+![ci](https://github.com/mkilpe/spssh/actions/workflows/ci.yml/badge.svg)
+
 SSH Version 2 client/server library for building SSH-based protocols with modern C++20.
 
 ## Features
 
 - Full SSH transport layer (RFC 4253) with re-keying support
 - SSH client and server implementations
-- SFTP client and server (RFC 4254 / draft-ietf-secsh-filexfer) (still missing some bits)
+- SFTP version 3 client and server (draft-ietf-secsh-filexfer-02), interoperable with OpenSSH
+- Local filesystem SFTP server backend with path confinement, or implement your own backend
 - Pluggable authentication: password, public key, host-based, keyboard-interactive
 - Configurable algorithm suites
 
@@ -70,8 +73,8 @@ ssh/
   services/
     sftp/     – SFTP client and server
 tools/
-  test_client/ – Example SSH client using Asio
-  test_server/ – Example SSH server using Asio
+  test_client/ – Example SSH client using Asio, with an interactive SFTP mode
+  test_server/ – Example SSH server using Asio, serves a directory over SFTP
 test/          – Unit tests (Catch2)
 ```
 
@@ -109,13 +112,52 @@ client.start_auth("ssh-connection");
 
 ### SFTP client
 
-Obtain a channel from a connected `ssh_client` and create an `sftp_client` on top of it:
+Implement `sftp::sftp_client_callback` to receive the results, then open a `"session"`
+channel on a connected `ssh_connection` that constructs the `sftp_client` on top of it
+(see `tools/test_client` for a complete example):
 
 ```cpp
 #include "ssh/services/sftp/sftp_client.hpp"
 
-auto sftp = std::make_unique<securepath::ssh::sftp::sftp_client>(callback, transport, local_info);
-auto handle = sftp->open_file("/remote/path", sftp::open_mode::read);
+// in namespace securepath::ssh
+auto ch = connection.open_channel("session",
+	[&](transport_base& t, channel_side_info info) {
+		return std::make_unique<sftp::sftp_client>(callback, t, info);
+	});
+
+// after the callback receives on_version, the commands are available;
+// each returns a call handle that identifies the matching result callback
+auto handle = sftp_client->open_file("/remote/path", sftp::fxf_read);
+```
+
+### SFTP server
+
+Register a `"session"` channel type that upgrades itself to an SFTP server when the
+client requests the sftp subsystem. `local_fs_server_backend` serves a local directory
+and refuses any path escaping it; implement `sftp::sftp_server_backend` for custom
+storage (see `tools/test_server` for a complete example):
+
+```cpp
+#include "ssh/services/sftp/local_fs_backend.hpp"
+#include "ssh/services/sftp/sftp_session_channel.hpp"
+
+// in namespace securepath::ssh
+connection.add_channel_type("session",
+	[root](transport_base& t, channel_side_info info) {
+		return std::make_unique<sftp::sftp_session_channel>(t, info,
+			[&t, root]() {
+				return std::make_shared<sftp::local_fs_server_backend>(t.log(), root);
+			});
+	});
+```
+
+### Trying it out
+
+The example server serves a directory over SFTP and works with the standard OpenSSH client:
+
+```sh
+./bin/spssh_test_server -p 2222 -b 127.0.0.1 --private-key tools/keys/ed25519_test_key --sftp-root /some/dir
+sftp -P 2222 -i tools/keys/ed25519_test_key test@127.0.0.1
 ```
 
 ### Authentication configuration (server)
@@ -129,6 +171,18 @@ auth_cfg.service_auth["ssh-connection"] = {
 };
 auth_cfg.num_of_tries = 5;
 ```
+
+## Testing
+
+Unit tests (Catch2) cover the transport, key exchange, authentication, connection and SFTP
+layers, including end-to-end client/server tests over the full protocol stack:
+
+```sh
+./bin/test_spssh "[unit]"   # the whole suite
+./bin/test_spssh "[sftp]"   # sftp only
+```
+
+CI builds and runs the tests with GCC and Clang on Linux and MSVC on Windows.
 
 ## License
 

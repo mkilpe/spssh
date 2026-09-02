@@ -42,25 +42,25 @@ protected:
 	~sftp_client_interface() = default;
 };
 
-class open_file_data;
-class read_file_data;
-class write_file_data;
-class close_file_data;
-class state_file_data;
-class setstate_file_data;
-class open_dir_data;
-class read_dir_data;
-class close_dir_data;
-class remove_file_data;
-class rename_data;
-class mkdir_data;
-class remove_dir_data;
-class stat_data;
-class setstat_data;
-class readlink_data;
-class symlink_data;
-class realpath_data;
-class extended_data;
+struct open_file_data;
+struct read_file_data;
+struct write_file_data;
+struct close_file_data;
+struct state_file_data;
+struct setstate_file_data;
+struct open_dir_data;
+struct read_dir_data;
+struct close_dir_data;
+struct remove_file_data;
+struct rename_data;
+struct mkdir_data;
+struct remove_dir_data;
+struct stat_data;
+struct setstat_data;
+struct readlink_data;
+struct symlink_data;
+struct realpath_data;
+struct extended_data;
 
 class sftp_client_callback {
 public:

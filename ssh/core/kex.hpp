@@ -51,7 +51,7 @@ protected:
 	std::string err_message_;
 };
 
-class supported_algorithms;
+struct supported_algorithms;
 
 class kex_context {
 public:

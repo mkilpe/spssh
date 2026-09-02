@@ -9,8 +9,8 @@ namespace securepath::ssh {
 class ssh_bf_binout_writer;
 class ssh_bf_reader;
 class public_key;
-class crypto_context;
-class crypto_call_context;
+struct crypto_context;
+struct crypto_call_context;
 class ssh_public_key;
 
 byte_vector ecdsa_sig(std::string_view payload, std::size_t integer_size);

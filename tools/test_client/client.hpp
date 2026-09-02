@@ -34,7 +34,7 @@ private:
 	sync_cout_logger log_;
 	single_thread_event_loop main_loop_;
 
-	class impl;
+	struct impl;
 	std::unique_ptr<impl> impl_;
 };
 
