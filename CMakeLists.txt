@@ -12,7 +12,9 @@ set(CMAKE_MODULE_PATH ${my_root_directory}/cmake)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
-if(NOT CMAKE_BUILD_TYPE)
+# default to debug build, but only for single configuration generators (multi
+# configuration generators select the build type at build time instead)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE Debug)
 	message("-- Enabling debug build")
 endif()

@@ -56,9 +56,12 @@ jobs:
 
       - name: configure
         shell: pwsh
+        # CMAKE_BUILD_TYPE has no effect on the multi-config build itself, but the
+        # vcpkg toolchain uses it to pick release instead of debug libraries
         run: >
           cmake -B build -S .
           -DUSE_CRYPTOPP=on
+          -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
 
       - name: build
