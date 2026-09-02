@@ -17,6 +17,10 @@ std::optional<resolved_path> confine_path(fs::path const& root, std::string_view
 	if(rel == ".") {
 		rel = fs::path();
 	}
+	if(!rel.empty() && rel.filename().empty()) {
+		// normalisation can leave a trailing separator (e.g. "d/." becomes "d/"), drop it
+		rel = rel.parent_path();
+	}
 	if(!rel.empty() && *rel.begin() == "..") {
 		return std::nullopt;
 	}
