@@ -65,7 +65,7 @@ struct crypto_context {
 	}
 
 	bool generate_random(securepath::ssh::span output) {
-		return handle && ::CryptGenRandom(handle, output.size(), securepath::ssh::to_uint8_ptr(output));
+		return handle && ::CryptGenRandom(handle, DWORD(output.size()), securepath::ssh::to_uint8_ptr(output));
 	}
 
 	HCRYPTPROV handle{};

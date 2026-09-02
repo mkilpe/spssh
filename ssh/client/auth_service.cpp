@@ -89,7 +89,7 @@ void client_auth_service::handle_change_password(const_span payload) {
 void client_auth_service::send_interactive_response(std::vector<std::string> const& results) {
 	byte_vector response;
 
-	bool ret = ser::serialise_to_vector<ser::userauth_info_response>(response, results.size());
+	bool ret = ser::serialise_to_vector<ser::userauth_info_response>(response, std::uint32_t(results.size()));
 
 	if(ret) {
 		// add the results

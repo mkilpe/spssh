@@ -44,7 +44,7 @@ public:
 std::unique_ptr<ssh::random> create_random() {
 	try {
 		return std::make_unique<random>();
-	} catch(CryptoPP::Exception const& ex) {
+	} catch(CryptoPP::Exception const&) {
 		// cannot get random, nothing we can do...
 		fprintf( stderr, "Could not construct cryptopp random, aborting...");
 		std::abort();

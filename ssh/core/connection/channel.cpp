@@ -73,7 +73,7 @@ std::uint32_t channel::write_to_buffer(const_span data, bool partial) {
 	if(size) {
 		log_.log(logger::debug_trace, "adding {} bytes to buffer for channel id={} [used={}, buffer_size={}]", size, local_info_.id, used_, buffer_.size());
 		copy(safe_subspan(data, 0, size), safe_subspan(buffer_, used_, size));
-		used_ += size;
+		used_ += std::uint32_t(size);
 	}
 
 	return std::uint32_t(size);
@@ -288,7 +288,7 @@ bool channel::send_packet(const_span s) {
 		auto rec = transport_.alloc_out_packet(p.size());
 		res = rec && p.write(rec->data) && transport_.write_alloced_out_packet(*rec);
 		if(res) {
-			out_window_ -= s.size();
+			out_window_ -= std::uint32_t(s.size());
 		}
 	}
 	if(!res) {
