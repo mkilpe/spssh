@@ -41,7 +41,7 @@ public:
 	}
 };
 
-std::unique_ptr<random> create_random() {
+std::unique_ptr<ssh::random> create_random() {
 	try {
 		return std::make_unique<random>();
 	} catch(CryptoPP::Exception const& ex) {
