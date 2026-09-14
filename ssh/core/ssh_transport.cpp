@@ -184,6 +184,7 @@ transport_op ssh_transport::process(in_buffer& in) {
 	if(state() == ssh_state::disconnected) {
 		return transport_op::disconnected;
 	}
+	flush_kex_pending(); // send packets held back during key exchange (if any)
 
 	if(state() == ssh_state::none || state() == ssh_state::version_exchange) {
 		handle_version_exchange(in);
@@ -400,6 +401,8 @@ handler_result ssh_transport::handle_kex_done(kex const&) {
 			//set sending encryption
 			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac));
 			local_kex_done_ = true;
+			// normal packets are allowed again from here on, and they must use the new keys
+			flush_kex_pending();
 			kex_set_done();
 		} else {
 			logger_.log(logger::error, "SSH Failed to send newkeys packet");
@@ -600,7 +603,46 @@ std::optional<out_packet_record> ssh_transport::alloc_out_packet(std::size_t dat
 }
 
 bool ssh_transport::write_alloced_out_packet(out_packet_record const& r) {
+	if(must_queue_out_packet(r.data)) {
+		// hold the payload and send it from flush_kex_pending, the allocated space is simply left uncommitted
+		kex_pending_out_.emplace_back(r.data.begin(), r.data.end());
+		return true;
+	}
 	return ssh_binary_packet::create_out_packet(r, output_);
+}
+
+bool ssh_transport::in_kex_send_window() const {
+	// between our kexinit and our newkeys (rfc 4253 section 7.1)
+	return state() == ssh_state::kex && !local_kex_done_;
+}
+
+bool ssh_transport::must_queue_out_packet(const_span payload) const {
+	bool res = false;
+	if(!payload.empty()) {
+		ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
+		// only transport generic (except service request/accept) and kex packets may be sent during the window
+		bool allowed = type <= 49 && type != ssh_service_request && type != ssh_service_accept;
+		// queue the rest while in the window, or behind already queued packets to keep their order
+		res = !allowed && (in_kex_send_window() || !kex_pending_out_.empty());
+	}
+	return res;
+}
+
+void ssh_transport::flush_kex_pending() {
+	// send in order; stop if the out buffer is full and continue on the next round
+	bool ok = !in_kex_send_window();
+	while(ok && !kex_pending_out_.empty()) {
+		auto const& payload = kex_pending_out_.front();
+		auto rec = alloc_out_packet(payload.size());
+		ok = rec.has_value();
+		if(ok) {
+			copy(payload, rec->data);
+			ok = ssh_binary_packet::create_out_packet(*rec, output_);
+			if(ok) {
+				kex_pending_out_.pop_front();
+			}
+		}
+	}
 }
 
 std::uint32_t ssh_transport::max_in_packet_size() {

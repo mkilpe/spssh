@@ -139,6 +139,16 @@ struct test_client : test_context, client_config, ssh_client {
 
 	bool local_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().local_kexinit); }
 	bool remote_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().remote_kexinit); }
+	byte_vector local_kexinit() const { return kex_data().local_kexinit; }
+
+	// non-kex packets received while in key exchange; on the side that did not initiate the rekey these can
+	// only be packets the peer sent after its own kexinit, which rfc 4253 forbids
+	handler_result handle_transport_packet(ssh_packet_type type, const_span payload) override {
+		if(state() == ssh_state::kex && !is_kex_packet(type)) {
+			++non_kex_packets_during_kex;
+		}
+		return ssh_client::handle_transport_packet(type, payload);
+	}
 
 	test_data_channel* get_channel(std::size_t id = 0) const {
 		assert(id < ids.size());
@@ -147,6 +157,7 @@ struct test_client : test_context, client_config, ssh_client {
 	}
 
 	std::vector<channel_id> ids{};
+	std::size_t non_kex_packets_during_kex{};
 };
 
 
@@ -173,9 +184,20 @@ struct test_server : test_context, server_config, ssh_server {
 
 	bool local_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().local_kexinit); }
 	bool remote_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().remote_kexinit); }
+	byte_vector local_kexinit() const { return kex_data().local_kexinit; }
+
+	// non-kex packets received while in key exchange; on the side that did not initiate the rekey these can
+	// only be packets the peer sent after its own kexinit, which rfc 4253 forbids
+	handler_result handle_transport_packet(ssh_packet_type type, const_span payload) override {
+		if(state() == ssh_state::kex && !is_kex_packet(type)) {
+			++non_kex_packets_during_kex;
+		}
+		return ssh_server::handle_transport_packet(type, payload);
+	}
 
 	std::size_t out_data_size{};
 	test_auth_data auth_data;
+	std::size_t non_kex_packets_during_kex{};
 };
 }
 
@@ -297,6 +319,7 @@ TEST_CASE("connection test - rekey", "[unit]") {
 
 	auto sid_span = server.session_id();
 	byte_vector sid{sid_span.begin(), sid_span.end()};
+	auto kexinit_before = client.local_kexinit();
 
 	REQUIRE(client.open_channel());
 
@@ -314,6 +337,40 @@ TEST_CASE("connection test - rekey", "[unit]") {
 	CHECK(server.local_kexinit_is_single_packet());
 	CHECK(client.remote_kexinit_is_single_packet());
 	CHECK(server.remote_kexinit_is_single_packet());
+
+	// the rekey happened, and the server (initiator) sent only kex packets between its kexinit and newkeys
+	CHECK(client.local_kexinit() != kexinit_before);
+	CHECK(client.non_kex_packets_during_kex == 0);
+
+	REQUIRE(client.check_data(data_size));
+	client.close_channel();
+
+	REQUIRE(run(client, server));
+}
+
+TEST_CASE("connection test - rekey initiated by client", "[unit]") {
+	std::size_t const data_size = 10*1024*1024;
+
+	test_server server(data_size, 128*1024);
+	test_client client;
+	client.rekey_data_interval = 1024*1024;
+
+	REQUIRE(run(client, server));
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	auto kexinit_before = server.local_kexinit();
+
+	REQUIRE(client.open_channel());
+
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+
+	// the rekey happened, and the client (initiator) sent only kex packets between its kexinit and newkeys
+	CHECK(server.local_kexinit() != kexinit_before);
+	CHECK(server.non_kex_packets_during_kex == 0);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();

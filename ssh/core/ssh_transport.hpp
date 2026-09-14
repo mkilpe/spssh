@@ -10,6 +10,7 @@
 #include "ssh/crypto/crypto_context.hpp"
 
 #include <chrono>
+#include <deque>
 #include <iosfwd>
 
 namespace securepath::ssh {
@@ -92,6 +93,10 @@ private: // init & generic packet handling
 	bool do_rekeying();
 	void start_kex();
 
+	bool in_kex_send_window() const;
+	bool must_queue_out_packet(const_span payload) const;
+	void flush_kex_pending();
+
 private: // input
 	handler_result process_transport_payload(span payload);
 
@@ -114,6 +119,8 @@ private: // data
 	bool local_kex_done_{};
 	bool remote_kex_done_{};
 	std::unique_ptr<kex> kex_;
+	// packets that may not be sent between our kexinit and newkeys, sent in order once allowed again
+	std::deque<byte_vector> kex_pending_out_;
 
 	bool flush_service_{};
 	std::chrono::steady_clock::time_point rekey_time_;
