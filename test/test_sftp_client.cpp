@@ -404,6 +404,13 @@ TEST_CASE("sftp client failure handling", "[unit][sftp]") {
 		CHECK(fx.cb->events.size() == 1); // just the version event
 		CHECK(!fx.transport.disconnected());
 	}
+	SECTION("name response with impossible count disconnects") {
+		// count claims far more entries than the packet could hold; must not try to reserve for them
+		auto h = fx.client.read_dir("dh1");
+		auto p = build_packet<name_response>(h, 0xFFFFFFFFu);
+		REQUIRE(fx.client.on_data(p));
+		CHECK(fx.transport.disconnected());
+	}
 	SECTION("malformed response packet disconnects") {
 		// status packet with truncated payload
 		byte_vector p;

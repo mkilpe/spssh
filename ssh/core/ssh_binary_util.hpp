@@ -247,6 +247,13 @@ public:
 		return in_.size() - pos_;
 	}
 
+	/// Returns true if 'count' items, each taking at least 'min_item_size' bytes on the wire, could still fit
+	/// in the remaining data. Use this to validate counts received from the wire before reserving memory for them.
+	bool can_fit(std::uint32_t count, std::size_t min_item_size) const {
+		SPSSH_ASSERT(min_item_size != 0, "min_item_size must be non-zero");
+		return count <= size_left() / min_item_size;
+	}
+
 	bool read(std::uint64_t& v) {
 		bool ret = size_left() >= 8;
 		if(ret) {

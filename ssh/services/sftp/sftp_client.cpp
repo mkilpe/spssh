@@ -188,31 +188,35 @@ void sftp_client::call_name_result(call_handle id, std::vector<file_info_view> f
 	}
 }
 
+static bool read_name_entries(ssh_bf_reader& reader, std::uint32_t count, std::vector<file_info_view>& out) {
+	// the count comes from the wire, check it could actually fit before reserving memory for it
+	// (each entry is at least two strings and the attribute flags)
+	bool ok = reader.can_fit(count, 2*ser::string::static_size + ser::uint32::static_size);
+	if(ok) {
+		out.reserve(count);
+		for(std::uint32_t i = 0; ok && i != count; ++i) {
+			file_info_view fi;
+			ok = reader.read(fi.filename) && reader.read(fi.longname) && fi.attrs.read(reader);
+			if(ok) {
+				out.push_back(std::move(fi));
+			}
+		}
+	}
+	return ok;
+}
+
 void sftp_client::handle_name(const_span s) {
 	name_response::load packet(s);
 	if(packet) {
 		auto& [id, count] = packet;
-		auto& reader = packet.reader();
 
 		std::vector<file_info_view> files;
-		files.reserve(count);
-
-		for(std::uint32_t i = 0; i != count; ++i) {
-			file_info_view fi;
-			if(reader.read(fi.filename)
-				&& reader.read(fi.longname)
-				&& fi.attrs.read(reader))
-			{
-				files.push_back(std::move(fi));
-			} else {
-				log_.log(logger::error, "Invalid sftp name packet");
-				transport_.set_error_and_disconnect(ssh_protocol_error);
-				return;
-			}
+		if(read_name_entries(packet.reader(), count, files)) {
+			call_name_result(id, std::move(files));
+		} else {
+			log_.log(logger::error, "Invalid sftp name packet");
+			transport_.set_error_and_disconnect(ssh_protocol_error);
 		}
-
-		call_name_result(id, std::move(files));
-
 	} else {
 		log_.log(logger::error, "Invalid sftp name packet");
 		transport_.set_error_and_disconnect(ssh_protocol_error);

@@ -106,6 +106,24 @@ void client_auth_service::send_interactive_response(std::vector<std::string> con
 	}
 }
 
+static bool read_interactive_prompts(ssh_bf_reader& reader, std::uint32_t count, interactive_request& req) {
+	// the count comes from the wire, check it could actually fit before reserving memory for it
+	// (each prompt is a string followed by a boolean)
+	bool ok = reader.can_fit(count, ser::string::static_size + ser::boolean::static_size);
+	if(ok) {
+		req.prompts.reserve(count);
+		for(std::uint32_t i = 0; ok && i != count; ++i) {
+			std::string_view text;
+			bool echo{};
+			ok = reader.read(text) && reader.read(echo);
+			if(ok) {
+				req.prompts.emplace_back(echo, text);
+			}
+		}
+	}
+	return ok;
+}
+
 handler_result client_auth_service::handle_interactive_request(const_span payload) {
 	log_.log(logger::debug, "interactive request from server");
 
@@ -114,19 +132,9 @@ handler_result client_auth_service::handle_interactive_request(const_span payloa
 		auto& [name, instruction, lang, prompt_count] = packet;
 
 		interactive_request req{name, instruction};
-		req.prompts.reserve(prompt_count);
-
-		// read the prompts
-		for(std::uint32_t i = 0; i != prompt_count; ++i) {
-			std::string_view text;
-			bool echo{};
-
-			if(!packet.reader().read(text) || !packet.reader().read(echo)) {
-				transport_.set_error_and_disconnect(ssh_protocol_error, "Invalid interactive request packet from server (prompts)");
-				return handler_result::handled;
-			}
-
-			req.prompts.emplace_back(echo, text);
+		if(!read_interactive_prompts(packet.reader(), prompt_count, req)) {
+			transport_.set_error_and_disconnect(ssh_protocol_error, "Invalid interactive request packet from server (prompts)");
+			return handler_result::handled;
 		}
 
 		std::vector<std::string> results;

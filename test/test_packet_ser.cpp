@@ -200,4 +200,24 @@ TEST_CASE("nested packet save with sftp", "[unit]") {
 	CHECK(inner_str == "my test");
 }
 
+TEST_CASE("bf reader can_fit", "[unit]") {
+	std::byte data[12]{};
+	ssh_bf_reader r(const_span{data});
+
+	CHECK(r.can_fit(0, 4));
+	CHECK(r.can_fit(3, 4));
+	CHECK(!r.can_fit(4, 4));
+	CHECK(!r.can_fit(0xFFFFFFFF, 1));
+
+	// consuming data lowers what can still fit
+	std::uint32_t v{};
+	REQUIRE(r.read(v));
+	CHECK(r.can_fit(2, 4));
+	CHECK(!r.can_fit(3, 4));
+
+	ssh_bf_reader empty(const_span{});
+	CHECK(empty.can_fit(0, 1));
+	CHECK(!empty.can_fit(1, 1));
+}
+
 }

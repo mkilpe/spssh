@@ -327,6 +327,22 @@ handler_result server_auth_service::handle_interactive_request(const_span payloa
 	return handler_result::handled;
 }
 
+static bool read_interactive_responses(ssh_bf_reader& reader, std::uint32_t count, std::vector<std::string_view>& out) {
+	// the count comes from the wire, check it could actually fit before reserving memory for it
+	bool ok = reader.can_fit(count, ser::string::static_size);
+	if(ok) {
+		out.reserve(count);
+		for(std::uint32_t i = 0; ok && i != count; ++i) {
+			std::string_view res;
+			ok = reader.read(res);
+			if(ok) {
+				out.push_back(res);
+			}
+		}
+	}
+	return ok;
+}
+
 handler_result server_auth_service::handle_interactive_response(const_span payload) {
 	if(!interactive_in_progress_) {
 		transport_.set_error_and_disconnect(ssh_protocol_error, "invalid state");
@@ -347,17 +363,9 @@ handler_result server_auth_service::handle_interactive_response(const_span paylo
 	auto& [response_count] = packet;
 
 	std::vector<std::string_view> responses;
-	responses.reserve(response_count);
-
-	// read the responses
-	for(std::uint32_t i = 0; i != response_count; ++i) {
-		std::string_view res;
-		if(!packet.reader().read(res)) {
-			transport_.set_error_and_disconnect(ssh_protocol_error, "Invalid interactive response packet from client");
-			return handler_result::handled;
-		}
-
-		responses.push_back(res);
+	if(!read_interactive_responses(packet.reader(), response_count, responses)) {
+		transport_.set_error_and_disconnect(ssh_protocol_error, "Invalid interactive response packet from client");
+		return handler_result::handled;
 	}
 
 	auto vres = verify_interactive(current_, responses);

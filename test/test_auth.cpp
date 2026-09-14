@@ -6,6 +6,8 @@
 
 #include "ssh/client/auth_service.hpp"
 #include "ssh/client/ssh_client.hpp"
+#include "ssh/core/auth/auth_protocol.hpp"
+#include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/server/ssh_server.hpp"
 #include "test/util/server_auth_service.hpp"
 
@@ -399,6 +401,61 @@ TEST_CASE("interactive auth test 3", "[unit][crypto][auth]") {
 
 	CHECK(client.data.interactive_name == "test");
 	CHECK(client.data.interactive_instruction == "string");
+}
+
+TEST_CASE("interactive response with impossible count", "[unit][crypto][auth]") {
+	test_server server;
+	test_client client;
+
+	crypto_test_context cctx;
+
+	server.auth_data.add_interactive("test-user"
+		, {interactive_request{"test", "string", {interactive_prompt{true, "name"}}}}
+		, {{"some"}});
+
+	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::interactive), 1};
+
+	CHECK(run(client, server));
+
+	// let the server send its info request, but never deliver it to the client
+	client.send_interactive("test-user");
+	server.process(client.out_buf);
+	CHECK(server.error() == 0);
+
+	// instead inject a response claiming far more entries than the packet could hold
+	byte_vector p;
+	REQUIRE(ser::serialise_to_vector<ser::userauth_info_response>(p, std::uint32_t(0xFFFFFFFF)));
+	REQUIRE(client.send_payload(p));
+	server.process(client.out_buf);
+
+	CHECK(server.state() == ssh_state::disconnected);
+	CHECK(server.error() == ssh_error_code::ssh_protocol_error);
+	CHECK(!server.user_authenticated());
+}
+
+TEST_CASE("interactive request with impossible prompt count", "[unit][crypto][auth]") {
+	test_server server;
+	test_client client;
+
+	crypto_test_context cctx;
+
+	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::interactive), 1};
+
+	CHECK(run(client, server));
+
+	// the client starts interactive auth; instead of the server we inject an info request
+	// claiming far more prompts than the packet could hold
+	client.send_interactive("test-user");
+
+	byte_vector p;
+	REQUIRE(ser::serialise_to_vector<ser::userauth_info_request>(p
+		, std::string_view("test"), std::string_view("string"), std::string_view(""), std::uint32_t(0xFFFFFFFF)));
+	REQUIRE(server.send_payload(p));
+	client.process(server.out_buf);
+
+	CHECK(client.state() == ssh_state::disconnected);
+	CHECK(client.error() == ssh_error_code::ssh_protocol_error);
+	CHECK(!client.user_authenticated());
 }
 
 TEST_CASE("bad password auth test", "[unit][crypto][auth]") {
