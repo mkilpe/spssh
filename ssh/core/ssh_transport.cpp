@@ -334,6 +334,8 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 	kex_cookie_.resize(cookie_size);
 	rand_->random_bytes(kex_cookie_);
 
+	// serialise_to_vector appends, so drop the kexinit of any previous exchange first
+	kex_data_.local_kexinit.clear();
 	bool ret = ser::serialise_to_vector<ser::kexinit>(kex_data_.local_kexinit,
 		std::span<std::byte const, cookie_size>(kex_cookie_),
 		config_.algorithms.kexes.name_list(),

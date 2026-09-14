@@ -10,6 +10,8 @@
 
 #include "ssh/client/auth_service.hpp"
 #include "ssh/client/ssh_client.hpp"
+#include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/protocol.hpp"
 #include "ssh/server/ssh_server.hpp"
 #include "test/util/server_auth_service.hpp"
 
@@ -23,6 +25,12 @@ namespace {
 // * flushing is not triggered from the ssh_transport layer
 // * all buffers full condition not correctly handled (ie. the service should not handle the incoming packet in this case and return to retry after there is space in buffers again)
 
+
+// true if the data holds exactly one kexinit packet with nothing trailing it
+bool is_single_kexinit(byte_vector const& data) {
+	ser::kexinit::load packet(ser::match_type_t, data);
+	return packet && packet.size() == data.size();
+}
 
 class test_data_channel : public channel {
 public:
@@ -129,6 +137,9 @@ struct test_client : test_context, client_config, ssh_client {
 		return ch != nullptr;
 	}
 
+	bool local_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().local_kexinit); }
+	bool remote_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().remote_kexinit); }
+
 	test_data_channel* get_channel(std::size_t id = 0) const {
 		assert(id < ids.size());
 		return static_cast<test_data_channel*>(
@@ -159,6 +170,9 @@ struct test_server : test_context, server_config, ssh_server {
 		}
 		return nullptr;
 	}
+
+	bool local_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().local_kexinit); }
+	bool remote_kexinit_is_single_packet() const { return is_single_kexinit(kex_data().remote_kexinit); }
 
 	std::size_t out_data_size{};
 	test_auth_data auth_data;
@@ -294,6 +308,12 @@ TEST_CASE("connection test - rekey", "[unit]") {
 	auto sid_span2 = server.session_id();
 	byte_vector sid2{sid_span2.begin(), sid_span2.end()};
 	CHECK(sid == sid2);
+
+	// every rekey must send a fresh kexinit, not the accumulated history of the earlier ones
+	CHECK(client.local_kexinit_is_single_packet());
+	CHECK(server.local_kexinit_is_single_packet());
+	CHECK(client.remote_kexinit_is_single_packet());
+	CHECK(server.remote_kexinit_is_single_packet());
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();

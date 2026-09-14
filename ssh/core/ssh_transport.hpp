@@ -74,6 +74,8 @@ protected:
 	using ssh_binary_packet::config_;
 	using ssh_binary_packet::logger_;
 
+	kex_init_data const& kex_data() const { return kex_data_; }
+
 private: // init & generic packet handling
 
 	void handle_version_exchange(in_buffer& in);
