@@ -47,14 +47,12 @@ struct in_packet_info {
 	in_packet_status status{in_packet_status::waiting_header};
 	std::size_t packet_size{}; // size of the whole packet, this is available after decrypting the header
 	std::size_t data_size{};   // size of the transport payload, this is available after decrypting whole packet
-	span payload{};            // current decrypted payload to be handled
 	std::uint32_t sequence{};  // sequence number of the incoming packet
 
 	void clear() {
 		status = in_packet_status::waiting_header;
 		packet_size = 0;
 		data_size = 0;
-		payload = {};
 		sequence = 0;
 	}
 };

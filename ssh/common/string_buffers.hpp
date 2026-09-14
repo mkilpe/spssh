@@ -12,23 +12,35 @@ public:
 	string_in_buffer(std::string s = {}) : data(s) {}
 
 	span get() override {
-		return span{reinterpret_cast<std::byte*>(data.data()), data.size()};
+		return span{reinterpret_cast<std::byte*>(data.data()) + pos, data.size() - pos};
 	}
 
 	void consume(std::size_t size) override {
-		assert(size <= data.size());
-		data = data.substr(size);
+		assert(size <= data.size() - pos);
+		// advance a read offset instead of reallocating, so the span from get() stays valid across
+		// partial consumes as the in_buffer contract promises; only a full consume may invalidate it
+		pos += size;
+		if(pos == data.size()) {
+			data.clear();
+			pos = 0;
+		}
 	}
 
 	void add(std::string_view s) {
+		// reclaim the consumed prefix before growing; add() is not consume() so it may move the data
+		if(pos != 0) {
+			data.erase(0, pos);
+			pos = 0;
+		}
 		data.insert(data.end(), s.begin(), s.end());
 	}
 
 	std::size_t size() const {
-		return data.size();
+		return data.size() - pos;
 	}
 
 	std::string data;
+	std::size_t pos{};
 };
 
 

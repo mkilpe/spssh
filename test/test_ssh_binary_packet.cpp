@@ -266,5 +266,49 @@ TEST_CASE("ssh_binary_packet crypto 2", "[unit]") {
 	CHECK(ignore == "test 2");
 }
 
+TEST_CASE("string_in_buffer partial consume keeps span valid", "[unit]") {
+	string_in_buffer in{std::string("ABCDEFGH")};
+	auto s = in.get();
+	REQUIRE(s.size() == 8);
+	auto* base = s.data();
+
+	in.consume(3);
+
+	// the in_buffer contract says a partial consume must not reallocate: the remainder is the same storage
+	auto r = in.get();
+	REQUIRE(r.size() == 5);
+	CHECK(r.data() == base + 3);
+	CHECK(std::to_integer<char>(r[0]) == 'D');
+
+	// consuming the whole remaining range is allowed to reclaim storage
+	in.consume(5);
+	CHECK(in.size() == 0);
+}
+
+TEST_CASE("string_io_buffer partial consume keeps span valid", "[unit]") {
+	string_io_buffer buf;
+
+	auto w = buf.get(8);
+	REQUIRE(w.size() >= 8);
+	for(int i = 0; i != 8; ++i) {
+		w[i] = std::byte('A' + i);
+	}
+	buf.commit(8);
+
+	auto s = buf.get();
+	REQUIRE(s.size() == 8);
+	auto* base = s.data();
+
+	buf.consume(3);
+
+	auto r = buf.get();
+	REQUIRE(r.size() == 5);
+	CHECK(r.data() == base + 3);
+	CHECK(std::to_integer<char>(r[0]) == 'D');
+
+	buf.consume(5);
+	CHECK(buf.empty());
+}
+
 
 }

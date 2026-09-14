@@ -100,6 +100,8 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 			set_error(spssh_invalid_packet, "Invalid packet");
 		} else {
 			std::size_t size = stream_in_.current_packet.packet_size - packet_header_size - padding;
+			// keep data_size set on every decrypt path, the transport re-reads the payload with it
+			stream_in_.current_packet.data_size = size;
 			if(in_data.size() >= size + packet_header_size) {
 				if(in_data.data() != out_data.data()) {
 					SPSSH_ASSERT(out_data.size() >= size, "invalid out buffer size");
@@ -118,7 +120,6 @@ span ssh_binary_packet::decrypt_packet(const_span in_data, span out_data) {
 	if(!payload.empty()) {
 		stream_in_.current_packet.status = in_packet_status::data_ready;
 		stream_in_.current_packet.sequence = stream_in_.packet_sequence;
-		stream_in_.current_packet.payload = payload;
 		stream_in_.transferred_bytes += stream_in_.current_packet.packet_size;
 		// incremented for every packet and let wrap around
 		++stream_in_.packet_sequence;

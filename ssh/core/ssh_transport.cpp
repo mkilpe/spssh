@@ -130,9 +130,15 @@ handler_result ssh_transport::handle_binary_packet(in_buffer& in) {
 
 	handler_result res = handler_result::handled;
 	if(stream_in_.current_packet.status == in_packet_status::data_ready) {
-		res = process_transport_payload(stream_in_.current_packet.payload);
-		if(res == handler_result::handled) {
-			logger_.log(logger::debug_trace, "SSH packet handled successfully");
+		// a pending packet is handled again on a later round, and the input buffer mihgt have been reallocated,
+		// so the span saved at decrypt time cannot be trusted; as we only ever consume whole packets the packet
+		// is always the first thing get() returns, with its decrypted bytes kept by the buffer,
+		// so the payload is simply re-read from there
+		auto payload = safe_subspan(data, packet_header_size, stream_in_.current_packet.data_size);
+		res = process_transport_payload(payload);
+		// only pending keeps the packet; for unknown packets the unimplemented reply has already been queued
+		if(res != handler_result::pending) {
+			logger_.log(logger::debug_trace, "SSH packet handled [result={}]", int(res));
 			in.consume(stream_in_.current_packet.packet_size);
 			stream_in_.current_packet.clear();
 		}
