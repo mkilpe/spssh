@@ -65,11 +65,15 @@ bool ssh_binary_packet::try_decode_header(span in_data) {
 		stream_in_.cipher->process(block_span, block_span);
 	}
 
-	stream_in_.current_packet.packet_size = packet_lenght_size + ntou32(in_data.data()) + stream_in_.integrity_size;
-	if(stream_in_.current_packet.packet_size > config_.max_in_packet_size) {
-		set_error(spssh_invalid_packet, "Incoming packet exceeds maximum allowed size");
+	// use 64 bits so that the sums cannot wrap on any platform, and check both bounds before the size is used
+	// anywhere; the decrypt functions rely on the packet being at least one cipher block before the mac
+	std::uint64_t length = ntou32(in_data.data());
+	std::uint64_t packet_size = packet_lenght_size + length + stream_in_.integrity_size;
+	if(packet_size > config_.max_in_packet_size || packet_lenght_size + length < stream_in_.block_size) {
+		set_error(spssh_invalid_packet, "Incoming packet size is out of the allowed range");
 		return false;
 	}
+	stream_in_.current_packet.packet_size = std::size_t(packet_size);
 
 	stream_in_.current_packet.status = in_packet_status::waiting_data;
 	logger_.log(logger::debug_trace, "SSH try_decode_header [size={}]", stream_in_.current_packet.packet_size);

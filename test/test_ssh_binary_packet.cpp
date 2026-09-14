@@ -182,6 +182,31 @@ TEST_CASE("ssh_binary_packet oversized packet rejected", "[unit]") {
 	CHECK(bp.error() == spssh_invalid_packet);
 }
 
+TEST_CASE("ssh_binary_packet packet length bounds", "[unit]") {
+	ssh_config config;
+	ssh_binary_packet bp(config, test_log());
+	bp.set_random(test_rand);
+
+	// without a cipher the block size is the minimum 8, so the header plus length must reach 8 bytes
+	std::byte hdr[8] = {};
+
+	SECTION("length below one block is rejected") {
+		hdr[3] = std::byte(3); // 4 + 3 = 7 < 8
+		CHECK(!bp.try_decode_header(span{hdr, sizeof(hdr)}));
+		CHECK(bp.error() == spssh_invalid_packet);
+	}
+	SECTION("length of exactly one block is accepted") {
+		hdr[3] = std::byte(4); // 4 + 4 = 8
+		CHECK(bp.try_decode_header(span{hdr, sizeof(hdr)}));
+		CHECK(bp.error() == ssh_noerror);
+	}
+	SECTION("length that would wrap 32 bit arithmetic is rejected") {
+		hdr[0] = hdr[1] = hdr[2] = hdr[3] = std::byte(0xFF);
+		CHECK(!bp.try_decode_header(span{hdr, sizeof(hdr)}));
+		CHECK(bp.error() == spssh_invalid_packet);
+	}
+}
+
 TEST_CASE("ssh_binary_packet padding overflow rejected", "[unit]") {
 	ssh_config config;
 	config.random_packet_padding = false;
