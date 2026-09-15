@@ -18,6 +18,8 @@ inline bool requires_padding(const_mpint_span s) {
 }
 
 inline std::size_t encoded_size(const_mpint_span s) {
+	// leading zeros are not written, and the padding depends on the value that is left after removing them
+	s = to_mpint(s.data, s.sign);
 	std::size_t size = 4+s.data.size();
 
 	if(requires_padding(s))	{
@@ -119,13 +121,11 @@ public:
 	}
 
 	bool write(const_mpint_span mpint) {
+		// leading zeros are redundant, and whether a padding zero is needed depends on the most significant
+		// bit of the value that is left, not of the first byte we were given
+		mpint = to_mpint(mpint.data, mpint.sign);
 		const_span d = mpint.data;
-		// remove the trailing zeroes
-		while(!d.empty() && d[0] == std::byte{0x0}) {
-			d = d.subspan(1);
-		}
 		bool ret = false;
-		// write size and add required zero if most significant bit is set and it is unsigned integer
 		if(requires_padding(mpint))	{
 			ret = write(std::uint32_t(d.size()+1))
 				&& write(std::uint8_t{0x0});
@@ -194,13 +194,11 @@ public:
 	}
 
 	bool write(const_mpint_span mpint) {
+		// leading zeros are redundant, and whether a padding zero is needed depends on the most significant
+		// bit of the value that is left, not of the first byte we were given
+		mpint = to_mpint(mpint.data, mpint.sign);
 		const_span d = mpint.data;
-		// remove the trailing zeroes
-		while(!d.empty() && d[0] == std::byte{0x0}) {
-			d = d.subspan(1);
-		}
 		bool ret = false;
-		// write size and add required zero if most significant bit is set and it is unsigned integer
 		if(requires_padding(mpint))	{
 			ret = write(std::uint32_t(d.size()+1))
 				&& write(std::uint8_t{0x0});

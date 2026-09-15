@@ -77,6 +77,12 @@ inline const_mpint_span to_umpint(std::string_view mpint) {
 	return to_umpint(to_span(mpint));
 }
 
+/// drop redundant leading zero bytes of a big-endian unsigned integer in place
+inline void trim_leading_zeros(byte_vector& v) {
+	auto first = std::find_if(v.begin(), v.end(), [](std::byte b) { return b != std::byte{0x0}; });
+	v.erase(v.begin(), first);
+}
+
 template<class T> concept Byte = std::is_same_v<std::remove_cv_t<T>, std::byte>;
 
 /// std::span doesn't clamp the count to the size-offset which is what we want

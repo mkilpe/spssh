@@ -1,4 +1,7 @@
 
+#include "ssh/core/keys/private_key_op.hpp"
+#include "ssh/core/keys/public_key_op.hpp"
+#include "ssh/core/ssh_binary_util.hpp"
 #include "config.hpp"
 #include "crypto.hpp"
 #include "test_buffers.hpp"
@@ -244,6 +247,70 @@ TEST_CASE("key exchange interop", "[unit][crypto]") {
 	CHECK(secret1 == secret2);
 }
 #endif
+
+key_exchange_type const dh_exchanges[] = { key_exchange_type::dh_group14, key_exchange_type::dh_group16 };
+std::size_t const dh_exchange_count = sizeof(dh_exchanges) / sizeof(*dh_exchanges);
+
+// the generator g = 2 encodes as a single byte mpint and is a valid public key (private exponent 1),
+// so agreeing with it must give our own public key g^y mod p; this exercises a remote key that is
+// shorter than the group size, which otherwise only happens by chance when the top byte is zero
+static void check_dh_minimal_remote_key(crypto_test_context& ctx, key_exchange_type type) {
+	auto exc = ctx.construct_key_exchange(key_exchange_data_type{type}, ctx.call);
+	REQUIRE(exc);
+
+	std::byte const two[] = {std::byte{2}};
+	auto secret = exc->agree(two);
+	REQUIRE(!secret.empty());
+
+	auto pub = exc->public_key();
+	CHECK(secret == byte_vector(pub.begin(), pub.end()));
+}
+
+TEST_CASE("dh key exchange accepts minimal length remote key", "[unit][crypto]") {
+	auto i = GENERATE(range(std::size_t{}, dh_exchange_count));
+	CAPTURE(i);
+
+	crypto_test_context ctx;
+	check_dh_minimal_remote_key(ctx, dh_exchanges[i]);
+}
+
+#if defined(USE_NETTLE) && defined(USE_CRYPTOPP)
+TEST_CASE("dh key exchange accepts minimal length remote key on both backends", "[unit][crypto]") {
+	auto i = GENERATE(range(std::size_t{}, dh_exchange_count));
+	CAPTURE(i);
+
+	crypto_test_context nettle_ctx(test_log(), nettle::create_nettle_context());
+	crypto_test_context cryptopp_ctx(test_log(), cryptopp::create_cryptopp_context());
+	check_dh_minimal_remote_key(nettle_ctx, dh_exchanges[i]);
+	check_dh_minimal_remote_key(cryptopp_ctx, dh_exchanges[i]);
+}
+#endif
+
+TEST_CASE("ecdsa signature blob encodes r and s as positive mpints", "[unit][crypto]") {
+	// raw r || s as both backends produce them: fixed 32 byte halves, zero padded
+	byte_vector raw(64, std::byte{0x11});
+	// r: a leading zero followed by a byte with the high bit set, the case a peer rejected as a negative number
+	raw[0] = std::byte{0x00};
+	raw[1] = std::byte{0x80};
+	// s: two leading zeros
+	raw[32] = std::byte{0x00};
+	raw[33] = std::byte{0x00};
+	raw[34] = std::byte{0x7F};
+
+	auto blob = to_ecdsa_signature_blob(raw);
+
+	ssh_bf_reader reader(to_span(blob));
+	const_mpint_span r, s;
+	REQUIRE(reader.read(r));
+	REQUIRE(reader.read(s));
+	CHECK(r.sign == const_mpint_span::unsigned_t);
+	CHECK(s.sign == const_mpint_span::unsigned_t);
+	CHECK(r.data.size() == 31);
+	CHECK(s.data.size() == 30);
+
+	// and the parse used before verifying gets the original fixed width halves back
+	CHECK(ecdsa_sig(blob, 32) == raw);
+}
 
 TEST_CASE("ed25519 generate key", "[unit][crypto]") {
 	crypto_test_context ctx;

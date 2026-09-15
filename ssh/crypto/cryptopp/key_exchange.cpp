@@ -69,6 +69,8 @@ public:
 		is_valid_ = exchange_.GetGroupParameters().ValidateGroup(random_generator(), 3);
 		if(is_valid_) {
 			exchange_.GenerateKeyPair(random_generator(), to_uint8_ptr(privkey_), to_uint8_ptr(pubkey_));
+			// cryptopp gives the fixed group size, the contract is the minimal mpint form
+			trim_leading_zeros(pubkey_);
 		}
 	}
 
@@ -95,15 +97,21 @@ public:
 	}
 
 	byte_vector agree(const_span remote_public) override {
-		if(remote_public.size() != exchange_.PublicKeyLength()) {
+		// the remote key is an mpint value, so it is shorter than the group size whenever its top byte is
+		// zero; cryptopp wants exactly the group size, so left pad it
+		std::size_t const size = exchange_.PublicKeyLength();
+		if(remote_public.empty() || remote_public.size() > size) {
 			return {};
 		}
+		byte_vector padded(size);
+		copy(remote_public, safe_subspan(padded, size - remote_public.size()));
 
 		byte_vector res(exchange_.AgreedValueLength());
-		if(!exchange_.Agree(to_uint8_ptr(res), to_uint8_ptr(privkey_), to_uint8_ptr(remote_public))) {
+		if(!exchange_.Agree(to_uint8_ptr(res), to_uint8_ptr(privkey_), to_uint8_ptr(padded))) {
 			return {};
 		}
 
+		trim_leading_zeros(res);
 		return res;
 	}
 

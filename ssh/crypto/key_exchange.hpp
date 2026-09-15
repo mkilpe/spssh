@@ -13,10 +13,12 @@ public:
 
 	virtual key_exchange_type type() const = 0;
 
-	/// return the public key part that is exchanged with the remote side (the format depends on the key exchange used)
+	/// return the public key part that is exchanged with the remote side (the format depends on the key exchange used);
+	/// for the DH exchanges this is the unsigned big-endian value without leading zero bytes
 	virtual const_span public_key() const = 0;
 
-	/// calculate shared secret and return it
+	/// calculate shared secret and return it; for the DH exchanges the remote key is accepted in the same
+	/// minimal form (any length up to the group size) and the secret is returned without leading zero bytes
 	virtual byte_vector agree(const_span remote_public) = 0;
 };
 

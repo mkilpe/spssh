@@ -220,4 +220,41 @@ TEST_CASE("bf reader can_fit", "[unit]") {
 	CHECK(!empty.can_fit(1, 1));
 }
 
+// rfc 4251 mpint: minimal two's complement, so leading zeros go and a zero byte is added only when the
+// most significant bit of what is left is set
+static void check_mpint_encoding(const_span value, std::string_view expected) {
+	std::byte buf[16] = {};
+	ssh_bf_writer w(buf);
+	REQUIRE(w.write(const_mpint_span{value}));
+	CHECK(to_string_view(w.used_span()) == expected);
+	CHECK(w.used_size() == encoded_size(const_mpint_span{value}));
+
+	std::string out;
+	string_binout bo(out);
+	ssh_bf_binout_writer bw(bo);
+	REQUIRE(bw.write(const_mpint_span{value}));
+	CHECK(out == expected);
+
+	// and it reads back as the same non-negative value
+	ssh_bf_reader r(w.used_span());
+	const_mpint_span back;
+	REQUIRE(r.read(back));
+	CHECK(back.sign == const_mpint_span::unsigned_t);
+	CHECK(to_string_view(back.data) == to_string_view(to_umpint(value).data));
+}
+
+TEST_CASE("mpint encoding of leading zeros and high bit", "[unit]") {
+	using namespace std::literals;
+	std::byte const hi[] = {std::byte{0x80}};
+	std::byte const zero_hi[] = {std::byte{0x00}, std::byte{0x80}};
+	std::byte const zeros_lo[] = {std::byte{0x00}, std::byte{0x00}, std::byte{0x7F}};
+	std::byte const lo[] = {std::byte{0x7F}};
+
+	check_mpint_encoding(hi, "\x00\x00\x00\x02\x00\x80"sv);
+	// the leading zero must not hide the high bit of the real top byte
+	check_mpint_encoding(zero_hi, "\x00\x00\x00\x02\x00\x80"sv);
+	check_mpint_encoding(zeros_lo, "\x00\x00\x00\x01\x7F"sv);
+	check_mpint_encoding(lo, "\x00\x00\x00\x01\x7F"sv);
+}
+
 }
