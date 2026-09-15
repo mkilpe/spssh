@@ -149,6 +149,13 @@ struct test_client : test_context, client_config, ssh_client {
 		}
 		return ssh_client::handle_transport_packet(type, payload);
 	}
+	// an exchange must never start while output is still pending, otherwise its packets could not be sent
+	void on_state_change(ssh_state old_s, ssh_state new_s) override {
+		if(new_s == ssh_state::kex && !can_start_kex()) {
+			++kex_started_congested;
+		}
+		ssh_client::on_state_change(old_s, new_s);
+	}
 
 	test_data_channel* get_channel(std::size_t id = 0) const {
 		assert(id < ids.size());
@@ -158,6 +165,7 @@ struct test_client : test_context, client_config, ssh_client {
 
 	std::vector<channel_id> ids{};
 	std::size_t non_kex_packets_during_kex{};
+	std::size_t kex_started_congested{};
 };
 
 
@@ -194,10 +202,18 @@ struct test_server : test_context, server_config, ssh_server {
 		}
 		return ssh_server::handle_transport_packet(type, payload);
 	}
+	// an exchange must never start while output is still pending, otherwise its packets could not be sent
+	void on_state_change(ssh_state old_s, ssh_state new_s) override {
+		if(new_s == ssh_state::kex && !can_start_kex()) {
+			++kex_started_congested;
+		}
+		ssh_server::on_state_change(old_s, new_s);
+	}
 
 	std::size_t out_data_size{};
 	test_auth_data auth_data;
 	std::size_t non_kex_packets_during_kex{};
+	std::size_t kex_started_congested{};
 };
 }
 
@@ -341,6 +357,8 @@ TEST_CASE("connection test - rekey", "[unit]") {
 	// the rekey happened, and the server (initiator) sent only kex packets between its kexinit and newkeys
 	CHECK(client.local_kexinit() != kexinit_before);
 	CHECK(client.non_kex_packets_during_kex == 0);
+	CHECK(server.kex_started_congested == 0);
+	CHECK(client.kex_started_congested == 0);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();
@@ -371,10 +389,36 @@ TEST_CASE("connection test - rekey initiated by client", "[unit]") {
 	// the rekey happened, and the client (initiator) sent only kex packets between its kexinit and newkeys
 	CHECK(server.local_kexinit() != kexinit_before);
 	CHECK(server.non_kex_packets_during_kex == 0);
+	CHECK(server.kex_started_congested == 0);
+	CHECK(client.kex_started_congested == 0);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();
 
+	REQUIRE(run(client, server));
+}
+
+TEST_CASE("connection test - rekey with congested output", "[unit]") {
+	// a short rekey interval with the default large window: every exchange ends with a long queue of held channel
+	// data, and the next exchange is already due while that queue is still draining into a full output buffer
+	std::size_t const data_size = 6*1024*1024;
+
+	server_config conf = test_server_config();
+	conf.rekey_data_interval = 256*1024;
+
+	test_server server(data_size, 128*1024, std::move(conf));
+	test_client client;
+
+	REQUIRE(run(client, server));
+	REQUIRE(client.open_channel());
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(server.kex_started_congested == 0);
+	REQUIRE(client.check_data(data_size));
+
+	client.close_channel();
 	REQUIRE(run(client, server));
 }
 

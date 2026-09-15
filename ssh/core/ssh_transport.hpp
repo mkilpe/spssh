@@ -77,6 +77,9 @@ protected:
 
 	kex_init_data const& kex_data() const { return kex_data_; }
 
+	/// true when a key exchange may be started: the pending output has drained and nothing is held from a previous one
+	bool can_start_kex() const;
+
 private: // init & generic packet handling
 
 	void handle_version_exchange(in_buffer& in);

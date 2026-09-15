@@ -146,6 +146,12 @@ handler_result ssh_transport::handle_binary_packet(in_buffer& in) {
 	return res;
 }
 
+bool ssh_transport::can_start_kex() const {
+	// starting an exchange needs room for our kexinit, and the packets held back by the previous exchange must
+	// be out before another one holds the output again; both are true once the pending output has drained
+	return stream_out_.data.empty() && kex_pending_out_.empty();
+}
+
 void ssh_transport::start_kex() {
 	set_state(ssh_state::kex);
 	if(!send_kex_init(config_.guess_kex_packet)) {
@@ -169,7 +175,7 @@ bool ssh_transport::do_rekeying() {
 		if(out_data_reached) {
 			logger_.log(logger::debug_trace, "rekey data interval for out has been reached [transferred={}, limit={}]", stream_out_.transferred_bytes, config_.rekey_data_interval);
 		}
-		res = time_passed || in_data_reached || out_data_reached;
+		res = (time_passed || in_data_reached || out_data_reached) && can_start_kex();
 		if(res) {
 			start_kex();
 		}
@@ -206,8 +212,8 @@ transport_op ssh_transport::process(in_buffer& in) {
 		}
 
 		if(handle_binary_packet(in) == handler_result::pending && state() != ssh_state::disconnected) {
-			logger_.log(logger::debug_trace, "action pending");
-			return transport_op::pending_action;
+			// a handler may also be waiting for the output to drain, so ask for a write first if there is one
+			return stream_out_.data.empty() ? transport_op::pending_action : transport_op::want_write_more;
 		}
 
 		if(flush_service_ && state() == ssh_state::transport) {
@@ -248,7 +254,11 @@ handler_result ssh_transport::process_transport_payload(span payload) {
 	handler_result result = handler_result::handled;
 	if(!res) {
 		if(state() == ssh_state::transport && type == ssh_kexinit)	{
-			//rekeying
+			// rekeying started by the remote; if our answer does not fit in the output yet, handle this
+			// packet again once the output has drained
+			if(!can_start_kex()) {
+				return handler_result::pending;
+			}
 			start_kex();
 		}
 
