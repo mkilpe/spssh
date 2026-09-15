@@ -28,8 +28,8 @@ protected:
 	void on_read_file(sftp::call_handle, sftp::read_file_data result) override;
 	void on_write_file(sftp::call_handle, sftp::write_file_data result) override;
 	void on_close_file(sftp::call_handle, sftp::close_file_data result) override;
-	void on_stat_file(sftp::call_handle, sftp::state_file_data result) override;
-	void on_setstat_file(sftp::call_handle, sftp::setstate_file_data result) override;
+	void on_stat_file(sftp::call_handle, sftp::stat_file_data result) override;
+	void on_setstat_file(sftp::call_handle, sftp::setstat_file_data result) override;
 	void on_open_dir(sftp::call_handle, sftp::open_dir_data result) override;
 	void on_read_dir(sftp::call_handle, sftp::read_dir_data result) override;
 	void on_close_dir(sftp::call_handle, sftp::close_dir_data result) override;

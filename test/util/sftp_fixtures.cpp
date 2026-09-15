@@ -90,12 +90,12 @@ void recording_client_callback::on_close_file(sftp::call_handle h, sftp::close_f
 	events.push_back({"close_file", h});
 }
 
-void recording_client_callback::on_stat_file(sftp::call_handle h, sftp::state_file_data r) {
+void recording_client_callback::on_stat_file(sftp::call_handle h, sftp::stat_file_data r) {
 	events.push_back({"stat_file", h});
 	last_attrs = std::move(r.attrs);
 }
 
-void recording_client_callback::on_setstat_file(sftp::call_handle h, sftp::setstate_file_data) {
+void recording_client_callback::on_setstat_file(sftp::call_handle h, sftp::setstat_file_data) {
 	events.push_back({"setstat_file", h});
 }
 

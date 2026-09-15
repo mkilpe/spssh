@@ -215,13 +215,10 @@ TEST_CASE("sftp e2e file upload and download", "[unit][sftp]") {
 		auto h = t.client.sftp().read_file(fh, rx.size(), chunk);
 		REQUIRE(h != 0);
 		REQUIRE(t.pump());
-		if(t.cb().last_event() == "read_file") {
-			rx.insert(rx.end(), t.cb().last_data.begin(), t.cb().last_data.end());
-		} else {
-			REQUIRE(t.cb().last_event() == "failure");
-			REQUIRE(t.cb().last_error.code() == fx_eof);
-			eof = true;
-		}
+		// end of file comes as a read with no data, never as a failure
+		REQUIRE(t.cb().last_event() == "read_file");
+		eof = t.cb().last_data.empty();
+		rx.insert(rx.end(), t.cb().last_data.begin(), t.cb().last_data.end());
 	}
 	REQUIRE(eof);
 	CHECK(rx == data);
@@ -253,12 +250,12 @@ TEST_CASE("sftp e2e directory operations", "[unit][sftp]") {
 	}
 	CHECK(found_a);
 
-	// second read_dir gives eof as failure
+	// the second read_dir reaches the end of the listing, which is an empty result rather than a failure
 	auto h = t.client.sftp().read_dir(dh);
 	REQUIRE(h != 0);
 	REQUIRE(t.pump());
-	REQUIRE(t.cb().last_event() == "failure");
-	CHECK(t.cb().last_error.code() == fx_eof);
+	REQUIRE(t.cb().last_event() == "read_dir");
+	CHECK(t.cb().last_files.empty());
 
 	t.call([&]{ return t.client.sftp().close_dir(dh); }, "close_dir");
 

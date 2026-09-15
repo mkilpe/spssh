@@ -386,8 +386,22 @@ TEST_CASE("sftp client failure handling", "[unit][sftp]") {
 		CHECK(fx.cb->last_error.message() == "no such file");
 		CHECK(fx.client.pending_calls() == 0);
 	}
-	SECTION("eof on read -> on_failure with eof code") {
+	SECTION("eof on read -> on_read_file with empty data, not a failure") {
 		auto h = fx.client.read_file("fh", 1000, 100);
+		fx.feed(build_packet<status_response>(h, std::uint32_t(fx_eof), std::string_view("End of file"), std::string_view("")));
+		CHECK(cb_event(fx, "read_file", h));
+		CHECK(fx.cb->last_data.empty());
+		CHECK(fx.client.pending_calls() == 0);
+	}
+	SECTION("eof on read_dir -> on_read_dir with no files, not a failure") {
+		auto h = fx.client.read_dir("dh");
+		fx.feed(build_packet<status_response>(h, std::uint32_t(fx_eof), std::string_view("End of file"), std::string_view("")));
+		CHECK(cb_event(fx, "read_dir", h));
+		CHECK(fx.cb->last_files.empty());
+		CHECK(fx.client.pending_calls() == 0);
+	}
+	SECTION("eof on anything else is still a failure") {
+		auto h = fx.client.stat("/x");
 		fx.feed(build_packet<status_response>(h, std::uint32_t(fx_eof), std::string_view("End of file"), std::string_view("")));
 		CHECK(cb_event(fx, "failure", h));
 		CHECK(fx.cb->last_error.code() == fx_eof);

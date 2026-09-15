@@ -94,14 +94,14 @@ void ssh_test_client::on_close_file(sftp::call_handle id, sftp::close_file_data 
 
 }
 
-void ssh_test_client::on_stat_file(sftp::call_handle, sftp::state_file_data result) {
+void ssh_test_client::on_stat_file(sftp::call_handle, sftp::stat_file_data result) {
 	logger_.log(logger::debug_trace, "on_stat_file");
 	std::osyncstream out(std::cout);
 	out << "fstat = " << to_string(result.attrs) << std::endl;
 	handler_.emit<events::command_prompt>();
 }
 
-void ssh_test_client::on_setstat_file(sftp::call_handle, sftp::setstate_file_data result) {
+void ssh_test_client::on_setstat_file(sftp::call_handle, sftp::setstat_file_data result) {
 	logger_.log(logger::debug_trace, "on_setstat_file");
 	handler_.emit<events::command_prompt>();
 }
@@ -129,16 +129,24 @@ void ssh_test_client::on_open_dir(sftp::call_handle id, sftp::open_dir_data resu
 void ssh_test_client::on_read_dir(sftp::call_handle id, sftp::read_dir_data result) {
 	logger_.log(logger::debug_trace, "on_read_dir");
 
-	// lets try to read more
-	if(success_cb_) {
-		success_cb_();
+	if(result.files.empty()) {
+		// end of the listing, close the directory
+		success_cb_ = nullptr;
+		if(fail_cb_) {
+			fail_cb_();
+			fail_cb_ = nullptr;
+		}
+	} else {
+		// lets try to read more
+		if(success_cb_) {
+			success_cb_();
+		}
+		std::osyncstream out(std::cout);
+		for(auto&& v : result.files) {
+			out << v.longname << "\n";
+		}
+		out << std::flush;
 	}
-
-	std::osyncstream out(std::cout);
-	for(auto&& v : result.files) {
-		out << v.longname << "\n";
-	}
-	out << std::flush;
 }
 
 void ssh_test_client::on_close_dir(sftp::call_handle id, sftp::close_dir_data result) {

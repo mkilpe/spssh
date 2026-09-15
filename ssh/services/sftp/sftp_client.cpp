@@ -60,7 +60,7 @@ void sftp_client::call_status_result(call_handle id, sftp_error err) {
 				case fxp_write:    callback_->on_write_file(id, write_file_data{}); break;
 				case fxp_close:    callback_->on_close_file(id, close_file_data{}); break;
 				case fxp_closedir: callback_->on_close_dir(id, close_dir_data{}); break;
-				case fxp_fsetstat: callback_->on_setstat_file(id, setstate_file_data{}); break;
+				case fxp_fsetstat: callback_->on_setstat_file(id, setstat_file_data{}); break;
 				case fxp_remove:   callback_->on_remove_file(id, remove_file_data{}); break;
 				case fxp_rename:   callback_->on_rename(id, rename_data{}); break;
 				case fxp_mkdir:    callback_->on_mkdir(id, mkdir_data{}); break;
@@ -76,8 +76,18 @@ void sftp_client::call_status_result(call_handle id, sftp_error err) {
 	} else {
 		log_.log(logger::debug_trace, "sftp_client::call_status_result failure [code={}, msg={}]", err.code(), err.message());
 
+		// end of file is how reading a file or a directory normally ends, so it is reported as an empty read
+		// rather than a failure
+		auto it = remote_calls_.find(id);
+		auto type = it != remote_calls_.end() ? it->second.type : fxp_status;
 		remote_calls_.erase(id);
-		callback_->on_failure(id, std::move(err));
+		if(err.code() == status_code::fx_eof && type == fxp_read) {
+			callback_->on_read_file(id, read_file_data{});
+		} else if(err.code() == status_code::fx_eof && type == fxp_readdir) {
+			callback_->on_read_dir(id, read_dir_data{});
+		} else {
+			callback_->on_failure(id, std::move(err));
+		}
 	}
 }
 
@@ -230,7 +240,7 @@ void sftp_client::call_attr_result(call_handle id, file_attributes attrs) {
 			// stats
 			case fxp_stat: [[fallthrough]];
 			case fxp_lstat: callback_->on_stat(id, stat_data{std::move(attrs)}); break;
-			case fxp_fstat: callback_->on_stat_file(id, state_file_data{std::move(attrs)}); break;
+			case fxp_fstat: callback_->on_stat_file(id, stat_file_data{std::move(attrs)}); break;
 			default:
 			{
 				log_.log(logger::debug_trace, "Invalid attrs packet for {} [call={}]", it->second.type, id);

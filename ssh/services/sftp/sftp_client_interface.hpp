@@ -46,8 +46,8 @@ struct open_file_data;
 struct read_file_data;
 struct write_file_data;
 struct close_file_data;
-struct state_file_data;
-struct setstate_file_data;
+struct stat_file_data;
+struct setstat_file_data;
 struct open_dir_data;
 struct read_dir_data;
 struct close_dir_data;
@@ -62,6 +62,8 @@ struct symlink_data;
 struct realpath_data;
 struct extended_data;
 
+/// The spans and string views inside the result structs point into the received packet and are valid only
+/// for the duration of the callback; copy whatever has to outlive it.
 class sftp_client_callback {
 public:
 	virtual ~sftp_client_callback() = default;
@@ -69,17 +71,20 @@ public:
 	/// fxp_version packet received, return false if the connection should not be accepted.
 	virtual bool on_version(std::uint32_t version, std::vector<ext_data_view> const& extensions) = 0;
 
-	/// called if any of the commands after agreeing on version fails
+	/// called if any of the commands after agreeing on version fails (end of file on read_file and end of the
+	/// listing on read_dir are not failures, see below)
 	virtual void on_failure(call_handle, sftp_error) = 0;
 
 	virtual void on_open_file(call_handle, open_file_data result) = 0;
+	/// empty data means end of file
 	virtual void on_read_file(call_handle, read_file_data result) = 0;
 	virtual void on_write_file(call_handle, write_file_data result) = 0;
 	virtual void on_close_file(call_handle, close_file_data result) = 0;
-	virtual void on_stat_file(call_handle, state_file_data result) = 0;
-	virtual void on_setstat_file(call_handle, setstate_file_data result) = 0;
+	virtual void on_stat_file(call_handle, stat_file_data result) = 0;
+	virtual void on_setstat_file(call_handle, setstat_file_data result) = 0;
 
 	virtual void on_open_dir(call_handle, open_dir_data result) = 0;
+	/// empty files means end of the listing
 	virtual void on_read_dir(call_handle, read_dir_data result) = 0;
 	virtual void on_close_dir(call_handle, close_dir_data result) = 0;
 
@@ -103,7 +108,7 @@ struct open_file_data {
 };
 
 struct read_file_data {
-	const_span data;
+	const_span data; // empty at end of file
 };
 
 struct write_file_data {
@@ -112,11 +117,11 @@ struct write_file_data {
 struct close_file_data {
 };
 
-struct state_file_data {
+struct stat_file_data {
 	file_attributes attrs;
 };
 
-struct setstate_file_data {
+struct setstat_file_data {
 };
 
 
@@ -131,7 +136,7 @@ struct file_info_view {
 };
 
 struct read_dir_data {
-	std::vector<file_info_view> files;
+	std::vector<file_info_view> files; // empty at end of the listing
 };
 
 struct close_dir_data {
