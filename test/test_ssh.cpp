@@ -38,6 +38,15 @@ struct test_client : test_context, client_config, ssh_client {
 		}
 		return nullptr;
 	}
+
+	bool handle_basic_packets(ssh_packet_type type, const_span payload) override {
+		if(type == ssh_unimplemented) {
+			++unimplemented_received;
+		}
+		return ssh_client::handle_basic_packets(type, payload);
+	}
+
+	std::size_t unimplemented_received{};
 };
 
 struct test_server : test_context, server_config, ssh_server {
@@ -400,6 +409,40 @@ TEST_CASE("ssh pending packet survives input buffer relocation", "[unit]") {
 	CHECK(server.probe->last_type == probe_service::pending_type);
 	CHECK(server.probe->last_payload == body);
 	CHECK(server.state() == ssh_state::transport);
+}
+
+TEST_CASE("ssh userauth request after success is silently ignored", "[unit]") {
+	probe_server server(test_log(), test_server_config());
+	test_client client(test_log(), test_client_config());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+	REQUIRE(server.user_authenticated());
+	REQUIRE(server.probe != nullptr);
+
+	// authentication messages after the authentication has already succeeded: a userauth request, an info
+	// response and a method specific message, followed by a normal packet
+	byte_vector auth_req{std::byte(ssh_userauth_request), std::byte('x')};
+	byte_vector info_resp{std::byte(ssh_userauth_info_response), std::byte('x')};
+	byte_vector method_specific{std::byte(60), std::byte('x')};
+	byte_vector known_pkt{std::byte(probe_service::known_type), std::byte('y')};
+	REQUIRE(client.send_payload(auth_req));
+	REQUIRE(client.send_payload(info_resp));
+	REQUIRE(client.send_payload(method_specific));
+	REQUIRE(client.send_payload(known_pkt));
+
+	for(int i = 0; i < 20; ++i) {
+		client.process(server.out_buf);
+		server.process(client.out_buf);
+	}
+
+	// rfc 4252 sections 5.1 and 5.3: ignored silently, so no unimplemented reply and the service never sees them
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.unimplemented_received == 0);
+	CHECK(server.probe->calls == 1);
+	CHECK(server.probe->last_type == probe_service::known_type);
 }
 
 }

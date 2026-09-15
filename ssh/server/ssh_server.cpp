@@ -61,6 +61,11 @@ handler_result ssh_server::handle_transport_packet(ssh_packet_type type, const_s
 	if(type == ssh_service_request) {
 		handle_service_request(payload);
 		return handler_result::handled;
+	} else if(user_authenticated_ && type >= 50 && type < 80) {
+		// rfc 4252 section 5.3: all authentication related messages (numbers 50 to 79, section 6) received after
+		// userauth success are silently ignored
+		logger_.log(logger::debug, "SSH ignoring authentication message after successful authentication [type={}]", int(type));
+		return handler_result::handled;
 	} else if(service_) {
 		return process_service(type, payload);
 	}
