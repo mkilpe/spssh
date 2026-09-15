@@ -4,6 +4,8 @@
 #include "util.hpp"
 #include "ssh/crypto/private_key.hpp"
 #include "ssh/client/ssh_client.hpp"
+#include "ssh/core/packet_ser_impl.hpp"
+#include "ssh/core/protocol.hpp"
 #include "ssh/server/ssh_server.hpp"
 #include "test/util/server_auth_service.hpp"
 
@@ -46,6 +48,23 @@ struct test_client : test_context, client_config, ssh_client {
 		return ssh_client::handle_basic_packets(type, payload);
 	}
 
+	bool strict() const { return strict_kex_negotiated(); }
+	byte_vector local_kexinit_packet() const { return kex_data().local_kexinit; }
+
+	// the sequence numbers at the moment an exchange completes; with strict kex both restart from zero
+	void on_state_change(ssh_state old_s, ssh_state new_s) override {
+		if(new_s == ssh_state::transport) {
+			++kex_done_count;
+			seq_in_at_done = in_sequence();
+			seq_out_at_done = out_sequence();
+		}
+		ssh_client::on_state_change(old_s, new_s);
+	}
+
+	int kex_done_count{};
+	std::uint32_t seq_in_at_done{};
+	std::uint32_t seq_out_at_done{};
+
 	std::size_t unimplemented_received{};
 };
 
@@ -75,6 +94,23 @@ struct test_server : test_context, server_config, ssh_server {
 		auth_data.add_password("test", "some");
 		auth.service_auth["dummy-service"] = req_auth{};
 	}
+
+	bool strict() const { return strict_kex_negotiated(); }
+	byte_vector local_kexinit_packet() const { return kex_data().local_kexinit; }
+
+	// the sequence numbers at the moment an exchange completes; with strict kex both restart from zero
+	void on_state_change(ssh_state old_s, ssh_state new_s) override {
+		if(new_s == ssh_state::transport) {
+			++kex_done_count;
+			seq_in_at_done = in_sequence();
+			seq_out_at_done = out_sequence();
+		}
+		ssh_server::on_state_change(old_s, new_s);
+	}
+
+	int kex_done_count{};
+	std::uint32_t seq_in_at_done{};
+	std::uint32_t seq_out_at_done{};
 
 	test_auth_data auth_data;
 };
@@ -443,6 +479,159 @@ TEST_CASE("ssh userauth request after success is silently ignored", "[unit]") {
 	CHECK(client.unimplemented_received == 0);
 	CHECK(server.probe->calls == 1);
 	CHECK(server.probe->last_type == probe_service::known_type);
+}
+
+namespace {
+
+std::vector<std::string> kex_names_of(byte_vector const& kexinit) {
+	ser::kexinit::load p(ser::match_type_t, kexinit);
+	REQUIRE(p);
+	auto& [cookie, kexes, host_keys, c1, c2, m1, m2, z1, z2, l1, l2, first, reserved] = p;
+	return std::vector<std::string>(kexes.begin(), kexes.end());
+}
+
+bool has_name(std::vector<std::string> const& names, std::string_view name) {
+	return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+}
+
+TEST_CASE("strict kex negotiated and sequence numbers reset", "[unit]") {
+	test_server server(test_log(), test_server_config());
+	test_client client(test_log(), test_client_config());
+
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+
+	// both offer it, standard and pre-standard name, and both see the other offering it
+	auto client_names = kex_names_of(client.local_kexinit_packet());
+	auto server_names = kex_names_of(server.local_kexinit_packet());
+	CHECK(has_name(client_names, "kex-strict-c"));
+	CHECK(has_name(client_names, "kex-strict-c-v00@openssh.com"));
+	CHECK(has_name(server_names, "kex-strict-s"));
+	CHECK(has_name(server_names, "kex-strict-s-v00@openssh.com"));
+	CHECK(client.strict());
+	CHECK(server.strict());
+
+	// and both directions restarted from zero right after newkeys
+	REQUIRE(client.kex_done_count == 1);
+	REQUIRE(server.kex_done_count == 1);
+	CHECK(client.seq_in_at_done == 0);
+	CHECK(client.seq_out_at_done == 0);
+	CHECK(server.seq_in_at_done == 0);
+	CHECK(server.seq_out_at_done == 0);
+}
+
+TEST_CASE("strict kex off when only one side offers it", "[unit]") {
+	server_config sconf = test_server_config();
+	client_config cconf = test_client_config();
+	bool server_offers = true;
+	SECTION("server does not offer") { sconf.strict_kex = false; server_offers = false; }
+	SECTION("client does not offer") { cconf.strict_kex = false; }
+
+	test_server server(test_log(), std::move(sconf));
+	test_client client(test_log(), std::move(cconf));
+	server.set_test_auth();
+	client.set_test_auth();
+
+	CHECK(run(client, server));
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+
+	CHECK(!client.strict());
+	CHECK(!server.strict());
+	CHECK(has_name(kex_names_of(server.local_kexinit_packet()), "kex-strict-s") == server_offers);
+
+	// no reset, so the counters keep counting from the start of the connection
+	REQUIRE(client.kex_done_count == 1);
+	CHECK(client.seq_in_at_done > 0);
+	CHECK(client.seq_out_at_done > 0);
+	CHECK(server.seq_in_at_done > 0);
+	CHECK(server.seq_out_at_done > 0);
+}
+
+TEST_CASE("strict kex rejects ignore during the initial exchange", "[unit]") {
+	server_config sconf = test_server_config();
+	bool strict = true;
+	SECTION("strict") {}
+	SECTION("not strict") { sconf.strict_kex = false; strict = false; }
+
+	test_server server(test_log(), std::move(sconf));
+	test_client client(test_log(), test_client_config());
+	server.set_test_auth();
+	client.set_test_auth();
+
+	// versions exchanged and both kexinits sent, then an ignore packet while the exchange is still running
+	client.process(server.out_buf);
+	server.process(client.out_buf);
+	client.process(server.out_buf);
+	REQUIRE(client.state() == ssh_state::kex);
+	client.send_ignore(10);
+
+	if(strict) {
+		CHECK(!run(client, server));
+		CHECK(server.state() == ssh_state::disconnected);
+		CHECK(server.error() == ssh_error_code::ssh_protocol_error);
+	} else {
+		CHECK(run(client, server));
+		CHECK(server.user_authenticated());
+	}
+}
+
+TEST_CASE("strict kex requires kexinit to be the first packet", "[unit]") {
+	server_config sconf = test_server_config();
+	bool strict = true;
+	SECTION("strict") {}
+	SECTION("not strict") { sconf.strict_kex = false; strict = false; }
+
+	test_server server(test_log(), std::move(sconf));
+	test_client client(test_log(), test_client_config());
+	server.set_test_auth();
+	client.set_test_auth();
+
+	// the client has sent its version only, then an ignore packet goes out before its kexinit
+	client.process(server.out_buf);
+	REQUIRE(client.state() == ssh_state::version_exchange);
+	client.send_ignore(10);
+
+	if(strict) {
+		CHECK(!run(client, server));
+		CHECK(server.state() == ssh_state::disconnected);
+		CHECK(server.error() == ssh_error_code::ssh_protocol_error);
+	} else {
+		CHECK(run(client, server));
+		CHECK(server.user_authenticated());
+	}
+}
+
+TEST_CASE("required strict kex refuses a remote that does not offer it", "[unit]") {
+	server_config sconf = test_server_config();
+	client_config cconf = test_client_config();
+	bool refused = false;
+	SECTION("server requires, client offers") { sconf.require_strict_kex = true; }
+	SECTION("server requires, client does not offer") { sconf.require_strict_kex = true; cconf.strict_kex = false; refused = true; }
+	SECTION("client requires, server does not offer") { cconf.require_strict_kex = true; sconf.strict_kex = false; refused = true; }
+
+	test_server server(test_log(), std::move(sconf));
+	test_client client(test_log(), std::move(cconf));
+	server.set_test_auth();
+	client.set_test_auth();
+
+	if(refused) {
+		CHECK(!run(client, server));
+		CHECK(client.state() == ssh_state::disconnected);
+		CHECK(server.state() == ssh_state::disconnected);
+		CHECK((client.error() == ssh_error_code::ssh_key_exchange_failed || server.error() == ssh_error_code::ssh_key_exchange_failed));
+	} else {
+		CHECK(run(client, server));
+		CHECK(client.strict());
+		CHECK(server.strict());
+		CHECK(server.user_authenticated());
+	}
 }
 
 }

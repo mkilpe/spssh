@@ -69,6 +69,7 @@ IANA name allocation: https://www.iana.org/assignments/ssh-parameters/ssh-parame
 Ed25519 pub key algos: https://datatracker.ietf.org/doc/html/rfc8709
 EdDSA: https://datatracker.ietf.org/doc/html/rfc8032
 Elliptic Curves for Security: https://datatracker.ietf.org/doc/html/rfc7748
+strict KEX: https://datatracker.ietf.org/doc/draft-ietf-sshm-strict-kex/02/
 
 Other:
 Asym key package: https://datatracker.ietf.org/doc/html/rfc5958

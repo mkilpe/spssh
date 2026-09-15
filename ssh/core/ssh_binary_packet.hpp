@@ -82,8 +82,9 @@ public:
 	ssh_config const& config() const;
 public: //input
 	void set_random(random&);
-	void set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
-	void set_output_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
+	/// install new keys; with reset_sequence the packet sequence number restarts from zero (strict key exchange)
+	void set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence = false);
+	void set_output_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence = false);
 	bool try_decode_header(span in_data);
 	span decrypt_packet(const_span in_data, span out_data);
 
@@ -105,7 +106,7 @@ protected: //output
 	void encrypt_packet(const_span data, span out);
 
 private:
-	void set_crypto(stream_crypto&, std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac);
+	void set_crypto(stream_crypto&, std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence);
 	bool resize_out_buffer(std::size_t);
 	void shrink_out_buffer();
 

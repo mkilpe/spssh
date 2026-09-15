@@ -80,6 +80,11 @@ protected:
 	/// true when a key exchange may be started: the pending output has drained and nothing is held from a previous one
 	bool can_start_kex() const;
 
+	/// strict key exchange (draft-ietf-sshm-strict-kex) was negotiated with the remote
+	bool strict_kex_negotiated() const { return strict_kex_; }
+	std::uint32_t in_sequence() const { return stream_in_.packet_sequence; }
+	std::uint32_t out_sequence() const { return stream_out_.packet_sequence; }
+
 private: // init & generic packet handling
 
 	void handle_version_exchange(in_buffer& in);
@@ -92,6 +97,8 @@ private: // init & generic packet handling
 
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();
+	bool remote_offers_strict_kex(std::vector<std::string_view> const& kexes) const;
+	bool forbidden_by_strict_kex(ssh_packet_type type) const;
 
 	bool do_rekeying();
 	void start_kex();
@@ -116,6 +123,7 @@ private: // data
 
 	// kex data
 	bool kexinit_received_{};
+	bool strict_kex_{};
 	byte_vector kex_cookie_;
 
 	kex_init_data kex_data_;

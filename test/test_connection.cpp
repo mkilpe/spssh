@@ -173,6 +173,10 @@ struct test_client : test_context, client_config, ssh_client {
 		if(new_s == ssh_state::kex && !can_start_kex()) {
 			++kex_started_congested;
 		}
+		if(new_s == ssh_state::transport) {
+			// with strict kex the remote's newkeys, which completes the exchange, restarts the incoming sequence
+			max_in_seq_at_done = std::max(max_in_seq_at_done, in_sequence());
+		}
 		ssh_client::on_state_change(old_s, new_s);
 	}
 
@@ -185,6 +189,7 @@ struct test_client : test_context, client_config, ssh_client {
 	std::vector<channel_id> ids{};
 	std::size_t non_kex_packets_during_kex{};
 	std::size_t kex_started_congested{};
+	std::uint32_t max_in_seq_at_done{};
 };
 
 
@@ -226,6 +231,10 @@ struct test_server : test_context, server_config, ssh_server {
 		if(new_s == ssh_state::kex && !can_start_kex()) {
 			++kex_started_congested;
 		}
+		if(new_s == ssh_state::transport) {
+			// with strict kex the remote's newkeys, which completes the exchange, restarts the incoming sequence
+			max_in_seq_at_done = std::max(max_in_seq_at_done, in_sequence());
+		}
 		ssh_server::on_state_change(old_s, new_s);
 	}
 
@@ -233,6 +242,7 @@ struct test_server : test_context, server_config, ssh_server {
 	test_auth_data auth_data;
 	std::size_t non_kex_packets_during_kex{};
 	std::size_t kex_started_congested{};
+	std::uint32_t max_in_seq_at_done{};
 	bool echo{};
 };
 }
@@ -379,6 +389,9 @@ TEST_CASE("connection test - rekey", "[unit]") {
 	CHECK(client.non_kex_packets_during_kex == 0);
 	CHECK(server.kex_started_congested == 0);
 	CHECK(client.kex_started_congested == 0);
+	// strict kex: every one of the exchanges restarted the sequence numbers
+	CHECK(client.max_in_seq_at_done == 0);
+	CHECK(server.max_in_seq_at_done == 0);
 
 	REQUIRE(client.check_data(data_size));
 	client.close_channel();

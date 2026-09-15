@@ -7,6 +7,7 @@ SSH Version 2 client/server library for building SSH-based protocols with modern
 ## Features
 
 - Full SSH transport layer (RFC 4253) with re-keying support
+- Strict key exchange ([draft-ietf-sshm-strict-kex](https://datatracker.ietf.org/doc/draft-ietf-sshm-strict-kex/), the Terrapin mitigation): offered by default in both the standard and the pre-standard OpenSSH form, interoperable with OpenSSH; can be made mandatory with `require_strict_kex`
 - SSH client and server implementations
 - SFTP version 3 client and server (draft-ietf-secsh-filexfer-02), interoperable with OpenSSH
 - Local filesystem SFTP server backend with path confinement, or implement your own backend

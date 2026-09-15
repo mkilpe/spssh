@@ -45,6 +45,12 @@ struct ssh_config {
 	// ever answering is not going to complete it, so the connection is closed
 	std::uint32_t max_kex_pending_out_size{8*1024*1024};
 
+	// offer strict key exchange (draft-ietf-sshm-strict-kex); when the remote offers it too, the packet sequence
+	// numbers are reset after every newkeys and nothing but the exchange itself is accepted during the initial one
+	bool strict_kex{true};
+	// refuse the connection if the remote does not offer strict key exchange (only meaningful with strict_kex)
+	bool require_strict_kex{};
+
 	// size to shrink the output buffer after handling output packet
 	std::uint32_t shrink_out_buffer_size{std::uint32_t(-1)};
 

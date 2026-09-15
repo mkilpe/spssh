@@ -5,6 +5,8 @@
 #include "protocol.hpp"
 #include "packet_ser_impl.hpp"
 
+#include <algorithm>
+
 namespace securepath::ssh {
 
 ssh_transport::ssh_transport(ssh_config const& c, logger& l, out_buffer& out, crypto_context cc)
@@ -248,6 +250,12 @@ handler_result ssh_transport::process_transport_payload(span payload) {
 	ssh_packet_type type = ssh_packet_type(std::to_integer<std::uint8_t>(payload[0]));
 	logger_.log(logger::debug_trace, "SSH process_transport_payload [state={}, type={}]", to_string(state()), type);
 
+	if(forbidden_by_strict_kex(type)) {
+		logger_.log(logger::error, "SSH strict key exchange: unexpected packet during initial exchange [type={}]", int(type));
+		set_error_and_disconnect(ssh_protocol_error, "strict key exchange: unexpected packet during initial exchange");
+		return handler_result::handled;
+	}
+
 	// first see if it is basic packet, we handle these at all states
 	bool res = handle_basic_packets(type, payload.subspan(1));
 
@@ -338,6 +346,24 @@ bool ssh_transport::handle_basic_packets(ssh_packet_type type, const_span payloa
 	return ret;
 }
 
+// draft-ietf-sshm-strict-kex: pseudo algorithm names signalling support, the standard and the pre-standard form
+static constexpr std::string_view strict_kex_client_names[] = {"kex-strict-c", "kex-strict-c-v00@openssh.com"};
+static constexpr std::string_view strict_kex_server_names[] = {"kex-strict-s", "kex-strict-s-v00@openssh.com"};
+
+bool ssh_transport::remote_offers_strict_kex(std::vector<std::string_view> const& kexes) const {
+	// we offer both names, so the remote offering either one is a match
+	auto const& names = config_.side == transport_side::client ? strict_kex_server_names : strict_kex_client_names;
+	return std::find(kexes.begin(), kexes.end(), names[0]) != kexes.end()
+		|| std::find(kexes.begin(), kexes.end(), names[1]) != kexes.end();
+}
+
+bool ssh_transport::forbidden_by_strict_kex(ssh_packet_type type) const {
+	// draft-ietf-sshm-strict-kex: during the initial exchange only the exchange itself may be sent, so the generic
+	// messages that are otherwise handled at any time are errors until the remote's newkeys has been seen
+	return strict_kex_ && kex_data_.session_id.empty()
+		&& (type == ssh_ignore || type == ssh_debug || type == ssh_unimplemented);
+}
+
 bool ssh_transport::send_kex_init(bool send_first_packet) {
 	logger_.log(logger::debug_trace, "SSH send_kex_init [send guess={}]", send_first_packet);
 	SPSSH_ASSERT(!kex_, "invalid state");
@@ -351,11 +377,18 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 	kex_cookie_.resize(cookie_size);
 	rand_->random_bytes(kex_cookie_);
 
+	// strict key exchange is offered in the initial kexinit only
+	auto kexes = config_.algorithms.kexes.name_list();
+	if(config_.strict_kex && kex_data_.session_id.empty()) {
+		auto const& names = config_.side == transport_side::client ? strict_kex_client_names : strict_kex_server_names;
+		kexes.insert(kexes.end(), std::begin(names), std::end(names));
+	}
+
 	// serialise_to_vector appends, so drop the kexinit of any previous exchange first
 	kex_data_.local_kexinit.clear();
 	bool ret = ser::serialise_to_vector<ser::kexinit>(kex_data_.local_kexinit,
 		std::span<std::byte const, cookie_size>(kex_cookie_),
-		config_.algorithms.kexes.name_list(),
+		kexes,
 		config_.algorithms.host_keys.name_list(),
 		config_.algorithms.client_server_ciphers.name_list(),
 		config_.algorithms.server_client_ciphers.name_list(),
@@ -415,7 +448,7 @@ handler_result ssh_transport::handle_kex_done(kex const&) {
 		//send new keys packet
 		if(send_packet<ser::newkeys>()) {
 			//set sending encryption
-			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac));
+			set_output_crypto(std::move(out_keys->cipher), std::move(out_keys->mac), strict_kex_);
 			local_kex_done_ = true;
 			// normal packets are allowed again from here on, and they must use the new keys
 			flush_kex_pending();
@@ -434,16 +467,18 @@ handler_result ssh_transport::handle_kex_done(kex const&) {
 bool ssh_transport::handle_remote_newkeys() {
 	logger_.log(logger::debug_trace, "SSH kex remote newkeys");
 
-	if(!kex_ || kex_->state() != kex_state::succeeded) {
-		logger_.log(logger::error, "SSH Invalid state");
-		set_error_and_disconnect(ssh_key_exchange_failed);
+	// exactly one newkeys per exchange, and only once the exchange has succeeded
+	if(remote_kex_done_ || !kex_ || kex_->state() != kex_state::succeeded) {
+		logger_.log(logger::error, "SSH unexpected newkeys from remote");
+		set_error_and_disconnect(ssh_key_exchange_failed, "unexpected newkeys");
+		return true;
 	}
 
 	//generate encryption keys
 	auto in_keys = kex_->construct_in_crypto_pair();
 	if(in_keys) {
 		//set receiving encryption
-		set_input_crypto(std::move(in_keys->cipher), std::move(in_keys->mac));
+		set_input_crypto(std::move(in_keys->cipher), std::move(in_keys->mac), strict_kex_);
 		remote_kex_done_ = true;
 		//remember our session id
 		if(kex_data_.session_id.empty()) {
@@ -574,6 +609,22 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 	}
 
 	remote_algs.dump("remote", logger_);
+
+	if(kex_data_.session_id.empty()) {
+		// strict key exchange is negotiated with the initial kexinit only, later ones are ignored for it
+		strict_kex_ = config_.strict_kex && remote_offers_strict_kex(kexes);
+		logger_.log(logger::debug, "SSH strict key exchange [enabled={}]", strict_kex_);
+		if(config_.require_strict_kex && !strict_kex_) {
+			logger_.log(logger::error, "SSH remote does not offer strict key exchange, which is required");
+			set_error_and_disconnect(ssh_key_exchange_failed, "strict key exchange required");
+			return false;
+		}
+		if(strict_kex_ && stream_in_.current_packet.sequence != 0) {
+			logger_.log(logger::error, "SSH strict key exchange: kexinit was not the first packet from remote");
+			set_error_and_disconnect(ssh_protocol_error, "strict key exchange: kexinit was not the first packet");
+			return false;
+		}
+	}
 
 	kexinit_agreement kagree(logger_, config_.side, config_.algorithms);
 	if(kagree.agree(remote_algs)) {

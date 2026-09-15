@@ -1,27 +1,5 @@
 
 
-for first version:
-----------
-* sftp
-* think what should happen in cases of full input/output buffers
-* implement test client/server configuration from command line / settings file
-* test against openssh, filezilla
-----------
-
-sftp:
------------
-* implement
-* unit tests
-* consider what to use for file_handle
-
----------
-
-
-* check that packet is not too large before sending
-* check that packet is not too large when receiving
-* check only correct packets allowed while in kex and other states
-
-
 not implemented yet:
 * possible certificates associated to public key when authenticating
 

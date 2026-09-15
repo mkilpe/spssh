@@ -23,9 +23,12 @@ void ssh_binary_packet::set_random(random& r) {
 	random_ = &r;
 }
 
-void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence) {
 	s.cipher = std::move(cipher);
 	s.mac = std::move(mac);
+	if(reset_sequence) {
+		s.packet_sequence = 0;
+	}
 
 	if(s.cipher->is_aead()) {
 		s.integrity_size = std::uint32_t(static_cast<aead_cipher const&>(*s.cipher).tag_size());
@@ -40,17 +43,17 @@ void ssh_binary_packet::set_crypto(stream_crypto& s, std::unique_ptr<ssh::cipher
 	SPSSH_ASSERT(s.block_size < maximum_padding_size, "too big cipher block size");
 }
 
-void ssh_binary_packet::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+void ssh_binary_packet::set_input_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence) {
 	logger_.log(logger::debug, "SSH starting to decrypt incoming packets");
 
-	set_crypto(stream_in_, std::move(cipher), std::move(mac));
+	set_crypto(stream_in_, std::move(cipher), std::move(mac), reset_sequence);
 	stream_in_.tag_buffer.resize(stream_in_.integrity_size);
 }
 
-void ssh_binary_packet::set_output_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac) {
+void ssh_binary_packet::set_output_crypto(std::unique_ptr<ssh::cipher> cipher, std::unique_ptr<ssh::mac> mac, bool reset_sequence) {
 	logger_.log(logger::debug, "SSH starting to encrypt outgoing packets");
 
-	set_crypto(stream_out_, std::move(cipher), std::move(mac));
+	set_crypto(stream_out_, std::move(cipher), std::move(mac), reset_sequence);
 }
 
 bool ssh_binary_packet::try_decode_header(span in_data) {
