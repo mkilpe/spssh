@@ -95,6 +95,7 @@ private: // init & generic packet handling
 	bool handle_remote_newkeys();
 	void kex_set_done();
 
+	std::vector<std::string_view> kex_name_list() const;
 	bool send_kex_init(bool send_first_packet);
 	void send_kex_guess();
 	bool remote_offers_strict_kex(std::vector<std::string_view> const& kexes) const;

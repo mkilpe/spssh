@@ -12,8 +12,7 @@ hash_type deduce_hash_type(kex_type t) {
 	switch(t) {
 		case dh_group14_sha256: [[fallthrough]];
 		case curve25519_sha256: [[fallthrough]];
-		case libssh_curve25519_sha256: [[fallthrough]];
-		case ecdh_sha2_nistp256:
+		case libssh_curve25519_sha256:
 			return hash_type::sha2_256;
 		case dh_group16_sha512:
 			return hash_type::sha2_512;
@@ -30,7 +29,6 @@ key_exchange_type deduce_exchange_type(kex_type t) {
 		case libssh_curve25519_sha256: return key_exchange_type::X25519;
 		case dh_group14_sha256:        return key_exchange_type::dh_group14;
 		case dh_group16_sha512:        return key_exchange_type::dh_group16;
-		case ecdh_sha2_nistp256:       return key_exchange_type::unknown; //this is not implemented yet
 		case unknown:                  return key_exchange_type::unknown;
 	}
 	return key_exchange_type::unknown;

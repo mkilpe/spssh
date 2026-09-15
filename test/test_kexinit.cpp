@@ -41,7 +41,7 @@ supported_algorithms const t2
 	,{mac_type::aes_256_gcm}};
 
 supported_algorithms const t2_1
-	{{kex_type::dh_group14_sha256, kex_type::curve25519_sha256, kex_type::ecdh_sha2_nistp256}
+	{{kex_type::dh_group14_sha256, kex_type::curve25519_sha256, kex_type::dh_group16_sha512}
 	,{key_type::ssh_rsa, key_type::ecdsa_sha2_nistp256, key_type::ssh_ed25519}
 	,{cipher_type::aes_256_ctr, cipher_type::aes_256_gcm}
 	,{cipher_type::aes_256_gcm, cipher_type::aes_256_ctr}
@@ -49,7 +49,7 @@ supported_algorithms const t2_1
 	,{mac_type::aes_256_gcm, mac_type::hmac_sha2_256}};
 
 supported_algorithms const t2_1_inv
-	{{kex_type::ecdh_sha2_nistp256, kex_type::curve25519_sha256, kex_type::dh_group14_sha256 }
+	{{kex_type::dh_group16_sha512, kex_type::curve25519_sha256, kex_type::dh_group14_sha256 }
 	,{key_type::ssh_ed25519, key_type::ecdsa_sha2_nistp256, key_type::ssh_rsa}
 	,{cipher_type::aes_256_gcm, cipher_type::aes_256_ctr}
 	,{cipher_type::aes_256_ctr, cipher_type::aes_256_gcm}
@@ -83,13 +83,13 @@ crypto_configuration const result2_1
 	,{cipher_type::aes_256_ctr, mac_type::hmac_sha2_256, compress_type::none}};
 
 crypto_configuration const result2_inv_1
-	{kex_type::ecdh_sha2_nistp256
+	{kex_type::dh_group16_sha512
 	,key_type::ssh_ed25519
 	,{cipher_type::aes_256_ctr, mac_type::hmac_sha2_256, compress_type::none}
 	,{cipher_type::aes_256_gcm, mac_type::aes_256_gcm, compress_type::none}};
 
 crypto_configuration const result2_inv_2
-	{kex_type::ecdh_sha2_nistp256
+	{kex_type::dh_group16_sha512
 	,key_type::ssh_ed25519
 	,{cipher_type::aes_256_gcm, mac_type::aes_256_gcm, compress_type::none}
 	,{cipher_type::aes_256_ctr, mac_type::hmac_sha2_256, compress_type::none}};

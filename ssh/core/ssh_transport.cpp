@@ -364,6 +364,16 @@ bool ssh_transport::forbidden_by_strict_kex(ssh_packet_type type) const {
 		&& (type == ssh_ignore || type == ssh_debug || type == ssh_unimplemented);
 }
 
+std::vector<std::string_view> ssh_transport::kex_name_list() const {
+	auto kexes = config_.algorithms.kexes.name_list();
+	// strict key exchange is offered in the initial kexinit only
+	if(config_.strict_kex && kex_data_.session_id.empty()) {
+		auto const& names = config_.side == transport_side::client ? strict_kex_client_names : strict_kex_server_names;
+		kexes.insert(kexes.end(), std::begin(names), std::end(names));
+	}
+	return kexes;
+}
+
 bool ssh_transport::send_kex_init(bool send_first_packet) {
 	logger_.log(logger::debug_trace, "SSH send_kex_init [send guess={}]", send_first_packet);
 	SPSSH_ASSERT(!kex_, "invalid state");
@@ -373,16 +383,10 @@ bool ssh_transport::send_kex_init(bool send_first_packet) {
 		set_error_and_disconnect(ssh_key_exchange_failed);
 		return false;
 	}
+	auto kexes = kex_name_list();
 
 	kex_cookie_.resize(cookie_size);
 	rand_->random_bytes(kex_cookie_);
-
-	// strict key exchange is offered in the initial kexinit only
-	auto kexes = config_.algorithms.kexes.name_list();
-	if(config_.strict_kex && kex_data_.session_id.empty()) {
-		auto const& names = config_.side == transport_side::client ? strict_kex_client_names : strict_kex_server_names;
-		kexes.insert(kexes.end(), std::begin(names), std::end(names));
-	}
 
 	// serialise_to_vector appends, so drop the kexinit of any previous exchange first
 	kex_data_.local_kexinit.clear();
@@ -423,7 +427,12 @@ void ssh_transport::send_kex_guess() {
 			*this,
 			kex_data_});
 
-	kex_->initiate();
+	if(kex_) {
+		kex_->initiate();
+	} else {
+		logger_.log(logger::error, "SSH no implementation for the guessed kex algorithm");
+		set_error_and_disconnect(ssh_key_exchange_failed, "unsupported key exchange");
+	}
 }
 
 void ssh_transport::kex_set_done() {
@@ -646,7 +655,11 @@ bool ssh_transport::handle_kexinit_packet(const_span payload) {
 				kex_context{
 					*this,
 					kex_data_});
-
+			if(!kex_) {
+				logger_.log(logger::error, "SSH no implementation for the agreed kex algorithm");
+				set_error_and_disconnect(ssh_key_exchange_failed, "unsupported key exchange");
+				return false;
+			}
 			kex_->initiate();
 		}
 		kex_->set_crypto_configuration(crypto_conf);

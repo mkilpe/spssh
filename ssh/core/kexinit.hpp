@@ -17,8 +17,8 @@ enum class kex_type {
 	dh_group14_sha256,
 	dh_group16_sha512,
 	curve25519_sha256,
-	libssh_curve25519_sha256, // same as above, old name
-	ecdh_sha2_nistp256
+	libssh_curve25519_sha256 // same as above, old name
+	// ecdh_sha2_nistp256: not implemented, add back here (and the exchange in both crypto backends) when it is
 };
 
 std::string_view to_string(kex_type);
