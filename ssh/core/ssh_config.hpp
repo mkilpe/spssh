@@ -40,6 +40,11 @@ struct ssh_config {
 	// maximum output buffer size (should be at least max_out_packet_size)
 	std::uint32_t max_out_buffer_size{128*1024};
 
+	// maximum bytes of packets held back after our kexinit while waiting for the remote to complete the key
+	// exchange, counting a fixed per packet overhead; a remote that keeps eliciting replies past this without
+	// ever answering is not going to complete it, so the connection is closed
+	std::uint32_t max_kex_pending_out_size{8*1024*1024};
+
 	// size to shrink the output buffer after handling output packet
 	std::uint32_t shrink_out_buffer_size{std::uint32_t(-1)};
 

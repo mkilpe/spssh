@@ -73,14 +73,33 @@ public:
 	byte_vector out_data;
 };
 
+// answers every incoming chunk with the same data
+class echo_channel : public channel {
+public:
+	using channel::channel;
+
+	bool on_data(const_span s) override {
+		send_data(s);
+		return channel::on_data(s);
+	}
+};
+
 class test_connection_service : public ssh_connection {
 public:
-	test_connection_service(ssh_transport& t, std::size_t out_data_size = 0)
+	test_connection_service(ssh_transport& t, std::size_t out_data_size = 0, bool echo = false)
 	: ssh_connection(t)
 	{
 		add_channel_type("data-test", [=](transport_base& t, channel_side_info info)
 		{
 			return std::make_unique<test_data_channel>(t, info, out_data_size);
+		});
+		// the echoing side gets an echo channel, the other side a plain recording channel
+		add_channel_type("echo-test", [=](transport_base& t, channel_side_info info) -> std::unique_ptr<channel>
+		{
+			if(echo) {
+				return std::make_unique<echo_channel>(t, info);
+			}
+			return std::make_unique<test_data_channel>(t, info);
 		});
 	}
 
@@ -103,8 +122,8 @@ struct test_client : test_context, client_config, ssh_client {
 		return nullptr;
 	}
 
-	bool open_channel() {
-		auto ch = static_cast<test_connection_service&>(*service_).open_channel("data-test");
+	bool open_channel(std::string_view type = "data-test") {
+		auto ch = static_cast<test_connection_service&>(*service_).open_channel(type);
 		if(ch) {
 			ids.push_back(ch->id());
 		}
@@ -185,7 +204,7 @@ struct test_server : test_context, server_config, ssh_server {
 
 	std::unique_ptr<ssh_service> construct_service(auth_info const& info) override {
 		if(info.service == connection_service_name) {
-			return std::make_unique<test_connection_service>(*this, out_data_size);
+			return std::make_unique<test_connection_service>(*this, out_data_size, echo);
 		}
 		return nullptr;
 	}
@@ -214,6 +233,7 @@ struct test_server : test_context, server_config, ssh_server {
 	test_auth_data auth_data;
 	std::size_t non_kex_packets_during_kex{};
 	std::size_t kex_started_congested{};
+	bool echo{};
 };
 }
 
@@ -420,6 +440,75 @@ TEST_CASE("connection test - rekey with congested output", "[unit]") {
 
 	client.close_channel();
 	REQUIRE(run(client, server));
+}
+
+namespace {
+
+// the server starts a rekey while the client, which never gets to see the kexinit, keeps sending data that the
+// server's echo channel has to answer; returns how many chunks were sent before the loop ended
+int feed_echo_server_during_rekey(test_client& client, test_server& server, std::size_t chunk_size, int max_chunks, bool& rekey_started) {
+	byte_vector chunk(chunk_size, std::byte{'E'});
+	int sent = 0;
+	for(; sent != max_chunks && server.state() != ssh_state::disconnected; ++sent) {
+		REQUIRE(client.get_channel()->send_data(chunk) == chunk.size());
+		// only the server runs, so the client never answers the kexinit
+		server.process(client.out_buf);
+		rekey_started = rekey_started || server.state() == ssh_state::kex;
+	}
+	return sent;
+}
+
+}
+
+TEST_CASE("connection test - remote never completes the rekey", "[unit]") {
+	server_config conf = test_server_config();
+	conf.rekey_data_interval = 64*1024;
+	conf.max_kex_pending_out_size = 256*1024;
+
+	test_server server(0, -1, std::move(conf));
+	server.echo = true;
+	test_client client;
+
+	REQUIRE(run(client, server));
+	REQUIRE(client.open_channel("echo-test"));
+	REQUIRE(run(client, server));
+	REQUIRE(server.state() == ssh_state::transport);
+
+	bool rekey_started = false;
+	int sent = feed_echo_server_during_rekey(client, server, 16*1024, 64, rekey_started);
+
+	// the held answers reached the limit, so the server gave up on the remote
+	CHECK(rekey_started);
+	CHECK(sent < 64);
+	CHECK(server.state() == ssh_state::disconnected);
+	CHECK(server.error() == ssh_error_code::ssh_key_exchange_failed);
+}
+
+TEST_CASE("connection test - remote completes the rekey late", "[unit]") {
+	server_config conf = test_server_config();
+	conf.rekey_data_interval = 64*1024;
+
+	test_server server(0, -1, std::move(conf));
+	server.echo = true;
+	test_client client;
+
+	REQUIRE(run(client, server));
+	REQUIRE(client.open_channel("echo-test"));
+	REQUIRE(run(client, server));
+
+	bool rekey_started = false;
+	int sent = feed_echo_server_during_rekey(client, server, 16*1024, 32, rekey_started);
+	CHECK(rekey_started);
+	CHECK(sent == 32);
+	CHECK(server.state() == ssh_state::kex);
+
+	// now the client answers, the exchange completes and every held answer arrives
+	REQUIRE(run(client, server));
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.get_channel()->in_data == byte_vector(32*16*1024, std::byte{'E'}));
+	CHECK(server.kex_started_congested == 0);
+	CHECK(client.non_kex_packets_during_kex == 0);
 }
 
 }

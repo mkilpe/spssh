@@ -621,10 +621,26 @@ std::optional<out_packet_record> ssh_transport::alloc_out_packet(std::size_t dat
 bool ssh_transport::write_alloced_out_packet(out_packet_record const& r) {
 	if(must_queue_out_packet(r.data)) {
 		// hold the payload and send it from flush_kex_pending, the allocated space is simply left uncommitted
-		kex_pending_out_.emplace_back(r.data.begin(), r.data.end());
-		return true;
+		return hold_out_packet(r.data);
 	}
 	return ssh_binary_packet::create_out_packet(r, output_);
+}
+
+// each held packet costs a vector object and a separate heap block on top of its payload; charge that too, so
+// that a flood of tiny replies cannot use ten times the memory the limit suggests
+static std::size_t constexpr held_packet_overhead = 64;
+
+bool ssh_transport::hold_out_packet(const_span payload) {
+	// bounded, as the remote may keep sending packets that need answers while never completing the exchange
+	bool ok = kex_pending_out_bytes_ + payload.size() + held_packet_overhead <= config_.max_kex_pending_out_size;
+	if(ok) {
+		kex_pending_out_.emplace_back(payload.begin(), payload.end());
+		kex_pending_out_bytes_ += payload.size() + held_packet_overhead;
+	} else {
+		logger_.log(logger::error, "SSH too much data held back waiting for the remote to complete the key exchange [held={}]", kex_pending_out_bytes_);
+		set_error_and_disconnect(ssh_key_exchange_failed, "remote did not complete key exchange");
+	}
+	return ok;
 }
 
 bool ssh_transport::in_kex_send_window() const {
@@ -655,6 +671,7 @@ void ssh_transport::flush_kex_pending() {
 			copy(payload, rec->data);
 			ok = ssh_binary_packet::create_out_packet(*rec, output_);
 			if(ok) {
+				kex_pending_out_bytes_ -= payload.size() + held_packet_overhead;
 				kex_pending_out_.pop_front();
 			}
 		}

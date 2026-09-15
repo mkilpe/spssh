@@ -98,6 +98,7 @@ private: // init & generic packet handling
 
 	bool in_kex_send_window() const;
 	bool must_queue_out_packet(const_span payload) const;
+	bool hold_out_packet(const_span payload);
 	void flush_kex_pending();
 
 private: // input
@@ -124,6 +125,7 @@ private: // data
 	std::unique_ptr<kex> kex_;
 	// packets that may not be sent between our kexinit and newkeys, sent in order once allowed again
 	std::deque<byte_vector> kex_pending_out_;
+	std::size_t kex_pending_out_bytes_{};
 
 	bool flush_service_{};
 	std::chrono::steady_clock::time_point rekey_time_;
