@@ -19,7 +19,13 @@ enum class version_parse_result {
 
 version_parse_result parse_ssh_version(in_buffer&, bool allow_non_version_lines, ssh_version& version);
 
+/// true if the string is a valid name for a name-list (rfc 4251 sections 5 and 6): non-empty printable US-ASCII
+/// without whitespace, control characters, DEL or the list separator comma
+bool is_valid_name(std::string_view name);
+
+/// parses a name-list, fails if any of the names is not valid
 bool parse_string_list(std::string_view, std::vector<std::string_view>& out);
+/// serialises a name-list, fails if any of the names is not valid
 bool to_string_list(std::vector<std::string_view> const& in, std::string& out);
 
 }

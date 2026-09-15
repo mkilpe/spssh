@@ -92,14 +92,19 @@ TEST_CASE("packet serialisation name-list", "[unit]") {
 	std::byte temp[256] = {};
 	using test_type = ser::ssh_packet_ser<ssh_disconnect, ser::name_list>;
 
-	test_type::save sp(ser::name_list_t{"test 1", "test 2", "hipshops"});
+	// names must be printable US-ASCII without whitespace (rfc 4251 section 5 and 6)
+	test_type::save sp(ser::name_list_t{"test-1", "test@2.example", "hipshops"});
 	REQUIRE(sp.write(temp));
 
 	test_type::load lp(ser::match_type_t, temp);
 	REQUIRE(lp);
 
 	auto & [list] = lp;
-	CHECK(list == ser::name_list_t{"test 1", "test 2", "hipshops"});
+	CHECK(list == ser::name_list_t{"test-1", "test@2.example", "hipshops"});
+
+	// a name with whitespace is refused when serialising
+	test_type::save bad(ser::name_list_t{"test 1"});
+	CHECK(!bad.write(temp));
 }
 
 TEST_CASE("packet serialisation bytes-n", "[unit]") {

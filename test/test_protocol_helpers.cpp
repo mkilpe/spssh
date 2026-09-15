@@ -147,4 +147,47 @@ TEST_CASE("protocol helpers parse_ssh_version", "[unit]") {
 	}
 }
 
+TEST_CASE("protocol helpers name-list validation", "[unit]") {
+	using namespace std::literals;
+	std::vector<std::string_view> out;
+
+	SECTION("valid lists") {
+		CHECK(parse_string_list("", out));
+		CHECK(out.empty());
+		CHECK(parse_string_list("none", out));
+		REQUIRE(out.size() == 1);
+		CHECK(parse_string_list("curve25519-sha256@libssh.org,ecdh-sha2-nistp256", out));
+		REQUIRE(out.size() == 3);
+		CHECK(out[1] == "curve25519-sha256@libssh.org");
+		CHECK(out[2] == "ecdh-sha2-nistp256");
+	}
+	SECTION("empty names are rejected") {
+		CHECK(!parse_string_list(",", out));
+		CHECK(!parse_string_list("a,", out));
+		CHECK(!parse_string_list(",a", out));
+		CHECK(!parse_string_list("a,,b", out));
+	}
+	SECTION("whitespace, control, DEL and non ascii characters are rejected") {
+		CHECK(!parse_string_list("a b", out));
+		CHECK(!parse_string_list("a\x01b"sv, out));
+		CHECK(!parse_string_list("a\x7f" "b"sv, out));
+		CHECK(!parse_string_list("\xc3\xa4"sv, out));
+		CHECK(!parse_string_list("a\0b"sv, out));
+		CHECK(!parse_string_list("a\0"sv, out));
+	}
+	SECTION("the writer applies the same rules") {
+		std::string s;
+		CHECK(to_string_list({"a", "b@c.d"}, s));
+		CHECK(s == "a,b@c.d");
+		s.clear();
+		CHECK(!to_string_list({"a", ""}, s));
+		s.clear();
+		CHECK(!to_string_list({"a,b"}, s));
+		s.clear();
+		CHECK(!to_string_list({"a b"}, s));
+		s.clear();
+		CHECK(!to_string_list({"a\x01"sv}, s));
+	}
+}
+
 }

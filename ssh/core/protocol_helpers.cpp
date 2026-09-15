@@ -101,35 +101,52 @@ version_parse_result parse_ssh_version(in_buffer& in, bool allow_non_version_lin
 	return result;
 }
 
+bool is_valid_name(std::string_view name) {
+	// rfc 4251 section 5: a name has non-zero length, is US-ASCII and contains no comma or null; section 6: the
+	// algorithm and method identifiers carried in name-lists are printable US-ASCII without whitespace, control
+	// characters or DEL
+	bool res = !name.empty();
+	for(auto it = name.begin(); res && it != name.end(); ++it) {
+		auto c = static_cast<unsigned char>(*it);
+		res = c > 0x20 && c < 0x7F && c != ',';
+	}
+	return res;
+}
+
 bool parse_string_list(std::string_view view, std::vector<std::string_view>& out) {
+	bool res = true;
 	std::string_view::size_type start = 0, end = 0;
 
+	// an empty list is valid, an empty name is not
 	if(!view.empty()) {
-		while(end != std::string_view::npos) {
+		while(res && end != std::string_view::npos) {
 			end = view.find_first_of(',', start);
-			if(end == std::string_view::npos) {
-				out.emplace_back(view.substr(start));
-			} else {
-				out.emplace_back(view.substr(start, end-start));
+			std::string_view name = end == std::string_view::npos ? view.substr(start) : view.substr(start, end-start);
+			res = is_valid_name(name);
+			if(res) {
+				out.emplace_back(name);
 			}
 			start = end + 1;
 		}
 	}
 
-	return true;
+	return res;
 }
 
 bool to_string_list(std::vector<std::string_view> const& in, std::string& out) {
+	bool res = true;
 	bool first = true;
-	for(auto&& v : in) {
-		if(v.empty()) return false;
-		if(v.find(',') != std::string_view::npos) return false;
-		if(!first) out += ",";
-
-		first = false;
-		out += v;
+	for(auto it = in.begin(); res && it != in.end(); ++it) {
+		res = is_valid_name(*it);
+		if(res) {
+			if(!first) {
+				out += ",";
+			}
+			first = false;
+			out += *it;
+		}
 	}
-	return true;
+	return res;
 }
 
 }
