@@ -8,16 +8,17 @@ namespace securepath::ssh::sftp {
 // the actual packet uses just fxp_close but we need to differentiate for result
 std::uint16_t const fxp_closedir = 512;
 
-sftp_client::sftp_client(std::shared_ptr<sftp_client_callback> callback, transport_base& transport, channel_side_info local, std::size_t buffer_size)
+sftp_client::sftp_client(std::shared_ptr<sftp_client_callback> callback, transport_base& transport, channel_side_info local, std::size_t buffer_size, std::string_view subsystem)
 : sftp_common(transport, local, buffer_size)
 , callback_(callback)
+, subsystem_(subsystem)
 {
 }
 
 bool sftp_client::on_confirm(channel_side_info remote, const_span extra_data) {
 	if(channel::on_confirm(remote, extra_data)) {
-		log_.log(logger::info, "sending sftp subsystem request");
-		send_subsystem_request(sftp_subsystem_name);
+		log_.log(logger::info, "sending subsystem request [{}]", subsystem_);
+		send_subsystem_request(subsystem_);
 	}
 	return true;
 }

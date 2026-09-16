@@ -3,14 +3,17 @@
 
 #include "sftp_common.hpp"
 #include "sftp_client_interface.hpp"
+#include "sftp.hpp"
 
 #include <map>
+#include <string>
 
 namespace securepath::ssh::sftp {
 
 class sftp_client : public sftp_common, public sftp_client_interface {
 public:
-	sftp_client(std::shared_ptr<sftp_client_callback> callback, transport_base& transport, channel_side_info local, std::size_t buffer_size = default_buffer_size);
+	sftp_client(std::shared_ptr<sftp_client_callback> callback, transport_base& transport, channel_side_info local
+		, std::size_t buffer_size = default_buffer_size, std::string_view subsystem = sftp_subsystem_name);
 
 public: // sftp_client_interface
 	void close(std::string_view error) override;
@@ -76,6 +79,8 @@ protected:
 	// previous packet id
 	std::uint32_t sequence_{};
 	std::shared_ptr<sftp_client_callback> callback_;
+	// the ssh subsystem to request, usually "sftp"
+	std::string subsystem_;
 
 	struct call_data {
 		std::uint16_t type{};

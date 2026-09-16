@@ -35,7 +35,8 @@ test_client_commands::test_client_commands()
 	add(password, "password", "", "password");
 	add(config_file, "config", "c", "config file");
 	add(service, "service", "", "ssh service to autheticate for");
-	add(subsystem, "subsystem", "sub", "subsystem to start");
+	add(channel, "channel", "", "channel type to open");
+	add(subsystem, "subsystem", "sub", "subsystem to request on the channel");
 	add(known_hosts, "known-hosts", "", "file of trusted host keys, checked and updated on connect");
 
 	config.add_commands(*this);

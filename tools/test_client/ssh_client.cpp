@@ -113,7 +113,8 @@ void ssh_test_client::on_service_started() {
 					std::shared_ptr<sftp::sftp_client_callback> self{this, [](void*){}};
 					// the transfer handler runs get/put and forwards everything else to this
 					transfers_ = std::make_shared<sftp::sftp_transfer_handler>(self);
-					return std::make_unique<sftp::sftp_client>(transfers_, t, sinfo);
+					return std::make_unique<sftp::sftp_client>(transfers_, t, sinfo,
+						default_buffer_size, test_config_.subsystem);
 				});
 
 		if(ch) {
