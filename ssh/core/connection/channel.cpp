@@ -350,8 +350,9 @@ void channel::on_request_failure() {
 void channel::adjust_in_window(std::uint32_t s) {
 	// lets not increase the size over 2^32-1
 	in_window_ += std::min(s, std::numeric_limits<std::uint32_t>::max() - in_window_);
-	if(in_window_ >= remote_info_.window_size/2) {
-		log_.log(logger::debug_trace, "adjusting in window [in_window={}, window_size={}]", in_window_, remote_info_.window_size);
+	// grant more window once we have consumed half of our own advertised receive window
+	if(in_window_ >= local_info_.window_size/2) {
+		log_.log(logger::debug_trace, "adjusting in window [in_window={}, window_size={}]", in_window_, local_info_.window_size);
 		send_window_adjust(in_window_);
 	}
 }

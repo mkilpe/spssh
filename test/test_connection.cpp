@@ -524,4 +524,32 @@ TEST_CASE("connection test - remote completes the rekey late", "[unit]") {
 	CHECK(client.non_kex_packets_during_kex == 0);
 }
 
+// a small receive window on one side with a large one on the other used to deadlock: the receiver granted
+// window back based on the remote window, a threshold the small pipe could never reach
+TEST_CASE("connection test - asymmetric channel windows", "[unit]") {
+	std::size_t const data_size = 4*1024*1024;
+
+	auto small = GENERATE(std::size_t{16*1024}, std::size_t{64*1024});
+	CAPTURE(small);
+
+	// the server streams data_size to the client, whose receive window is much smaller than the server's
+	test_server server(data_size);
+	test_client client;
+	server.channel.initial_window_size = 2*1024*1024;
+	client.channel.initial_window_size = std::uint32_t(small);
+	server.channel.max_packet_size = 32*1024;
+	client.channel.max_packet_size = 32*1024;
+
+	REQUIRE(run(client, server));
+	REQUIRE(client.open_channel());
+	REQUIRE(run(client, server));
+
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	REQUIRE(client.check_data(data_size));
+
+	client.close_channel();
+	REQUIRE(run(client, server));
+}
+
 }
