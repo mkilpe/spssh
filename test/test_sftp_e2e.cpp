@@ -10,6 +10,7 @@
 #include "ssh/server/ssh_server.hpp"
 #include "ssh/services/sftp/local_fs_backend.hpp"
 #include "ssh/services/sftp/sftp_session_channel.hpp"
+#include "ssh/services/sftp/sftp_transfer.hpp"
 
 #include <external/catch/catch.hpp>
 
@@ -122,7 +123,9 @@ struct sftp_test_client : test_context, client_config, ssh_client {
 	bool open_sftp() {
 		auto ch = connection().open_channel("session", [this](transport_base& t, channel_side_info si)
 		{
-			auto p = std::make_unique<sftp::sftp_client>(cb, t, si);
+			// the transfer handler sits in front of the recording callback, everything it does not own is forwarded
+			transfers = std::make_shared<sftp::sftp_transfer_handler>(cb);
+			auto p = std::make_unique<sftp::sftp_client>(transfers, t, si);
 			sftp_ = p.get();
 			return p;
 		});
@@ -136,6 +139,7 @@ struct sftp_test_client : test_context, client_config, ssh_client {
 	bool has_channel() { return connection().find_channel(sftp_channel_id_) != nullptr; }
 
 	std::shared_ptr<recording_client_callback> cb = std::make_shared<recording_client_callback>();
+	std::shared_ptr<sftp::sftp_transfer_handler> transfers;
 	sftp::sftp_client* sftp_{};
 	channel_id sftp_channel_id_{};
 };
@@ -418,6 +422,220 @@ TEST_CASE("sftp e2e version reject closes channel", "[unit][sftp]") {
 	CHECK(!t.client.has_channel());
 	CHECK(t.client.state() == ssh_state::transport);
 	CHECK(t.server.state() == ssh_state::transport);
+}
+
+// ---- file transfers through sftp_transfer_handler -------------------------------------------------------------
+
+namespace {
+
+byte_vector pattern(std::size_t n) {
+	byte_vector v(n);
+	for(std::size_t i = 0; i != n; ++i) {
+		v[i] = std::byte(i % 251);
+	}
+	return v;
+}
+
+struct transfer_probe {
+	bool done{};
+	sftp::transfer_result result;
+	std::vector<std::uint64_t> progress;
+
+	sftp::transfer_done on_done() {
+		return [this](sftp::transfer_id, sftp::transfer_result const& r) { done = true; result = r; };
+	}
+	sftp::transfer_progress on_progress() {
+		return [this](sftp::transfer_id, std::uint64_t bytes) { progress.push_back(bytes); };
+	}
+};
+
+bool pump_until_done(e2e& t, transfer_probe& p) {
+	for(int i = 0; i != 50 && !p.done; ++i) {
+		REQUIRE(t.pump());
+	}
+	return p.done;
+}
+
+}
+
+TEST_CASE("sftp transfer upload and download", "[unit][sftp]") {
+	e2e t;
+	auto data = pattern(1024*1024 + 123);
+
+	transfer_probe up;
+	auto id = t.client.transfers->upload(t.client.sftp(), "/up.bin", std::make_unique<sftp::memory_input>(data), {}, up.on_done(), up.on_progress());
+	REQUIRE(id != 0);
+	REQUIRE(pump_until_done(t, up));
+	CHECK(!up.result.error);
+	CHECK(!up.result.cancelled);
+	CHECK(up.result.bytes == data.size());
+	CHECK(slurp(t.dir.path / "up.bin") == data);
+	REQUIRE(!up.progress.empty());
+	CHECK(std::is_sorted(up.progress.begin(), up.progress.end()));
+	CHECK(up.progress.back() == data.size());
+	CHECK(t.client.transfers->active_transfers() == 0);
+
+	byte_vector got;
+	transfer_probe down;
+	id = t.client.transfers->download(t.client.sftp(), "/up.bin", std::make_unique<sftp::memory_output>(got), {}, down.on_done(), down.on_progress());
+	REQUIRE(id != 0);
+	REQUIRE(pump_until_done(t, down));
+	CHECK(!down.result.error);
+	CHECK(down.result.bytes == data.size());
+	CHECK(got == data);
+	REQUIRE(down.result.attrs);
+	CHECK(down.result.attrs->size == data.size());
+	CHECK(down.progress.back() == data.size());
+	CHECK(t.client.transfers->active_transfers() == 0);
+}
+
+TEST_CASE("sftp transfer with local files", "[unit][sftp]") {
+	e2e t;
+	temp_dir local;
+	auto data = pattern(300*1024 + 5);
+	{
+		std::ofstream f(local.path / "in.bin", std::ios::binary);
+		f.write(reinterpret_cast<char const*>(data.data()), std::streamsize(data.size()));
+	}
+
+	auto in = std::make_unique<sftp::file_input>(local.path / "in.bin");
+	REQUIRE(in->is_open());
+	CHECK(in->size() == data.size());
+	transfer_probe up;
+	REQUIRE(t.client.transfers->upload(t.client.sftp(), "/f.bin", std::move(in), {}, up.on_done()) != 0);
+	REQUIRE(pump_until_done(t, up));
+	CHECK(!up.result.error);
+	CHECK(slurp(t.dir.path / "f.bin") == data);
+
+	auto out = std::make_unique<sftp::file_output>(local.path / "out.bin");
+	REQUIRE(out->is_open());
+	transfer_probe down;
+	REQUIRE(t.client.transfers->download(t.client.sftp(), "/f.bin", std::move(out), {}, down.on_done()) != 0);
+	REQUIRE(pump_until_done(t, down));
+	CHECK(!down.result.error);
+	CHECK(slurp(local.path / "out.bin") == data);
+
+	CHECK(!sftp::file_input(local.path / "missing.bin").is_open());
+}
+
+TEST_CASE("sftp transfer small chunks and deep pipeline", "[unit][sftp]") {
+	e2e t;
+	auto data = pattern(100007);
+	sftp::transfer_options o;
+	o.chunk_size = 1000;
+	o.max_in_flight = 8;
+
+	transfer_probe up;
+	REQUIRE(t.client.transfers->upload(t.client.sftp(), "/p.bin", std::make_unique<sftp::memory_input>(data), o, up.on_done()) != 0);
+	REQUIRE(pump_until_done(t, up));
+	CHECK(!up.result.error);
+	CHECK(slurp(t.dir.path / "p.bin") == data);
+
+	// without the size known in advance the end is found by reading until eof
+	o.stat_first = false;
+	byte_vector got;
+	transfer_probe down;
+	REQUIRE(t.client.transfers->download(t.client.sftp(), "/p.bin", std::make_unique<sftp::memory_output>(got), o, down.on_done()) != 0);
+	REQUIRE(pump_until_done(t, down));
+	CHECK(!down.result.error);
+	CHECK(!down.result.attrs);
+	CHECK(got == data);
+	CHECK(down.result.bytes == data.size());
+}
+
+TEST_CASE("sftp transfer failures", "[unit][sftp]") {
+	e2e t;
+	spit(t.dir.path / "exists.txt", "x");
+
+	SECTION("download of a missing file") {
+		byte_vector got;
+		transfer_probe down;
+		REQUIRE(t.client.transfers->download(t.client.sftp(), "/missing.bin", std::make_unique<sftp::memory_output>(got), {}, down.on_done()) != 0);
+		REQUIRE(pump_until_done(t, down));
+		CHECK(down.result.error);
+		CHECK(down.result.error.code() == fx_no_such_file);
+		CHECK(down.result.bytes == 0);
+	}
+	SECTION("upload onto a directory") {
+		auto data = pattern(10);
+		transfer_probe up;
+		REQUIRE(t.client.transfers->upload(t.client.sftp(), "/", std::make_unique<sftp::memory_input>(data), {}, up.on_done()) != 0);
+		REQUIRE(pump_until_done(t, up));
+		CHECK(up.result.error);
+	}
+	SECTION("exclusive upload onto an existing file") {
+		auto data = pattern(10);
+		sftp::transfer_options o;
+		o.exclusive = true;
+		transfer_probe up;
+		REQUIRE(t.client.transfers->upload(t.client.sftp(), "/exists.txt", std::make_unique<sftp::memory_input>(data), o, up.on_done()) != 0);
+		REQUIRE(pump_until_done(t, up));
+		CHECK(up.result.error);
+		CHECK(slurp(t.dir.path / "exists.txt") == byte_vector{std::byte('x')});
+	}
+	CHECK(t.client.transfers->active_transfers() == 0);
+	// and the client is still usable, with results the handler does not own reaching the callback behind it
+	t.call([&]{ return t.client.sftp().realpath("/"); }, "realpath");
+}
+
+TEST_CASE("sftp transfer cancel", "[unit][sftp]") {
+	e2e t;
+	auto data = pattern(1024*1024);
+	{
+		std::ofstream f(t.dir.path / "big.bin", std::ios::binary);
+		f.write(reinterpret_cast<char const*>(data.data()), std::streamsize(data.size()));
+	}
+
+	sftp::transfer_options o;
+	o.chunk_size = 4096;
+	o.max_in_flight = 2;
+	byte_vector got;
+	transfer_probe down;
+	sftp::transfer_id id{};
+	bool cancelled = false;
+	id = t.client.transfers->download(t.client.sftp(), "/big.bin", std::make_unique<sftp::memory_output>(got), o, down.on_done()
+		, [&](sftp::transfer_id, std::uint64_t bytes) {
+			if(bytes >= 20000 && !cancelled) {
+				cancelled = true;
+				CHECK(t.client.transfers->cancel(id));
+			}
+		});
+	REQUIRE(id != 0);
+	REQUIRE(pump_until_done(t, down));
+	CHECK(down.result.cancelled);
+	CHECK(!down.result.error);
+	CHECK(down.result.bytes >= 20000);
+	CHECK(down.result.bytes < data.size());
+	CHECK(t.client.transfers->active_transfers() == 0);
+	CHECK(!t.client.transfers->cancel(id));
+
+	// the stray results of the reads in flight and of the close are dropped, and the session goes on
+	t.call([&]{ return t.client.sftp().realpath("/"); }, "realpath");
+}
+
+TEST_CASE("sftp transfer handler routes single calls", "[unit][sftp]") {
+	e2e t;
+
+	bool mkdir_ok = false;
+	REQUIRE(t.client.transfers->call(t.client.sftp().mkdir("/r"), [&](sftp::call_result const& r) {
+		mkdir_ok = std::holds_alternative<sftp::mkdir_data>(r);
+	}));
+	REQUIRE(t.pump());
+	CHECK(mkdir_ok);
+	CHECK(fs::is_directory(t.dir.path / "r"));
+
+	std::optional<status_code> code;
+	REQUIRE(t.client.transfers->call(t.client.sftp().stat("/nope"), [&](sftp::call_result const& r) {
+		if(auto e = std::get_if<sftp::sftp_error>(&r)) {
+			code = e->code();
+		}
+	}));
+	REQUIRE(t.pump());
+	CHECK(code == fx_no_such_file);
+
+	// routed results never reached the callback behind the handler
+	CHECK(t.cb().last_event() == "version");
+	CHECK(!t.client.transfers->call(0, [](sftp::call_result const&) {}));
 }
 
 }

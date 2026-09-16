@@ -38,8 +38,10 @@ void ssh_test_client::on_service_started() {
 			.open_channel(test_config_.channel,
 					[&](transport_base& t, channel_side_info sinfo) {
 					// create shared_ptr that doesn't delete
-					std::shared_ptr<sftp::sftp_client_callback> p{this, [](void*){}};
-					return std::make_unique<sftp::sftp_client>(p, t, sinfo);
+					std::shared_ptr<sftp::sftp_client_callback> self{this, [](void*){}};
+					// the transfer handler runs get/put and forwards everything else to this
+					transfers_ = std::make_shared<sftp::sftp_transfer_handler>(self);
+					return std::make_unique<sftp::sftp_client>(transfers_, t, sinfo);
 				});
 
 		if(ch) {

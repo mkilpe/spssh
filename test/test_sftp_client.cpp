@@ -3,6 +3,7 @@
 
 #include "ssh/services/sftp/packet_ser_impl.hpp"
 #include "ssh/services/sftp/protocol.hpp"
+#include "ssh/services/sftp/sftp_transfer.hpp"
 
 #include <external/catch/catch.hpp>
 
@@ -28,9 +29,14 @@ byte_vector with_attrs(byte_vector p, file_attributes const& attrs) {
 struct client_fixture {
 	sftp_record_transport transport{test_log()};
 	std::shared_ptr<recording_client_callback> cb = std::make_shared<recording_client_callback>();
-	exposed_sftp_client client{cb, transport, channel_side_info{1, 2*1024*1024, 32768}};
+	// optionally the transfer handler in front of the recording callback
+	std::shared_ptr<sftp_transfer_handler> handler;
+	exposed_sftp_client client;
 
-	client_fixture() {
+	client_fixture(bool with_handler = false)
+	: handler(with_handler ? std::make_shared<sftp_transfer_handler>(cb) : nullptr)
+	, client(with_handler ? std::shared_ptr<sftp_client_callback>(handler) : cb, transport, channel_side_info{1, 2*1024*1024, 32768})
+	{
 		auto& base = static_cast<channel_base&>(client);
 		base.on_confirm(channel_side_info{7, 2*1024*1024, 32768}, {});
 		base.on_request_success();
@@ -55,6 +61,14 @@ struct client_fixture {
 		return pkts.front();
 	}
 };
+
+byte_vector pattern_bytes(std::size_t n) {
+	byte_vector v(n);
+	for(std::size_t i = 0; i != n; ++i) {
+		v[i] = std::byte(i % 251);
+	}
+	return v;
+}
 
 bool cb_event(client_fixture& fx, std::string_view name, sftp::call_handle h) {
 	return fx.cb->last_event() == name && fx.cb->last_handle() == h;
@@ -435,6 +449,134 @@ TEST_CASE("sftp client failure handling", "[unit][sftp]") {
 		REQUIRE(fx.client.on_data(p));
 		CHECK(fx.transport.disconnected());
 	}
+}
+
+TEST_CASE("sftp transfer download handles short and out of order reads", "[unit][sftp]") {
+	client_fixture fx(true);
+
+	// a 300 byte file, served by a scripted server that answers the read at offset 0 short
+	std::string const content = std::string(40, 'A') + std::string(60, 'a') + std::string(100, 'B') + std::string(100, 'C');
+	byte_vector got;
+	bool done = false;
+	transfer_result result;
+	transfer_options o;
+	o.chunk_size = 100;
+	o.max_in_flight = 3;
+	o.stat_first = false;
+	auto id = fx.handler->download(fx.client, "/f", std::make_unique<memory_output>(got), o
+		, [&](transfer_id, transfer_result const& r) { done = true; result = r; });
+	REQUIRE(id != 0);
+
+	// the open request, answered with a handle
+	auto pkts = fx.sent_sftp();
+	REQUIRE(pkts.size() == 1);
+	REQUIRE(pkts[0].type == fxp_open);
+	ssh_bf_reader open_reader(pkts[0].payload);
+	std::uint32_t open_id{};
+	REQUIRE(open_reader.read(open_id));
+	fx.feed(build_packet<handle_response>(open_id, std::string_view("fh")));
+
+	auto answer = [&](sftp_packet_data const& pd) {
+		if(pd.type == fxp_read) {
+			read_request::load lp(pd.payload);
+			REQUIRE(lp);
+			auto& [rid, handle, pos, size] = lp;
+			if(pos >= content.size()) {
+				fx.feed(build_packet<status_response>(rid, std::uint32_t(fx_eof), std::string_view("End of file"), std::string_view("")));
+			} else {
+				std::size_t n = pos == 0 ? 40 : std::min<std::size_t>(size, content.size() - pos);
+				fx.feed(build_packet<data_response>(rid, std::string_view(content).substr(pos, n)));
+			}
+		} else if(pd.type == fxp_close) {
+			ssh_bf_reader r(pd.payload);
+			std::uint32_t cid{};
+			REQUIRE(r.read(cid));
+			fx.feed(build_packet<status_response>(cid, std::uint32_t(fx_ok), std::string_view(""), std::string_view("")));
+		}
+	};
+
+	// answer each batch of requests in reverse order
+	for(int round = 0; round != 20 && !done; ++round) {
+		auto batch = fx.sent_sftp();
+		REQUIRE(!batch.empty());
+		std::reverse(batch.begin(), batch.end());
+		for(auto& pd : batch) {
+			answer(pd);
+		}
+	}
+
+	REQUIRE(done);
+	CHECK(!result.error);
+	CHECK(result.bytes == content.size());
+	CHECK(to_string_view(got) == content);
+	CHECK(fx.handler->active_transfers() == 0);
+	CHECK(fx.client.pending_calls() == 0);
+}
+
+TEST_CASE("sftp transfer upload pauses when the channel is full and resumes", "[unit][sftp]") {
+	// a small remote window and a small channel buffer make write_file refuse once a few writes are outstanding;
+	// the transfer must then pause and only resume when the channel signals room again (a window adjust)
+	sftp_record_transport transport{test_log()};
+	auto cb = std::make_shared<recording_client_callback>();
+	auto handler = std::make_shared<sftp_transfer_handler>(cb);
+	std::size_t const channel_buffer = 12*1024;
+	exposed_sftp_client client{handler, transport, channel_side_info{1, 2*1024*1024, 32768}, channel_buffer};
+
+	auto& base = static_cast<channel_base&>(client);
+	base.on_confirm(channel_side_info{7, 20*1024, 32768}, {}); // the remote grants us only 20k to start with
+	base.on_request_success();
+	client.on_data(build_packet<version>(3u));
+	REQUIRE(cb->last_event() == "version");
+	transport.sent.clear();
+
+	auto data = pattern_bytes(200*1024);
+	transfer_options o;
+	o.chunk_size = 8*1024;
+	o.max_in_flight = 32;
+
+	bool done = false;
+	transfer_result result;
+	auto id = handler->upload(client, "/up.bin", std::make_unique<memory_input>(data), o
+		, [&](transfer_id, transfer_result const& r) { done = true; result = r; });
+	REQUIRE(id != 0);
+
+	byte_vector received;
+	// the channel may flush a partial channel-data packet, so parse the whole cumulative stream each round and
+	// only answer sftp packets that have fully arrived since last time
+	std::size_t answered = 0;
+	for(int round = 0; round != 400 && !done; ++round) {
+		// room for the channel to flush buffered data and to wake the paused transfer
+		base.on_window_adjust(32*1024);
+
+		auto packets = parse_sftp_packets(channel_data_stream(transport.sent));
+		for(; answered != packets.size(); ++answered) {
+			auto& pd = packets[answered];
+			ssh_bf_reader r(pd.payload);
+			std::uint32_t rid{};
+			REQUIRE(r.read(rid));
+			if(pd.type == fxp_open) {
+				client.on_data(build_packet<handle_response>(rid, std::string_view("fh")));
+			} else if(pd.type == fxp_write) {
+				std::string_view h; std::uint64_t pos{}; std::string_view chunk;
+				bool ok = r.read(h); ok = r.read(pos) && ok; ok = r.read(chunk) && ok;
+				REQUIRE(ok);
+				if(pos + chunk.size() > received.size()) {
+					received.resize(pos + chunk.size());
+				}
+				std::memcpy(received.data() + pos, chunk.data(), chunk.size());
+				client.on_data(build_packet<status_response>(rid, std::uint32_t(fx_ok), std::string_view(""), std::string_view("")));
+			} else if(pd.type == fxp_close) {
+				client.on_data(build_packet<status_response>(rid, std::uint32_t(fx_ok), std::string_view(""), std::string_view("")));
+			}
+		}
+	}
+
+	REQUIRE(done);
+	CHECK(!result.error);
+	CHECK(result.bytes == data.size());
+	CHECK(result.pauses > 0);
+	CHECK(received == data);
+	CHECK(handler->active_transfers() == 0);
 }
 
 }

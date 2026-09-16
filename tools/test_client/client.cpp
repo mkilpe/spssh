@@ -57,6 +57,7 @@ public:
 	, socket_(io_context_)
 	, timer_(io_context_)
 	, log_(log)
+	, handler_(handler)
 	, client_(handler, config, log_, out_buf_, ccontext)
 	{
 		timer_.expires_at(std::chrono::steady_clock::time_point::max());
@@ -106,6 +107,26 @@ public:
 			});
 	}
 
+	void download(std::string remote, std::string local) {
+		post_transfer([this, remote, local](auto& h, auto& sftp)
+			{
+				return h.download(sftp, remote, std::make_unique<sftp::file_output>(local), {}, transfer_done("download"));
+			});
+	}
+
+	void upload(std::string local, std::string remote) {
+		auto input = std::make_unique<sftp::file_input>(local);
+		if(!input->is_open()) {
+			std::osyncstream(std::cout) << "cannot open " << local << std::endl;
+			handler_.emit<events::command_prompt>();
+			return;
+		}
+		post_transfer([this, in = std::shared_ptr<sftp::file_input>(std::move(input)), remote](auto& h, auto& sftp)
+			{
+				return h.upload(sftp, remote, std::make_unique<owned_input>(in), {}, transfer_done("upload"));
+			});
+	}
+
 	ssh_test_client& ssh_client() {
 		return client_;
 	}
@@ -119,6 +140,41 @@ private:
 				if(sftp) {
 					func(*sftp);
 					// release the write wait to make sure the buffer gets flushed
+					timer_.cancel_one();
+				}
+			});
+	}
+
+	// a transfer_input that keeps its file_input alive
+	struct owned_input : sftp::transfer_input {
+		std::shared_ptr<sftp::file_input> in;
+		explicit owned_input(std::shared_ptr<sftp::file_input> i) : in(std::move(i)) {}
+		std::optional<std::uint64_t> size() const override { return in->size(); }
+		std::size_t read(std::uint64_t offset, span out) override { return in->read(offset, out); }
+	};
+
+	sftp::transfer_done transfer_done(std::string what) {
+		return [this, what](sftp::transfer_id, sftp::transfer_result const& r) {
+			std::osyncstream out(std::cout);
+			if(r.error) {
+				out << what << " failed: " << r.error.message() << std::endl;
+			} else {
+				out << what << " done, " << r.bytes << " bytes" << std::endl;
+			}
+			handler_.emit<events::command_prompt>();
+		};
+	}
+
+	void post_transfer(std::function<sftp::transfer_id(sftp::sftp_transfer_handler&, sftp::sftp_client_interface&)> func) {
+		asio::post(socket_.get_executor(), [this, func = std::move(func)]
+			{
+				auto sftp = client_.sftp();
+				auto* h = client_.transfers();
+				if(sftp && h) {
+					if(func(*h, *sftp) == 0) {
+						std::osyncstream(std::cout) << "could not start transfer" << std::endl;
+						handler_.emit<events::command_prompt>();
+					}
 					timer_.cancel_one();
 				}
 			});
@@ -188,6 +244,7 @@ private:
 	asio::steady_timer timer_;
 
 	logger& log_;
+	event_handler& handler_;
 
 	string_in_buffer in_buf_;
 	string_out_buffer out_buf_;
@@ -233,6 +290,20 @@ struct test_client::impl : public event_handler {
 			{
 				ensure_args(args, 1);
 				session_->stat(args[0]);
+				return true;
+			};
+
+		commands_["get"] = [&](auto args)
+			{
+				ensure_args(args, 2);
+				session_->download(args[0], args[1]);
+				return true;
+			};
+
+		commands_["put"] = [&](auto args)
+			{
+				ensure_args(args, 2);
+				session_->upload(args[0], args[1]);
 				return true;
 			};
 

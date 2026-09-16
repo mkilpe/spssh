@@ -32,6 +32,10 @@ void sftp_client::on_request_failure() {
 	transport_.set_error_and_disconnect(ssh_service_not_available);
 }
 
+void sftp_client::on_send_more() {
+	callback_->on_send_more();
+}
+
 void sftp_client::handle_version(const_span s) {
 	version::load packet(s);
 	if(packet) {

@@ -5,6 +5,7 @@
 #include "ssh/client/ssh_client.hpp"
 #include "ssh/services/sftp/sftp_client.hpp"
 #include "ssh/services/sftp/sftp_client_interface.hpp"
+#include "ssh/services/sftp/sftp_transfer.hpp"
 #include "tools/common/event_handler.hpp"
 #include <functional>
 
@@ -15,6 +16,7 @@ public:
 	ssh_test_client(event_handler& handler, test_client_config const&, logger& log, out_buffer&, crypto_context = default_crypto_context());
 
 	sftp::sftp_client* sftp();
+	sftp::sftp_transfer_handler* transfers() { return transfers_.get(); }
 
 protected:
 	handler_result handle_kex_done(kex const&) override;
@@ -51,6 +53,7 @@ private:
 
 	std::function<void()> success_cb_;
 	std::function<void()> fail_cb_;
+	std::shared_ptr<sftp::sftp_transfer_handler> transfers_;
 };
 
 }

@@ -101,6 +101,9 @@ public:
 
 	virtual void on_realpath(call_handle, realpath_data result) = 0;
 	virtual void on_extended(call_handle, extended_data result) = 0;
+
+	/// the channel can take data again; a request that returned call_handle 0 could not be sent and may be retried
+	virtual void on_send_more() {}
 };
 
 struct open_file_data {

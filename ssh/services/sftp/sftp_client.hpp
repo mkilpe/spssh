@@ -45,6 +45,7 @@ protected: // sftp_common
 	bool on_confirm(channel_side_info remote, const_span extra_data) override;
 	void on_request_success() override;
 	void on_request_failure() override;
+	void on_send_more() override;
 	void handle_sftp_packet(sftp_packet_type type, const_span data) override;
 
 protected:
