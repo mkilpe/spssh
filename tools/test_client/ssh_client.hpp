@@ -25,6 +25,7 @@ public:
 
 protected:
 	handler_result handle_kex_done(kex const&) override;
+	std::unique_ptr<auth_service> construct_auth() override;
 
 	void on_service_started() override;
 

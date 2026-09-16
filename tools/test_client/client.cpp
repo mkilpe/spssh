@@ -48,6 +48,12 @@ void test_client_commands::create_config(logger& log) {
 	host_label = port == 22 ? host : "[" + host + "]:" + std::to_string(port);
 
 	config.parse(log, *this);
+
+	// with no key and no password there is nothing to authenticate with, so ask for a password up front;
+	// keyboard-interactive prompts are answered live during authentication
+	if(password.empty() && private_keys.empty()) {
+		password = prompt_input("Password: ", false);
+	}
 }
 
 using tcp = asio::ip::tcp;

@@ -146,6 +146,7 @@ struct test_server_commands : test_server_config, securepath::command_parser {
 		add(port, "port", "p", "port to listen");
 		add(config_file, "config", "c", "config file");
 		add(sftp_root, "sftp-root", "r", "directory served over sftp");
+		add(keyboard_interactive, "keyboard-interactive", "", "require keyboard-interactive authentication only");
 		config.add_commands(*this);
 	}
 
@@ -157,6 +158,10 @@ struct test_server_commands : test_server_config, securepath::command_parser {
 		config.parse(log, *this);
 
 		auth.banner = "Welcome to SPSSH test server";
+		if(keyboard_interactive) {
+			// require keyboard-interactive so the round trip can be exercised deterministically
+			auth.service_auth[std::string(connection_service_name)].allowed = auth_bits(auth_type::interactive);
+		}
 	}
 
 };

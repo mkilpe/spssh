@@ -39,6 +39,12 @@ std::unique_ptr<auth_service> ssh_test_server::construct_auth() {
 	test_auth_data data;
 	data.add_password("test", "some");
 	data.add_pk("test", "SHA256:AJxI+SMrILxnTIinoWVeFhz3BGq9zH+VyOcH6IsJV/0");
+	if(config_.keyboard_interactive) {
+		// a single hidden prompt, satisfied by the same password
+		data.add_interactive("test"
+			, {interactive_request{"", "", {interactive_prompt{false, "Password: "}}}}
+			, {{"some"}});
+	}
 	return std::make_unique<server_test_auth_service>(*this, config_.auth, std::move(data));
 }
 

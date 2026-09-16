@@ -4,6 +4,7 @@
 #include "util.hpp"
 #include "ssh/crypto/private_key.hpp"
 #include "ssh/client/ssh_client.hpp"
+#include "ssh/client/auth_service.hpp"
 #include "ssh/core/packet_ser_impl.hpp"
 #include "ssh/core/protocol.hpp"
 #include "ssh/server/ssh_server.hpp"
@@ -192,6 +193,96 @@ private:
 	// old allocations are kept alive but poisoned, so a stale span reads defined 0xFF rather than freed memory
 	std::vector<std::unique_ptr<byte_vector>> graveyard_;
 };
+}
+
+namespace {
+
+// a default_client_auth that opts into keyboard-interactive and answers with preset responses
+class interactive_client_auth : public default_client_auth {
+public:
+	interactive_client_auth(transport_base& t, client_config const& c, std::vector<std::string> answers)
+	: default_client_auth(t, c), answers_(std::move(answers))
+	{}
+
+	bool queried() const { return queried_; }
+
+protected:
+	bool supports_interactive() const override { return true; }
+	interactive_result on_interactive(interactive_request const&, std::vector<std::string>& results) override {
+		queried_ = true;
+		results = answers_;
+		return interactive_result::data;
+	}
+
+private:
+	std::vector<std::string> answers_;
+	bool queried_{};
+};
+
+struct interactive_test_client : test_context, client_config, ssh_client {
+	interactive_test_client(logger& l, std::vector<std::string> answers, bool support = true)
+	: test_context(l, "[client] ")
+	, client_config(test_client_config())
+	, ssh_client(*this, slog, out_buf)
+	, answers(std::move(answers))
+	, support(support)
+	{
+		side = transport_side::client;
+		username = "test-user";
+		service = "dummy-service";
+	}
+
+	std::unique_ptr<auth_service> construct_auth() override {
+		if(support) {
+			return std::make_unique<interactive_client_auth>(*this, *this, answers);
+		}
+		// a plain default auth that does not offer keyboard-interactive
+		return ssh_client::construct_auth();
+	}
+
+	std::unique_ptr<ssh_service> construct_service(auth_info const& info) override {
+		if(info.service == "dummy-service") {
+			return std::make_unique<dummy_service>();
+		}
+		return nullptr;
+	}
+
+	std::vector<std::string> answers;
+	bool support;
+};
+
+void require_interactive(test_server& server) {
+	server.auth_data.add_interactive("test-user"
+		, {interactive_request{"login", "", {interactive_prompt{false, "Password: "}}}}
+		, {{"secret"}});
+	server.auth.service_auth["dummy-service"] = req_auth{{}, auth_bits(auth_type::interactive), 1};
+	server.auth.num_of_tries = 1;
+}
+
+}
+
+TEST_CASE("keyboard-interactive auth via default_client_auth", "[unit][crypto]") {
+	test_server server(test_log(), test_server_config());
+	interactive_test_client client(test_log(), {"secret"});
+	require_interactive(server);
+
+	CHECK(run(client, server));
+	CHECK(client.state() == ssh_state::transport);
+	CHECK(server.state() == ssh_state::transport);
+	CHECK(client.user_authenticated());
+	CHECK(server.user_authenticated());
+}
+
+TEST_CASE("default client auth does not offer keyboard-interactive unless opted in", "[unit][crypto]") {
+	test_server server(test_log(), test_server_config());
+	interactive_test_client client(test_log(), {"secret"}, false);
+	require_interactive(server);
+
+	// the only method the server accepts is keyboard-interactive, which the plain default auth never tries
+	CHECK(!run(client, server));
+	CHECK(client.state() == ssh_state::disconnected);
+	CHECK(!client.user_authenticated());
+	CHECK(client.error() == ssh_error_code::ssh_no_more_auth_methods_available);
 }
 
 TEST_CASE("ssh test", "[unit]") {

@@ -361,7 +361,17 @@ void default_client_auth::populate(std::vector<std::string_view> const& methods)
 					authenticate(config_.username, config_.service, config_.password);
 				});
 		}
+		if(supports_interactive() && std::find(methods.begin(), methods.end(), "keyboard-interactive") != methods.end()) {
+			auths_.push_back(
+				[&]	{
+					authenticate_interactive(config_.username, config_.service, {});
+				});
+		}
 	}
+}
+
+bool default_client_auth::supports_interactive() const {
+	return false;
 }
 
 void default_client_auth::next() {

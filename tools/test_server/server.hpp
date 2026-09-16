@@ -9,6 +9,8 @@ namespace securepath::ssh {
 struct test_server_config : server_config {
 	// directory served over sftp
 	std::string sftp_root{"."};
+	// also offer keyboard-interactive authentication, answered by the same password
+	bool keyboard_interactive{};
 };
 
 class ssh_test_server : public ssh_server {

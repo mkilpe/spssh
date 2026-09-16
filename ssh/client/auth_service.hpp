@@ -100,6 +100,8 @@ protected:
 	void on_auth_success(auth_try, std::vector<std::string_view> const& methods) override;
 	void on_success(std::string_view username, std::string_view service) override;
 	interactive_result on_interactive(interactive_request const&, std::vector<std::string>& results) override;
+	/// keyboard-interactive is only offered when a subclass opts in by overriding this and on_interactive
+	virtual bool supports_interactive() const;
 
 private:
 	void populate(std::vector<std::string_view> const& methods);

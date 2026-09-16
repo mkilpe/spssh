@@ -12,6 +12,9 @@ ssh_config test_tool_default_config();
 
 std::string tokenise_command(std::string const& line, std::vector<std::string>& args);
 
+/// print prompt and read a line from stdin; terminal echo is turned off when echo is false (for passwords)
+std::string prompt_input(std::string const& prompt, bool echo);
+
 class sync_cout_logger : public logger {
 public:
 	using logger::logger;

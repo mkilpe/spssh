@@ -6,7 +6,9 @@
 #include "ssh/services/sftp/sftp.hpp"
 #include "ssh/services/sftp/sftp_client.hpp"
 #include "ssh/core/ssh_public_key.hpp"
+#include "ssh/client/auth_service.hpp"
 #include "ssh/common/util.hpp"
+#include "tools/common/util.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -16,6 +18,41 @@
 namespace securepath::ssh {
 
 namespace {
+
+// answers keyboard-interactive prompts from the terminal, reusing a known password for hidden prompts
+class tool_client_auth : public default_client_auth {
+public:
+	tool_client_auth(transport_base& transport, client_config const& config)
+	: default_client_auth(transport, config)
+	, config_(config)
+	{}
+
+protected:
+	bool supports_interactive() const override { return true; }
+
+	interactive_result on_interactive(interactive_request const& req, std::vector<std::string>& results) override {
+		std::osyncstream out(std::cout);
+		if(!req.name.empty()) {
+			out << req.name << '\n';
+		}
+		if(!req.instruction.empty()) {
+			out << req.instruction << '\n';
+		}
+		out.emit();
+		for(auto const& p : req.prompts) {
+			// a hidden prompt is a password prompt, answer with a known password to avoid asking twice
+			if(!p.echo && !config_.password.empty()) {
+				results.push_back(config_.password);
+			} else {
+				results.push_back(prompt_input(std::string(p.text), p.echo));
+			}
+		}
+		return interactive_result::data;
+	}
+
+private:
+	client_config const& config_;
+};
 
 enum class host_key_check { trusted, added, changed, unwritable };
 
@@ -86,6 +123,10 @@ void ssh_test_client::on_service_started() {
 			logger_.log(logger::error, "failed to open channel");
 		}
 	}
+}
+
+std::unique_ptr<auth_service> ssh_test_client::construct_auth() {
+	return std::make_unique<tool_client_auth>(*this, config_);
 }
 
 handler_result ssh_test_client::handle_kex_done(kex const& k) {
