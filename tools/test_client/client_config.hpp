@@ -12,6 +12,8 @@ struct test_client_config : client_config {
 	std::string known_hosts;
 	/// label of the host used in the known hosts file, set from the host and port
 	std::string host_label;
+	/// connection timeout in seconds, 0 disables it
+	unsigned connect_timeout{15};
 };
 
 }

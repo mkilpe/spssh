@@ -11,6 +11,8 @@
 #include <asio.hpp>
 #include <asio/experimental/as_tuple.hpp>
 
+#include <chrono>
+
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -38,6 +40,7 @@ test_client_commands::test_client_commands()
 	add(channel, "channel", "", "channel type to open");
 	add(subsystem, "subsystem", "sub", "subsystem to request on the channel");
 	add(known_hosts, "known-hosts", "", "file of trusted host keys, checked and updated on connect");
+	add(connect_timeout, "connect-timeout", "", "connection timeout in seconds, 0 to disable");
 
 	config.add_commands(*this);
 }
@@ -69,20 +72,38 @@ public:
 	, timer_(io_context_)
 	, log_(log)
 	, handler_(handler)
+	, config_(config)
 	, client_(handler, config, log_, out_buf_, ccontext)
 	{
 		timer_.expires_at(std::chrono::steady_clock::time_point::max());
 	}
 
-	asio::awaitable<void> connect(tcp::endpoint ep) {
-		log_.log(logger::info, "Connecting to {}", ep);
+	asio::awaitable<void> connect(tcp::resolver::results_type endpoints) {
+		log_.log(logger::info, "Connecting to {}", config_.host_label);
 
-		auto [e] = co_await socket_.async_connect(ep, asio::experimental::as_tuple(asio::use_awaitable));
+		// abort the connect if it takes too long, so a dead or slow host does not hang the tool
+		asio::steady_timer deadline(co_await asio::this_coro::executor);
+		if(config_.connect_timeout != 0) {
+			deadline.expires_after(std::chrono::seconds(config_.connect_timeout));
+			deadline.async_wait([this](asio::error_code ec) {
+				if(!ec) {
+					socket_.close();
+				}
+			});
+		}
+
+		// try each resolved address in turn until one connects
+		auto [e, ep] = co_await asio::async_connect(socket_, endpoints, asio::experimental::as_tuple(asio::use_awaitable));
+		deadline.cancel();
+
 		if(!e) {
+			asio::error_code oec;
+			socket_.set_option(asio::socket_base::keep_alive(true), oec);
+			log_.log(logger::info, "Connected to {}", ep);
 			connected_ = true;
 			start();
 		} else {
-			log_.log(logger::error, "Connect failed: {}", e.message());
+			log_.log(logger::error, "Connect to {} failed: {}", config_.host_label, e.message());
 			io_context_.stop();
 		}
 	}
@@ -286,6 +307,7 @@ private:
 
 	logger& log_;
 	event_handler& handler_;
+	test_client_config const& config_;
 
 	string_in_buffer in_buf_;
 	string_out_buffer out_buf_;
@@ -364,17 +386,15 @@ struct test_client::impl : public event_handler {
 	}
 
 	int run() {
-		auto result = tcp::resolver(io_context_).resolve(config_.host, "ssh");
-		if(result.begin() == result.end()) {
-			std::cerr << "Failed to resolve address\n";
+		asio::error_code ec;
+		auto endpoints = tcp::resolver(io_context_).resolve(config_.host, std::to_string(config_.port), ec);
+		if(ec || endpoints.empty()) {
+			std::cerr << "Failed to resolve " << config_.host << ": " << (ec ? ec.message() : "no addresses") << "\n";
 			return 1;
 		}
 
-		auto endpoint = result.begin()->endpoint();
-		endpoint.port(config_.port);
-
 		session_ = std::make_shared<ssh_client_session>(*this, io_context_, log_, config_.config.get_crypto_context(), config_);
-		asio::co_spawn(io_context_, session_->connect(endpoint), asio::detached);
+		asio::co_spawn(io_context_, session_->connect(std::move(endpoints)), asio::detached);
 
 		thread_ = std::thread{
 			[&]{
