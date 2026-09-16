@@ -18,6 +18,11 @@ public:
 	sftp::sftp_client* sftp();
 	sftp::sftp_transfer_handler* transfers() { return transfers_.get(); }
 
+	/// record that a command or transfer failed, reflected in the process exit code
+	void note_failure() { command_failed_ = true; }
+	/// true if the session disconnected with an error or any command or transfer failed
+	bool failed() const { return command_failed_ || error() != ssh_error_code::ssh_noerror; }
+
 protected:
 	handler_result handle_kex_done(kex const&) override;
 
@@ -54,6 +59,7 @@ private:
 	std::function<void()> success_cb_;
 	std::function<void()> fail_cb_;
 	std::shared_ptr<sftp::sftp_transfer_handler> transfers_;
+	bool command_failed_{};
 };
 
 }

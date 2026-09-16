@@ -5,11 +5,46 @@
 #include "ssh/core/kex.hpp"
 #include "ssh/services/sftp/sftp.hpp"
 #include "ssh/services/sftp/sftp_client.hpp"
+#include "ssh/core/ssh_public_key.hpp"
+#include "ssh/common/util.hpp"
 
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <syncstream>
 
 namespace securepath::ssh {
+
+namespace {
+
+enum class host_key_check { trusted, added, changed, unwritable };
+
+// simple known hosts file, one "host keytype base64key" line per host; trust on first use appends
+host_key_check check_known_hosts(std::string const& path, std::string const& host, ssh_public_key const& key) {
+	std::string const algo(to_string(key.type()));
+	auto blob = to_byte_vector(key);
+	std::string const b64 = encode_base64(blob);
+
+	std::ifstream in(path);
+	std::string line;
+	while(std::getline(in, line)) {
+		std::istringstream ls(line);
+		std::string h, a, k;
+		if(ls >> h >> a >> k && h == host) {
+			return (a == algo && k == b64) ? host_key_check::trusted : host_key_check::changed;
+		}
+	}
+	in.close();
+
+	std::ofstream out(path, std::ios::app);
+	if(!out) {
+		return host_key_check::unwritable;
+	}
+	out << host << ' ' << algo << ' ' << b64 << '\n';
+	return host_key_check::added;
+}
+
+}
 
 ssh_test_client::ssh_test_client(event_handler& handler, test_client_config const& conf, logger& log, out_buffer& buf, crypto_context c)
 : ssh_client(conf, log, buf, c)
@@ -55,8 +90,28 @@ void ssh_test_client::on_service_started() {
 
 handler_result ssh_test_client::handle_kex_done(kex const& k) {
 	auto key = k.server_host_key();
-	logger_.log(logger::info, "Server host key ({}) fingerprint: {}", to_string(key.type()), key.fingerprint(crypto(), call_context()));
-	//check the above key is trusted, if not set_error_and_disconnect(ssh_key_exchange_failed);
+	auto fingerprint = key.fingerprint(crypto(), call_context());
+	logger_.log(logger::info, "Server host key ({}) fingerprint: {}", to_string(key.type()), fingerprint);
+
+	if(!test_config_.known_hosts.empty()) {
+		auto const& host = test_config_.host_label;
+		switch(check_known_hosts(test_config_.known_hosts, host, key)) {
+			case host_key_check::changed:
+				logger_.log(logger::error, "host key for {} changed, refusing to connect [{}]", host, fingerprint);
+				std::osyncstream(std::cout) << "Host key verification failed for " << host << ", key is " << fingerprint << std::endl;
+				set_error_and_disconnect(ssh_key_exchange_failed, "host key verification failed");
+				return handler_result::handled;
+			case host_key_check::added:
+				std::osyncstream(std::cout) << "Trusting new host " << host << " with key " << fingerprint << std::endl;
+				break;
+			case host_key_check::unwritable:
+				logger_.log(logger::error, "cannot write known hosts file {}", test_config_.known_hosts);
+				break;
+			case host_key_check::trusted:
+				logger_.log(logger::info, "host key for {} is trusted", host);
+				break;
+		}
+	}
 	return ssh_client::handle_kex_done(k);
 }
 
@@ -68,6 +123,7 @@ bool ssh_test_client::on_version(std::uint32_t version, std::vector<sftp::ext_da
 
 void ssh_test_client::on_failure(sftp::call_handle, sftp::sftp_error err) {
 	logger_.log(logger::debug_trace, "command on_failure");
+	note_failure();
 	success_cb_ = nullptr;
 	if(fail_cb_) {
 		logger_.log(logger::debug_trace, "fail cb set");

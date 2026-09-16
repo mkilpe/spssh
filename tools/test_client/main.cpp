@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		test_client client(p);
-		client.run();
+		return client.run();
 	} catch(std::exception const& e) {
 		std::cerr << "Exception: " << e.what() << "\n";
 		return 1;

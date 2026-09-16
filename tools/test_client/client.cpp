@@ -36,6 +36,7 @@ test_client_commands::test_client_commands()
 	add(config_file, "config", "c", "config file");
 	add(service, "service", "", "ssh service to autheticate for");
 	add(subsystem, "subsystem", "sub", "subsystem to start");
+	add(known_hosts, "known-hosts", "", "file of trusted host keys, checked and updated on connect");
 
 	config.add_commands(*this);
 }
@@ -43,6 +44,8 @@ test_client_commands::test_client_commands()
 void test_client_commands::create_config(logger& log) {
 	side = transport_side::client;
 	my_version.software = "spssh_test_client";
+	// openssh style label, plain host for the default port, [host]:port otherwise
+	host_label = port == 22 ? host : "[" + host + "]:" + std::to_string(port);
 
 	config.parse(log, *this);
 }
@@ -69,11 +72,17 @@ public:
 
 		auto [e] = co_await socket_.async_connect(ep, asio::experimental::as_tuple(asio::use_awaitable));
 		if(!e) {
+			connected_ = true;
 			start();
 		} else {
 			log_.log(logger::error, "Connect failed: {}", e.message());
 			io_context_.stop();
 		}
+	}
+
+	// a non-zero process exit code: connect never succeeded, or the session ended in error
+	bool failed() const {
+		return !connected_ || client_.failed();
 	}
 
 	void start() {
@@ -160,6 +169,7 @@ private:
 			// a newline first to leave the in place progress line
 			out << '\n';
 			if(r.error) {
+				client_.note_failure();
 				out << what << " failed: " << r.error.message() << std::endl;
 			} else if(r.cancelled) {
 				out << what << " cancelled after " << r.bytes << " bytes" << std::endl;
@@ -271,6 +281,7 @@ private:
 	string_out_buffer out_buf_;
 
 	ssh_test_client client_;
+	bool connected_{};
 };
 
 static void ensure_args(auto const& args, std::size_t amount) {
@@ -342,11 +353,11 @@ struct test_client::impl : public event_handler {
 		}
 	}
 
-	bool run() {
+	int run() {
 		auto result = tcp::resolver(io_context_).resolve(config_.host, "ssh");
 		if(result.begin() == result.end()) {
 			std::cerr << "Failed to resolve address\n";
-			return false;
+			return 1;
 		}
 
 		auto endpoint = result.begin()->endpoint();
@@ -363,7 +374,7 @@ struct test_client::impl : public event_handler {
 
 		main_loop_.thread_entry();
 
-		return true;
+		return session_->failed() ? 1 : 0;
 	}
 
 	void handle_event(std::unique_ptr<event_base> ev) {
@@ -440,7 +451,7 @@ test_client::~test_client()
 }
 
 int test_client::run() {
-	return impl_->run() ? 0 : 1;
+	return impl_->run();
 }
 
 }
