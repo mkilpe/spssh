@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <syncstream>
 #include <functional>
+#include <optional>
 
 namespace securepath::ssh {
 
@@ -110,7 +111,7 @@ public:
 	void download(std::string remote, std::string local) {
 		post_transfer([this, remote, local](auto& h, auto& sftp)
 			{
-				return h.download(sftp, remote, std::make_unique<sftp::file_output>(local), {}, transfer_done("download"));
+				return h.download(sftp, remote, std::make_unique<sftp::file_output>(local), {}, transfer_done("download"), progress("download", {}));
 			});
 	}
 
@@ -123,7 +124,7 @@ public:
 		}
 		post_transfer([this, in = std::shared_ptr<sftp::file_input>(std::move(input)), remote](auto& h, auto& sftp)
 			{
-				return h.upload(sftp, remote, std::make_unique<owned_input>(in), {}, transfer_done("upload"));
+				return h.upload(sftp, remote, std::make_unique<owned_input>(in), {}, transfer_done("upload"), progress("upload", in->size()));
 			});
 	}
 
@@ -156,12 +157,32 @@ private:
 	sftp::transfer_done transfer_done(std::string what) {
 		return [this, what](sftp::transfer_id, sftp::transfer_result const& r) {
 			std::osyncstream out(std::cout);
+			// a newline first to leave the in place progress line
+			out << '\n';
 			if(r.error) {
 				out << what << " failed: " << r.error.message() << std::endl;
+			} else if(r.cancelled) {
+				out << what << " cancelled after " << r.bytes << " bytes" << std::endl;
 			} else {
 				out << what << " done, " << r.bytes << " bytes" << std::endl;
 			}
 			handler_.emit<events::command_prompt>();
+		};
+	}
+
+	sftp::transfer_progress progress(std::string what, std::optional<std::uint64_t> total) {
+		return [what, total, last = std::uint64_t{0}](sftp::transfer_id, std::uint64_t bytes) mutable {
+			// throttle so a fast transfer does not flood the terminal; the final count comes from transfer_done
+			if(bytes < last + 64*1024) {
+				return;
+			}
+			last = bytes;
+			std::osyncstream out(std::cout);
+			if(total && *total) {
+				out << '\r' << what << ' ' << (bytes * 100 / *total) << "% (" << bytes << '/' << *total << ")" << std::flush;
+			} else {
+				out << '\r' << what << ' ' << bytes << " bytes" << std::flush;
+			}
 		};
 	}
 

@@ -80,20 +80,33 @@ void ssh_test_client::on_failure(sftp::call_handle, sftp::sftp_error err) {
 	}
 }
 
-void ssh_test_client::on_open_file(sftp::call_handle id, sftp::open_file_data result) {
-
+void ssh_test_client::on_open_file(sftp::call_handle, sftp::open_file_data result) {
+	logger_.log(logger::debug_trace, "on_open_file");
+	std::osyncstream(std::cout) << "opened file, handle of " << result.handle.size() << " bytes" << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
-void ssh_test_client::on_read_file(sftp::call_handle id, sftp::read_file_data result) {
-
+void ssh_test_client::on_read_file(sftp::call_handle, sftp::read_file_data result) {
+	logger_.log(logger::debug_trace, "on_read_file");
+	std::osyncstream out(std::cout);
+	if(result.data.empty()) {
+		out << "read: end of file" << std::endl;
+	} else {
+		out << "read " << result.data.size() << " bytes" << std::endl;
+	}
+	handler_.emit<events::command_prompt>();
 }
 
-void ssh_test_client::on_write_file(sftp::call_handle id, sftp::write_file_data result) {
-
+void ssh_test_client::on_write_file(sftp::call_handle, sftp::write_file_data result) {
+	logger_.log(logger::debug_trace, "on_write_file");
+	std::osyncstream(std::cout) << "wrote" << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
-void ssh_test_client::on_close_file(sftp::call_handle id, sftp::close_file_data result) {
-
+void ssh_test_client::on_close_file(sftp::call_handle, sftp::close_file_data result) {
+	logger_.log(logger::debug_trace, "on_close_file");
+	std::osyncstream(std::cout) << "closed file" << std::endl;
+	handler_.emit<events::command_prompt>();
 }
 
 void ssh_test_client::on_stat_file(sftp::call_handle, sftp::stat_file_data result) {
