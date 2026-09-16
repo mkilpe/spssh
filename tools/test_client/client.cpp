@@ -261,6 +261,9 @@ private:
 					std::string buf = out_buf_.extract_committed();
 					log_.log(logger::debug_trace, "writing out: {}", to_span(buf));
 					co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
+					// the output has drained, so let the transport continue work it deferred waiting for that
+					// (a rekey held back until the buffer emptied), without needing more input from the peer
+					client_process();
 				}
 			}
 		} catch(std::exception&) {
